@@ -398,94 +398,6 @@ function generarReciboTransporte(codigo, estudiante, curso, tipo, monto, fechaPa
         const parteEntera = Math.floor(monto);
         const parteDecimal = Math.round((monto - parteEntera) * 100);
         const montoLiteral = numeroATexto(parteEntera) + ' ' + String(parteDecimal).padStart(2, '0') + '/100';
-        doc.text(montoLiteral, 75, 130);tos', 'Trescientos', 'Cuatrocientos', 'Quinientos', 'Seiscientos', 'Setecientos', 'Ochocientos', 'Novecientos'];
-        
-        if (num === 0) return 'Cero';
-        if (num === 100) return 'Cien';
-        
-        let texto = '';
-        
-        if (num >= 100) {
-            texto += centenas[Math.floor(num / 100)] + ' ';
-            num %= 100;
-        }
-        
-        if (num >= 20) {
-            texto += decenas[Math.floor(num / 10)];
-            if (num % 10 > 0) texto += ' y ' + unidades[num % 10];
-        } else if (num >= 10) {
-            texto += especiales[num - 10];
-        } else if (num > 0) {
-            texto += unidades[num];
-        }
-        
-        return texto.trim();
-    }
-    
-    function dibujarRecibo(tipoRecibo) {
-        doc.setLineWidth(2);
-        doc.setDrawColor(0, 0, 0);
-        doc.rect(10, 10, 592, 376);
-        
-        // Encabezado izquierdo
-        doc.setFontSize(8);
-        doc.setFont(undefined, 'bold');
-        doc.text('U.E. PRIVADA INTERANDINO BOLIVIANO', 15, 25);
-        doc.setFontSize(6.5);
-        doc.setFont(undefined, 'normal');
-        doc.text('C/ VICTOR GUTIERREZ Nº 3339', 15, 35);
-        doc.text('TELÉFONO: 2840320 - 67304340', 15, 43);
-        
-        // Cuadro de fecha y monto (derecha)
-        doc.setLineWidth(1.5);
-        doc.rect(470, 15, 125, 45);
-        doc.setFontSize(6.5);
-        doc.setFont(undefined, 'normal');
-        doc.text('Día/Mes/Año', 532, 25, { align: 'center' });
-        doc.setFontSize(9);
-        doc.setFont(undefined, 'bold');
-        doc.text(fechaPago, 532, 35, { align: 'center' });
-        doc.setLineWidth(0.5);
-        doc.line(470, 40, 595, 40);
-        doc.setFontSize(7);
-        doc.setFont(undefined, 'normal');
-        doc.text('Bs.', 478, 52);
-        doc.setFontSize(10);
-        doc.setFont(undefined, 'bold');
-        doc.text(monto.toFixed(2), 535, 52, { align: 'right' });
-        doc.setFontSize(7);
-        doc.setFont(undefined, 'normal');
-        doc.text('$us.', 545, 52);
-        
-        // Línea separadora
-        doc.setLineWidth(1.5);
-        doc.line(15, 65, 597, 65);
-        
-        // RECIBO con código
-        doc.setFontSize(16);
-        doc.setFont(undefined, 'bold');
-        doc.text('RECIBO - ' + codigo, 306, 85, { align: 'center' });
-        
-        // Cancelado por
-        doc.setFontSize(9);
-        doc.setFont(undefined, 'bold');
-        doc.text('Cancelado por:', 15, 110);
-        doc.setFont(undefined, 'normal');
-        doc.setLineDash([2, 2]);
-        doc.line(85, 112, 597, 112);
-        doc.setLineDash([]);
-        doc.text(estudiante, 90, 110);
-        
-        // La suma de
-        doc.setFont(undefined, 'bold');
-        doc.text('La suma de:', 15, 130);
-        doc.setFont(undefined, 'normal');
-        doc.setLineDash([2, 2]);
-        doc.line(70, 132, 597, 132);
-        doc.setLineDash([]);
-        const parteEntera = Math.floor(monto);
-        const parteDecimal = Math.round((monto - parteEntera) * 100);
-        const montoLiteral = numeroATexto(parteEntera) + ' ' + String(parteDecimal).padStart(2, '0') + '/100';
         doc.text(montoLiteral, 75, 130);
         
         // Por concepto de
@@ -493,13 +405,13 @@ function generarReciboTransporte(codigo, estudiante, curso, tipo, monto, fechaPa
         doc.text('Por concepto de:', 15, 150);
         doc.setFont(undefined, 'normal');
         doc.setLineDash([2, 2]);
-        doc.line(90, 152, 597, 152);
+        doc.line(90, 152, 585, 152);
         doc.setLineDash([]);
         let concepto = 'Pago Transporte Escolar ' + tipo + ' - Est: ' + estudiante + ' - Curso: ' + curso;
         if (meses.length > 0) {
             concepto += '\nMeses: ' + meses.join(', ');
         }
-        const conceptoLines = doc.splitTextToSize(concepto, 500);
+        const conceptoLines = doc.splitTextToSize(concepto, 490);
         let yConcepto = 150;
         conceptoLines.forEach((line, index) => {
             doc.text(line, 95, yConcepto + (index * 10));
@@ -520,7 +432,7 @@ function generarReciboTransporte(codigo, estudiante, curso, tipo, monto, fechaPa
         doc.line(15, yPos, 597, yPos);
         doc.setFontSize(10);
         doc.setFont(undefined, 'bold');
-        doc.text('TOTAL', 540, yPos + 15);
+        doc.text('TOTAL', 480, yPos + 15);
         doc.text(monto.toFixed(2), 585, yPos + 15, { align: 'right' });
         
         // Sección de firmas

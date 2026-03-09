@@ -476,123 +476,126 @@ function generarRecibo(recibo, estudiante, padre, curso, gestion, concepto, mont
     }
     
     function dibujarRecibo(tipoRecibo) {
-        doc.setLineWidth(1);
+        doc.setLineWidth(2);
         doc.setDrawColor(0, 0, 0);
-        doc.rect(10, 10, 592, 360);
+        doc.rect(10, 10, 592, 376);
         
         doc.setFontSize(8);
         doc.setFont(undefined, 'bold');
         doc.text('U.E. PRIVADA INTERANDINO BOLIVIANO', 15, 25);
-        doc.setFontSize(7);
+        doc.setFontSize(6.5);
         doc.setFont(undefined, 'normal');
         doc.text('C/ VICTOR GUTIERREZ Nº 3339', 15, 35);
         doc.text('TELÉFONO: 2840320 - 67304340', 15, 43);
         
-        doc.setFontSize(16);
-        doc.setFont(undefined, 'bold');
-        doc.text('RECIBO', 306, 32, { align: 'center' });
-        
-        doc.setLineWidth(0.5);
-        doc.rect(485, 17, 110, 35);
-        doc.setFontSize(7);
+        doc.setLineWidth(1.5);
+        doc.rect(470, 15, 125, 45);
+        doc.setFontSize(6.5);
         doc.setFont(undefined, 'normal');
-        doc.text('Día/Mes/Año:', 490, 27);
-        doc.text(fecha, 490, 35);
-        doc.line(485, 39, 595, 39);
-        doc.text('Bs.', 490, 47);
+        doc.text('Día/Mes/Año', 532, 25, { align: 'center' });
         doc.setFontSize(9);
         doc.setFont(undefined, 'bold');
-        doc.text(monto.toFixed(2), 510, 47);
+        doc.text(fecha, 532, 35, { align: 'center' });
+        doc.setLineWidth(0.5);
+        doc.line(470, 40, 595, 40);
         doc.setFontSize(7);
         doc.setFont(undefined, 'normal');
-        doc.text('$us.', 560, 47);
-        doc.text('Bolivianos/Dólares', 525, 55, { align: 'center' });
-        
-        doc.setLineWidth(0.5);
-        doc.line(15, 57, 597, 57);
-        
-        doc.setFontSize(8);
+        doc.text('Bs.', 478, 52);
+        doc.setFontSize(10);
         doc.setFont(undefined, 'bold');
-        doc.text('Cancelado por:', 15, 72);
+        doc.text(monto.toFixed(2), 535, 52, { align: 'right' });
+        doc.setFontSize(7);
         doc.setFont(undefined, 'normal');
-        doc.text(padre, 80, 72);
+        doc.text('$us.', 545, 52);
+        
+        doc.setLineWidth(1.5);
+        doc.line(15, 65, 597, 65);
+        
+        doc.setFontSize(16);
+        doc.setFont(undefined, 'bold');
+        doc.text('RECIBO - ' + recibo, 306, 85, { align: 'center' });
+        
+        doc.setFontSize(9);
+        doc.setFont(undefined, 'bold');
+        doc.text('Cancelado por:', 15, 110);
+        doc.setFont(undefined, 'normal');
+        doc.setLineDash([2, 2]);
+        doc.line(85, 112, 585, 112);
+        doc.setLineDash([]);
+        doc.text(padre, 90, 110);
         
         const parteEntera = Math.floor(monto);
         const parteDecimal = Math.round((monto - parteEntera) * 100);
         const montoLiteral = numeroATexto(parteEntera) + ' ' + String(parteDecimal).padStart(2, '0') + '/100';
         
         doc.setFont(undefined, 'bold');
-        doc.text('La suma de:', 15, 85);
+        doc.text('La suma de:', 15, 130);
         doc.setFont(undefined, 'normal');
-        doc.text(montoLiteral, 65, 85);
+        doc.setLineDash([2, 2]);
+        doc.line(70, 132, 585, 132);
+        doc.setLineDash([]);
+        doc.text(montoLiteral, 75, 130);
         
         doc.setFont(undefined, 'bold');
-        doc.text('Por concepto de:', 15, 98);
+        doc.text('Por concepto de:', 15, 150);
         doc.setFont(undefined, 'normal');
-        doc.text(concepto, 90, 98);
+        doc.setLineDash([2, 2]);
+        doc.line(90, 152, 585, 152);
+        doc.setLineDash([]);
+        let conceptoCompleto = concepto + ' - Est: ' + estudiante + ' - Curso: ' + curso + ' - Gestión: ' + gestion;
+        const conceptoLines = doc.splitTextToSize(conceptoCompleto, 490);
+        let yConcepto = 150;
+        conceptoLines.forEach((line, index) => {
+            doc.text(line, 95, yConcepto + (index * 10));
+        });
         
-        let yPos = 111;
-        doc.setFontSize(7);
-        
-        doc.setFont(undefined, 'bold');
-        doc.text('Cód.', 20, yPos);
-        doc.text('Descripción', 145, yPos);
-        doc.text('Monto', 555, yPos);
-        
-        doc.line(15, yPos + 3, 597, yPos + 3);
-        yPos += 15;
-        
-        doc.setFont(undefined, 'normal');
-        doc.text(recibo, 20, yPos);
-        
-        let descripcion = concepto + ' - Estudiante: ' + estudiante + ' - Curso: ' + curso + ' - Gestión: ' + gestion;
-        const maxWidth = 390;
-        const lines = doc.splitTextToSize(descripcion, maxWidth);
-        doc.text(lines, 85, yPos);
-        
-        doc.text(monto.toFixed(2), 555, yPos);
-        
-        yPos += (lines.length * 10) + 10;
-        
-        for (let i = 0; i < 3; i++) {
+        let yPos = 185;
+        for (let i = 0; i < 5; i++) {
             doc.setLineDash([1, 2]);
             doc.line(15, yPos, 597, yPos);
-            yPos += 15;
+            yPos += 20;
         }
         doc.setLineDash([]);
         
-        doc.setLineWidth(1);
+        yPos = 295;
+        doc.setLineWidth(1.5);
         doc.line(15, yPos, 597, yPos);
-        yPos += 15;
+        doc.setFontSize(10);
+        doc.setFont(undefined, 'bold');
+        doc.text('TOTAL', 480, yPos + 15);
+        doc.text(monto.toFixed(2), 585, yPos + 15, { align: 'right' });
+        
+        yPos = 320;
+        doc.setLineWidth(1.5);
+        doc.line(15, yPos, 597, yPos);
+        doc.line(306, yPos, 306, 386);
         
         doc.setFontSize(8);
         doc.setFont(undefined, 'normal');
-        doc.text('SON: ' + montoLiteral + ' Bolivianos', 20, yPos);
-        yPos += 12;
-        
-        doc.setFontSize(10);
+        doc.setLineDash([1, 2]);
+        doc.line(50, yPos + 30, 260, yPos + 30);
+        doc.setLineDash([]);
+        doc.setFontSize(9);
         doc.setFont(undefined, 'bold');
-        doc.text('TOTAL', 485, yPos);
-        doc.text(monto.toFixed(2), 555, yPos);
+        doc.text('RECIBÍ CONFORME', 150, yPos + 60, { align: 'center' });
         
-        yPos += 5;
-        doc.line(15, yPos, 597, yPos);
-        doc.line(15, yPos + 2, 597, yPos + 2);
-        
-        yPos = 325;
-        doc.setFontSize(7);
+        doc.setFontSize(8);
         doc.setFont(undefined, 'normal');
-        
-        doc.text('Firma:........................C.I.........................', 35, yPos);
-        doc.text('Nom. Y Ap.:........................................', 35, yPos + 12);
+        doc.text('Firma:', 320, yPos + 20);
+        doc.setLineDash([1, 2]);
+        doc.line(350, yPos + 22, 450, yPos + 22);
+        doc.setLineDash([]);
+        doc.text('C.I.:', 460, yPos + 20);
+        doc.setLineDash([1, 2]);
+        doc.line(480, yPos + 22, 580, yPos + 22);
+        doc.setLineDash([]);
+        doc.text('Nom. Y Ap.:', 320, yPos + 38);
+        doc.setLineDash([1, 2]);
+        doc.line(370, yPos + 40, 580, yPos + 40);
+        doc.setLineDash([]);
+        doc.setFontSize(9);
         doc.setFont(undefined, 'bold');
-        doc.text('RECIBÍ CONFORME', 95, yPos + 30, { align: 'center' });
-        
-        doc.setFont(undefined, 'normal');
-        doc.text('Firma:........................C.I.........................', 345, yPos);
-        doc.text('Nom. Y Ap.:........................................', 345, yPos + 12);
-        doc.setFont(undefined, 'bold');
-        doc.text('ENTREGUÉ CONFORME', 425, yPos + 30, { align: 'center' });
+        doc.text('ENTREGUÉ CONFORME', 450, yPos + 60, { align: 'center' });
     }
     
     dibujarRecibo('ORIGINAL');
