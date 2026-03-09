@@ -1,0 +1,323 @@
+<!DOCTYPE html><html><head><meta charset='UTF-8'><meta http-equiv='X-UA-Compatible' content='IE=Edge'><meta content='width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no' name='viewport'>
+    <title>KunaQuest</title><link href='plugins/bootstrap/css/bootstrap.css' rel='stylesheet'>
+    <link href='plugins/node-waves/waves.css' rel='stylesheet' />
+    <link href='css/style.css' rel='stylesheet'><link href='css/themes/all-themes.css' rel='stylesheet' />
+<style>
+img{max-width:100%;}
+html{
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+.tiempo{
+    border:none;
+    font-size: 18px;
+    width: 90%;
+    background:transparent;
+    text-align: center;
+    font-weight: 500;
+}
+.busq{
+    margin:14px 0;
+    text-align:center;
+    padding:12px;
+    background: linear-gradient(135deg, #667777 0%, #4a5568 100%);
+    color: white;
+    font-size: 24px;
+    font-weight: bold;
+    border-radius: 12px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+}
+.busq a{color:white;}
+
+/* Estilos mejorados para información del estudiante */
+#estudiante-info {
+    background: white;
+    border-radius: 20px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+    padding: 30px;
+    margin: 30px auto;
+    max-width: 500px;
+    animation: slideIn 0.5s ease-out;
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.estudiante-nombre {
+    font-size: 32px;
+    font-weight: bold;
+    color: #2d3748;
+    margin: 20px 0;
+    text-align: center;
+    line-height: 1.3;
+}
+
+.estudiante-detalle {
+    background: #f7fafc;
+    padding: 15px;
+    border-radius: 10px;
+    margin: 15px 0;
+    text-align: center;
+}
+
+.estudiante-detalle p {
+    margin: 8px 0;
+    font-size: 16px;
+    color: #4a5568;
+}
+
+.estudiante-detalle strong {
+    color: #2d3748;
+    font-weight: 600;
+}
+
+.mensaje-exito {
+    background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+    color: white;
+    padding: 15px;
+    border-radius: 12px;
+    font-weight: bold;
+    font-size: 18px;
+    margin: 20px 0;
+    box-shadow: 0 4px 6px rgba(72, 187, 120, 0.3);
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.02);
+    }
+}
+
+.btn-confirmar {
+    background: linear-gradient(135deg, #667777 0%, #4a5568 100%);
+    border: none;
+    border-radius: 12px;
+    padding: 15px 40px;
+    color: white;
+    font-weight: bold;
+    font-size: 18px;
+    cursor: pointer;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    transition: all 0.3s ease;
+    width: 100%;
+    margin-top: 15px;
+}
+
+.btn-confirmar:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+}
+
+.btn-confirmar:active {
+    transform: translateY(0);
+}
+
+.icono-check {
+    display: inline-block;
+    width: 60px;
+    height: 60px;
+    background: #48bb78;
+    border-radius: 50%;
+    margin: 0 auto 15px;
+    position: relative;
+}
+
+.icono-check::after {
+    content: '✓';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: white;
+    font-size: 36px;
+    font-weight: bold;
+}
+</style>
+</head>
+<body class='theme-orange'>
+    <div class='overlay'></div>
+    <nav class='navbar' style="background:#667777;">
+        <div class='container-fluid'>
+            <div class='navbar-header'>
+                <span style='font-size:25px;padding:0 0 5px;color:white;'>&nbsp;U.E. Inter Andino </span>
+            </div> 
+        </div>
+    </nav>
+            <section class='content'>
+                <div class='container-fluid'> 
+                    <div class='row'>
+                        <div class='col-lg-12 col-md-12 col-sm-12 col-xs-12'>
+                            <div class='card'><div class='body'>
+                                <div class='row clearfix demo-button-sizes' align="center">                                  
+
+                                    <h3 style='font-size:27px;'>Lector QR  <br>
+                                        U.E. Privada Interandino Boliviano </h3> <hr>
+
+                                        <div id="qr-reader" style="width:100%"></div>
+                                        <div id="qr-reader-results"></div>
+                                        
+                                        <!-- Información del estudiante -->
+                                        <div id="estudiante-info" style="display:none;">
+                                            <div class="icono-check"></div>
+                                            <div class="estudiante-nombre" id="nombre-estudiante"></div>
+                                            <div class="estudiante-detalle" id="estudiante-datos"></div>
+                                            <div class="mensaje-exito">
+                                                ✓ Asistencia Registrada Exitosamente
+                                            </div>
+                                            <button onclick="confirmarAsistencia()" class="btn-confirmar">
+                                                Confirmar Asistencia
+                                            </button>
+                                        </div>
+                                        
+                                        <b>Fecha:</b><input type="text" id="txtFecha" class="tiempo"> <br>
+                                        <b>Hora:</b><input type="text" id="txtHora" class="tiempo">
+                                        <div id="res"></div>
+                                                
+                                    <br><br><br><br><br> 
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+<script src='plugins/jquery/jquery.min.js'></script><script src='plugins/node-waves/waves.js'></script><script src='js/admin.js'></script></body></html>
+<script src="html5-qrcode.min.js"></script>
+<script>
+var html5QrcodeScanner = new Html5QrcodeScanner(
+   "qr-reader", { fps: 5, qrbox: 270 });
+
+function onScanSuccess(decodedText, decodedResult) {
+    var resultContainer = document.getElementById('qr-reader-results');
+    resultContainer.innerHTML = "<div class='busq'>"+decodedText+"</div>";
+    fRegistrar(decodedText);
+}
+
+function fRegistrar(decc){
+  let fecha = $('#txtFecha').val();
+  let hora = $('#txtHora').val();
+
+  $.post('https://uep-interandinoboliviano.com/app_asistencia/asistencia_registrar.php',{
+	'codigo': decc,
+    'fecha':fecha,
+    'hora':hora
+  },function(data){
+    try {
+        var response = typeof data === 'string' ? JSON.parse(data) : data;
+        
+        if(response.success && response.estudiante) {
+            mostrarInfoEstudiante(response.estudiante);
+            $('#res').html('<div style="color:green;font-weight:bold;padding:10px;">' + response.message + '</div>');
+        } else {
+            $('#res').html('<div style="color:red;font-weight:bold;padding:10px;">' + (response.message || 'Error al registrar') + '</div>');
+        }
+    } catch(e) {
+        console.error('Error:', e, data);
+        $('#res').html('<div style="color:red;font-weight:bold;padding:10px;">Error al procesar</div>');
+    }
+  }).fail(function(xhr, status, error) {
+      console.error('Error AJAX:', error);
+      $('#res').html('<div style="color:red;font-weight:bold;padding:10px;">Error de conexión</div>');
+  });  
+}
+
+function mostrarInfoEstudiante(estudiante) {
+    var nombreCompleto = (estudiante.nombres || '') + ' ' + (estudiante.apellidos || '');
+    $('#nombre-estudiante').html(nombreCompleto);
+    
+    var html = '';
+    html += '<p><strong>Código:</strong> ' + (estudiante.codigo || '') + '</p>';
+    html += '<p><strong>Curso:</strong> ' + (estudiante.curso || '') + '</p>';
+    html += '<p><strong>Fecha:</strong> ' + $('#txtFecha').val() + '</p>';
+    html += '<p><strong>Hora:</strong> ' + $('#txtHora').val() + '</p>';
+    
+    $('#estudiante-datos').html(html);
+    $('#estudiante-info').fadeIn(500);
+    
+    setTimeout(function() {
+        $('#estudiante-info').fadeOut(500);
+    }, 8000);
+}
+
+function confirmarAsistencia() {
+    $('#estudiante-info').fadeOut(500);
+    
+    var mensaje = $('<div>').css({
+        'position': 'fixed',
+        'top': '50%',
+        'left': '50%',
+        'transform': 'translate(-50%, -50%)',
+        'background': 'linear-gradient(135deg, #48bb78 0%, #38a169 100%)',
+        'color': 'white',
+        'padding': '30px 50px',
+        'border-radius': '15px',
+        'font-size': '24px',
+        'font-weight': 'bold',
+        'box-shadow': '0 10px 30px rgba(0,0,0,0.3)',
+        'z-index': '9999'
+    }).html('✓ Asistencia Confirmada');
+    
+    $('body').append(mensaje);
+    
+    setTimeout(function() {
+        mensaje.fadeOut(500, function() {
+            $(this).remove();
+        });
+    }, 2000);
+}
+
+html5QrcodeScanner.render(onScanSuccess);   
+
+
+setInterval(() => {
+    const selectElement = document.getElementById('html5-qrcode-select-camera');
+    if (selectElement) {
+        document.querySelectorAll("#html5-qrcode-select-camera option").forEach(option => {
+            if (option.textContent.includes("front")) {
+                option.remove();
+            }
+        });
+        selectElement.selectedIndex = 0; 
+        clearInterval(this);
+    }
+}, 1000);
+
+$(document).ready(function(){    	
+    var tiempo = new Date();
+    //fecha
+    var mes =(tiempo.getMonth()+1);
+        if(mes<10) mes = '0'+mes;
+    var dia =tiempo.getDate();
+        if(dia<10) dia='0'+dia;
+    var ano = tiempo.getFullYear();
+    var fecha = ano+'-'+mes+'-'+dia;
+
+    $('#txtFecha').val(fecha);
+	setInterval('Horas()',1000);
+});	
+//hora
+function Horas(){
+	var tiempo = new Date();
+	
+    let hh = tiempo.getHours();
+        if(hh<10) hh = '0'+hh;
+    let mm = tiempo.getMinutes();
+        if(mm<10) mm = '0'+mm;
+    let ss = tiempo.getSeconds();
+        if(ss<10) ss = '0'+ss;
+    let hora = hh+':'+mm+':'+ss;	
+
+    $('#txtHora').val(hora);
+}
+</script>

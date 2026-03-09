@@ -1,0 +1,159 @@
+Ahora organizamos el sistema por módulos funcionales.
+
+🎓 MÓDULO ACADÉMICO
+
+Incluye:
+
+Gestión de estudiantes
+
+Gestión de cursos y paralelos
+
+Dimensiones MINEDU
+
+Carga de notas
+
+Bloqueo de trimestres
+
+Aprobaciones finales
+
+Reportes académicos
+
+Estudiantes en riesgo
+
+🕒 MÓDULO DE ASISTENCIAS
+
+Incluye:
+
+Registro manual
+
+Registro QR / código barras
+
+Clasificación automática
+
+Configuración horarios ingreso
+
+Alertas automáticas
+
+Reportes estadísticos
+
+Integración con horarios
+
+💰 MÓDULO CONTABLE
+
+Incluye:
+
+Configuración de ítems de cobro
+
+Gestión colegiaturas
+
+Transporte
+
+Servicios adicionales
+
+Control morosidad
+
+Reportes de caja
+
+Restricciones automáticas
+
+🛒 MÓDULO DE VENTAS Y ALMACÉN (BETA)
+
+Incluye:
+
+Gestión proveedores
+
+Gestión productos
+
+Categorías
+
+Inventario en tiempo real
+
+Registro ventas
+
+Emisión recibos
+
+Reportes ventas
+
+Reportes stock
+
+Movimientos almacén
+
+📄 MÓDULO DE LICENCIAS
+
+Incluye:
+
+Registro de licencias médicas
+
+Justificaciones familiares
+
+Validación con asistencia
+
+Reportes por curso/nivel
+
+🏥 MÓDULO ENFERMERÍA
+
+Incluye:
+
+Cardex médico digital
+
+Registro atenciones
+
+Medicamentos administrados
+
+Emergencias
+
+Estadísticas médicas
+
+🧠 MÓDULO PSICOLOGÍA
+
+Incluye:
+
+Evaluaciones
+
+Seguimiento de casos
+
+Registro sesiones
+
+Alertas riesgo
+
+Reportes psicológicos
+
+🏫 MÓDULO REGENCIA
+
+Incluye:
+
+Registro incidentes
+
+Notificaciones formales
+
+Reportes disciplina
+
+Coordinación psicología
+
+🚌 MÓDULO TRANSPORTE
+
+Incluye:
+
+Rutas
+
+Choferes
+
+Asignación estudiantes
+
+Integración cobros
+
+📱 MÓDULO PADRES (APK)
+
+Incluye:
+
+Visualización notas
+
+Asistencias
+
+Alertas automáticas
+
+Estado financiero
+
+Confirmación eventos
+
+Actualización datos

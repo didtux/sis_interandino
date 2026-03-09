@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset='UTF-8'>
+    <meta http-equiv='X-UA-Compatible' content='IE=Edge'>
+    <meta content='width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no' name='viewport'>
+    <title>Sistema de Asistencia - U.E. Interandino Boliviano</title>
+    <link href='plugins/bootstrap/css/bootstrap.css' rel='stylesheet'>
+    <link href='plugins/node-waves/waves.css' rel='stylesheet' />
+    <link href='css/style.css' rel='stylesheet'>
+    <link href='css/themes/all-themes.css' rel='stylesheet' />
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+        
+        img {
+            max-width: 100%;
+        }
+        
+        .navbar {
+            background: linear-gradient(135deg, #667777 0%, #4a5568 100%) !important;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            padding: 15px 0;
+        }
+        
+        .navbar .bars {
+            color: white !important;
+            font-size: 24px !important;
+            font-weight: 600;
+            text-decoration: none;
+        }
+        
+        .sidebar {
+            background: linear-gradient(180deg, #667777 0%, #4a5568 100%) !important;
+            box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+        }
+        
+        .sidebar .menu ul li a {
+            transition: all 0.3s ease;
+        }
+        
+        .sidebar .menu ul li a:hover {
+            background: rgba(255,255,255,0.1);
+            transform: translateX(5px);
+        }
+        
+        .content {
+            padding: 30px 15px;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            border: none;
+            overflow: hidden;
+            animation: fadeIn 0.5s ease-out;
+        }
+        
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .card .body {
+            padding: 40px 20px;
+        }
+        
+        .hero-image {
+            border-radius: 15px;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+            margin: 20px 0;
+            max-height: 300px;
+            object-fit: cover;
+        }
+        
+        .welcome-text {
+            font-size: 28px;
+            font-weight: bold;
+            color: #2d3748;
+            margin: 30px 0 15px;
+            text-align: center;
+        }
+        
+        .subtitle-text {
+            font-size: 16px;
+            color: #718096;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .btn-qr {
+            background: linear-gradient(135deg, #667777 0%, #4a5568 100%) !important;
+            color: white !important;
+            border: none !important;
+            border-radius: 15px !important;
+            padding: 20px 40px !important;
+            font-size: 20px !important;
+            font-weight: bold !important;
+            box-shadow: 0 6px 15px rgba(102, 119, 119, 0.3) !important;
+            transition: all 0.3s ease !important;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .btn-qr::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.2);
+            transform: translate(-50%, -50%);
+            transition: width 0.6s, height 0.6s;
+        }
+        
+        .btn-qr:hover::before {
+            width: 300px;
+            height: 300px;
+        }
+        
+        .btn-qr:hover {
+            transform: translateY(-3px) !important;
+            box-shadow: 0 10px 25px rgba(102, 119, 119, 0.4) !important;
+        }
+        
+        .btn-qr:active {
+            transform: translateY(-1px) !important;
+        }
+        
+        .qr-icon {
+            display: inline-block;
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, #667777 0%, #4a5568 100%);
+            border-radius: 20px;
+            margin: 0 auto 20px;
+            box-shadow: 0 6px 15px rgba(0,0,0,0.2);
+            position: relative;
+        }
+        
+        .qr-icon::after {
+            content: '■';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: 50px;
+        }
+        
+        .feature-box {
+            background: #f7fafc;
+            padding: 20px;
+            border-radius: 12px;
+            margin: 15px 0;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+        
+        .feature-box:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+        }
+        
+        .feature-icon {
+            font-size: 40px;
+            margin-bottom: 10px;
+        }
+        
+        .feature-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #2d3748;
+            margin-bottom: 5px;
+        }
+        
+        .feature-desc {
+            font-size: 14px;
+            color: #718096;
+        }
+    </style>
+</head>
+<body class='theme-orange'>
+    <div class='overlay'></div>
+    <nav class='navbar'>
+        <div class='container-fluid'>
+            <div class='navbar-header'>
+                <a href='javascript:void(0);' class='bars'>☰ U.E. Interandino Boliviano</a>
+            </div> 
+        </div>
+    </nav>
+    
+    <section>
+        <aside id='leftsidebar' class='sidebar'>
+            <div class='user-info'>
+                <div class='image'><br><br></div>
+                <div class='info-container'>
+                    <div class='name' data-toggle='dropdown' aria-haspopup='true' aria-expanded='false'></div>
+                </div>
+            </div>
+            <div class='menu'>
+                <ul class='list'>
+                    <li>
+                        <a href='#'>
+                            <span onclick='Opciones(1)' style="color:white; font-size:16px;">
+                                📱 Lector QR
+                            </span>
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </aside>
+    </section>
+    
+    <section class='content'>
+        <div class='container-fluid'> 
+            <div class='row'>
+                <div class='col-lg-12 col-md-12 col-sm-12 col-xs-12'>
+                    <div class='card'>
+                        <div class='body'>
+                            <div class='row clearfix demo-button-sizes' align="center">
+                                <div class="qr-icon"></div>
+                                
+                                <h1 class="welcome-text">
+                                    Sistema de Control de Asistencia
+                                </h1>
+                                <p class="subtitle-text">
+                                    Escanea el código QR para registrar tu asistencia
+                                </p>
+                                
+                                <img src='images/user-img-background.jpg' class='hero-image' alt='Sistema QR'>
+                                
+                                <div style="margin: 30px 0;">
+                                    <button type='button' onclick='Opciones()' class='btn btn-block btn-lg btn-qr waves-effect'>
+                                        <span style="position: relative; z-index: 1;">
+                                            📷 Abrir Lector QR de Asistencia
+                                        </span>
+                                    </button>
+                                </div>
+                                
+                                <div class="row" style="margin-top: 40px;">
+                                    <div class="col-md-4">
+                                        <div class="feature-box">
+                                            <div class="feature-icon">⚡</div>
+                                            <div class="feature-title">Rápido</div>
+                                            <div class="feature-desc">Registro instantáneo</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="feature-box">
+                                            <div class="feature-icon">🔒</div>
+                                            <div class="feature-title">Seguro</div>
+                                            <div class="feature-desc">Datos protegidos</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="feature-box">
+                                            <div class="feature-icon">✅</div>
+                                            <div class="feature-title">Confiable</div>
+                                            <div class="feature-desc">Sistema verificado</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+    
+    <script src='plugins/jquery/jquery.min.js'></script>
+    <script src='plugins/node-waves/waves.js'></script>
+    <script src='js/admin.js'></script>
+    <script src='js/demo.js'></script>
+</body>
+</html>
+<script>
+    function Opciones(Codigo) {
+        Android.AbrirQR();
+    }
+</script>

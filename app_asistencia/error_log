@@ -1,0 +1,19 @@
+[20-Feb-2026 12:11:38 UTC] PHP Fatal error:  __autoload() is no longer supported, use spl_autoload_register() instead in /home/uepinter/public_html/casa/setup.casa.php on line 29
+[20-Feb-2026 12:18:05 UTC] PHP Warning:  Undefined array key "codigo" in /home/uepinter/public_html/app_asistencia/asistencia_registrar.php on line 8
+[20-Feb-2026 12:18:05 UTC] PHP Warning:  Undefined array key "fecha" in /home/uepinter/public_html/app_asistencia/asistencia_registrar.php on line 9
+[20-Feb-2026 12:18:05 UTC] PHP Warning:  Undefined array key "hora" in /home/uepinter/public_html/app_asistencia/asistencia_registrar.php on line 10
+[20-Feb-2026 12:18:05 UTC] PHP Fatal error:  Uncaught Error: Undefined constant "DB_server" in /home/uepinter/public_html/app_asistencia/asistencia_registrar.php:19
+Stack trace:
+#0 {main}
+  thrown in /home/uepinter/public_html/app_asistencia/asistencia_registrar.php on line 19
+[20-Feb-2026 12:29:09 UTC] PHP Warning:  Undefined array key "codigo" in /home/uepinter/public_html/app_asistencia/asistencia_registrar.php on line 8
+[20-Feb-2026 12:29:09 UTC] PHP Warning:  Undefined array key "fecha" in /home/uepinter/public_html/app_asistencia/asistencia_registrar.php on line 9
+[20-Feb-2026 12:29:09 UTC] PHP Warning:  Undefined array key "hora" in /home/uepinter/public_html/app_asistencia/asistencia_registrar.php on line 10
+[22-Feb-2026 19:48:09 UTC] PHP Warning:  Undefined array key "codigo" in /home/uepinter/public_html/app_asistencia/asistencia_registrar.php on line 8
+[22-Feb-2026 19:48:09 UTC] PHP Warning:  Undefined array key "fecha" in /home/uepinter/public_html/app_asistencia/asistencia_registrar.php on line 9
+[22-Feb-2026 19:48:09 UTC] PHP Warning:  Undefined array key "hora" in /home/uepinter/public_html/app_asistencia/asistencia_registrar.php on line 10
+[22-Feb-2026 19:48:09 UTC] PHP Fatal error:  Uncaught mysqli_sql_exception: Incorrect date value: '' for column `uepinter_interandino`.`colegio_asistencia`.`asis_fecha` at row 1 in /home/uepinter/public_html/app_asistencia/asistencia_registrar.php:19
+Stack trace:
+#0 /home/uepinter/public_html/app_asistencia/asistencia_registrar.php(19): mysqli_query()
+#1 {main}
+  thrown in /home/uepinter/public_html/app_asistencia/asistencia_registrar.php on line 19

@@ -1,0 +1,24 @@
+-- Migración completada exitosamente
+-- Todos los campos necesarios ya existen en la tabla asistencia_permisos
+
+-- Estructura final de la tabla:
+-- permiso_id (PK, AUTO_INCREMENT)
+-- permiso_codigo (UNIQUE)
+-- permiso_tipo (VARCHAR(20) - 'PERMISO' o 'LICENCIA')
+-- permiso_numero (INT - Número correlativo)
+-- estud_codigo (FK a colegio_estudiantes)
+-- permiso_fecha_inicio (DATE)
+-- permiso_fecha_fin (DATE)
+-- permiso_motivo (VARCHAR(200))
+-- permiso_observacion (TEXT)
+-- permiso_solicitante_tipo (VARCHAR(20) - 'PADRE' o 'OTRO')
+-- permiso_solicitante_pfam (VARCHAR(20) - Código del padre/tutor)
+-- permiso_solicitante_nombre (VARCHAR(200) - Nombre si es OTRO)
+-- permiso_responsable (VARCHAR(200) - Responsable que firma)
+-- permiso_archivo (VARCHAR(255))
+-- permiso_documento (VARCHAR(100))
+-- permiso_estado (TINYINT - 1=Aprobado, 0=Rechazado, 2=Pendiente)
+-- permiso_aprobado_por (VARCHAR(14))
+-- permiso_fecha_registro (DATETIME)
+
+-- ✅ Migración completada - No se requieren cambios adicionales

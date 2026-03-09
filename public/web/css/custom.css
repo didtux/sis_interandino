@@ -1,0 +1,26 @@
+/**
+ *
+ * You can write your CSS code here, DO NOT touch the default JavaScript file
+ * because it will make it harder for you to update.
+ * 
+ */
+
+/* Habilitar scroll en sidebar */
+.main-sidebar {
+    height: 100vh !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    position: fixed !important;
+}
+
+#sidebar-wrapper {
+    height: 100% !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+}
+
+.sidebar-menu {
+    padding-bottom: 100px !important;
+}
+
+/*# sourceMappingURL=custom.css.map */

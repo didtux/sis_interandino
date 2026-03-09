@@ -1,0 +1,352 @@
+/* Estilos personalizados para tablas modernas y responsive */
+
+.modern-card {
+    border: none;
+    border-radius: 12px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+    margin-bottom: 30px;
+    overflow: hidden;
+}
+
+.modern-card .card-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 20px 25px;
+    border: none;
+}
+
+.modern-card .card-header h4 {
+    margin: 0;
+    font-weight: 600;
+    font-size: 1.25rem;
+    color: white;
+}
+
+.modern-card .card-body {
+    padding: 25px;
+}
+
+/* Tabla moderna */
+.modern-table {
+    width: 100%;
+    margin-bottom: 1rem;
+    background-color: transparent;
+}
+
+.modern-table thead th {
+    background-color: #f8f9fa;
+    color: #495057;
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 0.5px;
+    padding: 15px 12px;
+    border: none;
+    white-space: nowrap;
+}
+
+.modern-table tbody tr {
+    transition: all 0.3s ease;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.modern-table tbody tr:hover {
+    background-color: #f8f9fc;
+    transform: translateY(-2px);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+
+.modern-table tbody td {
+    padding: 15px 12px;
+    vertical-align: middle;
+    color: #495057;
+    font-size: 0.9rem;
+}
+
+/* Responsive table wrapper */
+.table-responsive-modern {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    border-radius: 8px;
+}
+
+@media (max-width: 768px) {
+    .table-responsive-modern {
+        border: 1px solid #dee2e6;
+    }
+    
+    .modern-table thead {
+        display: none;
+    }
+    
+    .modern-table tbody tr {
+        display: block;
+        margin-bottom: 15px;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        padding: 10px;
+    }
+    
+    .modern-table tbody td {
+        display: flex;
+        justify-content: space-between;
+        padding: 10px;
+        border: none;
+        text-align: right;
+    }
+    
+    .modern-table tbody td:before {
+        content: attr(data-label);
+        font-weight: 600;
+        text-transform: uppercase;
+        font-size: 0.75rem;
+        color: #6c757d;
+        text-align: left;
+    }
+}
+
+/* Botones de acción */
+.action-buttons {
+    display: flex;
+    gap: 5px;
+    flex-wrap: wrap;
+}
+
+.btn-action {
+    padding: 6px 12px;
+    font-size: 0.8rem;
+    border-radius: 6px;
+    transition: all 0.3s ease;
+    border: none;
+}
+
+.btn-action:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+}
+
+.btn-action-view {
+    background-color: #17a2b8;
+    color: white;
+}
+
+.btn-action-edit {
+    background-color: #ffc107;
+    color: #212529;
+}
+
+.btn-action-delete {
+    background-color: #dc3545;
+    color: white;
+}
+
+/* Badge moderno */
+.modern-badge {
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    display: inline-block;
+}
+
+.badge-primary-modern {
+    background-color: #e3f2fd;
+    color: #1976d2;
+}
+
+.badge-success-modern {
+    background-color: #e8f5e9;
+    color: #388e3c;
+}
+
+.badge-warning-modern {
+    background-color: #fff3e0;
+    color: #f57c00;
+}
+
+/* Filtros y búsqueda */
+.filter-section {
+    background-color: #f8f9fa;
+    padding: 20px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+}
+
+.search-box {
+    position: relative;
+}
+
+.search-box input {
+    padding-left: 40px;
+    border-radius: 25px;
+    border: 1px solid #dee2e6;
+}
+
+.search-box i {
+    position: absolute;
+    left: 15px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #6c757d;
+}
+
+/* Paginación moderna */
+.pagination {
+    margin-top: 20px;
+}
+
+.page-link {
+    border-radius: 6px;
+    margin: 0 3px;
+    border: none;
+    color: #667eea;
+}
+
+.page-item.active .page-link {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border: none;
+}
+
+/* Estado vacío */
+.empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: #6c757d;
+}
+
+.empty-state i {
+    font-size: 4rem;
+    color: #dee2e6;
+    margin-bottom: 20px;
+}
+
+.empty-state h5 {
+    color: #495057;
+    margin-bottom: 10px;
+}
+
+/* Alertas modernas */
+.alert-modern {
+    border: none;
+    border-radius: 8px;
+    padding: 15px 20px;
+    margin-bottom: 20px;
+}
+
+.alert-success-modern {
+    background-color: #d4edda;
+    color: #155724;
+    border-left: 4px solid #28a745;
+}
+
+/* Botón principal */
+.btn-primary-modern {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border: none;
+    border-radius: 8px;
+    padding: 10px 24px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.btn-primary-modern:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+}
+
+/* Loading spinner */
+.spinner-modern {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border: 3px solid rgba(255,255,255,.3);
+    border-radius: 50%;
+    border-top-color: #fff;
+    animation: spin 1s ease-in-out infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+
+/* Estilos para formularios modernos */
+.form-group label {
+    font-weight: 600;
+    color: #495057;
+    margin-bottom: 8px;
+    font-size: 0.9rem;
+}
+
+.form-control {
+    border-radius: 8px;
+    border: 1px solid #dee2e6;
+    padding: 10px 15px;
+    transition: all 0.3s ease;
+}
+
+.form-control:focus {
+    border-color: #667eea;
+    box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.15);
+}
+
+.form-control.is-invalid {
+    border-color: #dc3545;
+}
+
+.invalid-feedback {
+    font-size: 0.85rem;
+    margin-top: 5px;
+}
+
+.custom-control-label {
+    font-weight: 500;
+    color: #495057;
+}
+
+.form-control-plaintext {
+    padding: 10px 0;
+    color: #495057;
+    font-size: 1rem;
+}
+
+/* Botones secundarios */
+.btn-secondary {
+    background-color: #6c757d;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 24px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.btn-secondary:hover {
+    background-color: #5a6268;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(108, 117, 125, 0.3);
+}
+
+/* Mejoras para select */
+select.form-control {
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23495057' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 15px center;
+    padding-right: 40px;
+}
+
+/* Espaciado de formularios */
+.form-group {
+    margin-bottom: 1.5rem;
+}
+
+/* Texto de ayuda */
+.text-muted {
+    font-size: 0.85rem;
+}
+
+/* Requerido */
+.text-danger {
+    color: #dc3545;
+    font-weight: bold;
+}
