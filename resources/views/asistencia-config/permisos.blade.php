@@ -70,7 +70,7 @@
                         <tbody>
                             @forelse($permisos as $p)
                                 <tr>
-                                    <td>{{ $p->permiso_numero ?? $p->permiso_codigo }}</td>
+                                    <td>{{ $p->permiso_codigo }}</td>
                                     <td><span class="badge badge-{{ $p->permiso_tipo == 'LICENCIA' ? 'info' : 'secondary' }}">{{ $p->permiso_tipo }}</span></td>
                                     <td>{{ $p->estudiante->est_nombres ?? 'N/A' }} {{ $p->estudiante->est_apellidos ?? '' }}</td>
                                     <td>{{ $p->estudiante->curso->cur_nombre ?? 'N/A' }}</td>

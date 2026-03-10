@@ -5,12 +5,7 @@
     <title>Compromiso Disciplinario</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { 
-            font-family: Arial, sans-serif; 
-            font-size: 11px;
-            padding: 20px;
-            line-height: 1.6;
-        }
+        body { font-family: Arial, sans-serif; font-size: 11px; line-height: 1.6; padding: 15mm 20mm; }
         .header {
             display: table;
             width: 100%;
@@ -81,13 +76,11 @@
         .signature-box {
             display: table-cell;
             width: 50%;
-            text-align: center;
-            padding: 10px;
+            text-align: left;
+            padding: 10px 20px;
         }
-        .signature-line {
-            border-top: 1px solid #000;
-            margin-top: 50px;
-            padding-top: 5px;
+        .signature-item {
+            margin: 15px 0;
         }
         .footer {
             position: fixed;
@@ -145,27 +138,44 @@
         Para constancia firmo el presente compromiso por la buena salud académica y disciplinaria de mi hijo(a).
     </div>
 
-    <div class="content" style="margin-top: 30px;">
+    <div class="content" style="margin-top: 30px; text-align: center;">
         Alto <span class="dotted" style="min-width: 100px;">{{ \Carbon\Carbon::parse($caso->psico_fecha)->format('d') }}</span> de <span class="dotted" style="min-width: 150px;">{{ \Carbon\Carbon::parse($caso->psico_fecha)->locale('es')->translatedFormat('F') }}</span> 2026
     </div>
 
     <div class="signature-section">
         <div class="signature-box">
-            <div class="signature-line">
-                Firma: <span class="dotted" style="min-width: 200px;"></span><br>
-                Nombres y Apellidos: <span class="dotted" style="min-width: 150px;">{{ strtoupper($caso->estudiante->padres->first()->pfam_nombres ?? '') }} {{ strtoupper($caso->estudiante->padres->first()->pfam_apellidos ?? '') }}</span><br>
-                <span class="dotted" style="min-width: 250px;"></span><br>
-                C. I.: <span class="dotted" style="min-width: 150px;">{{ $caso->estudiante->padres->first()->pfam_ci ?? '' }}</span><br>
-                Cel.: <span class="dotted" style="min-width: 150px;">{{ $caso->estudiante->padres->first()->pfam_celular ?? '' }}</span>
+            <div class="signature-item">
+                Firma: <span class="dotted" style="min-width: 250px;"></span>
             </div>
+            <div class="signature-item">
+                Nombres: <span class="dotted" style="min-width: 200px;">{{ strtoupper($caso->estudiante->padres->first()->pfam_nombres ?? '') }}</span>
+            </div>
+            <div class="signature-item">
+                Apellidos: <span class="dotted" style="min-width: 200px;">{{ strtoupper($caso->estudiante->padres->first()->pfam_apellidos ?? '') }}</span>
+            </div>
+            <div class="signature-item">
+                C. I.: <span class="dotted" style="min-width: 200px;">{{ $caso->estudiante->padres->first()->pfam_ci ?? '' }}</span>
+            </div>
+            <div class="signature-item">
+                Cel.: <span class="dotted" style="min-width: 200px;">{{ $caso->estudiante->padres->first()->pfam_celular ?? '' }}</span>
+            </div>
+
         </div>
         <div class="signature-box">
-            <div class="signature-line">
-                Firma: <span class="dotted" style="min-width: 200px;"></span><br>
-                Nombres y Apellidos: <span class="dotted" style="min-width: 150px;">{{ strtoupper($caso->estudiante->padres->skip(1)->first()->pfam_nombres ?? '') }} {{ strtoupper($caso->estudiante->padres->skip(1)->first()->pfam_apellidos ?? '') }}</span><br>
-                <span class="dotted" style="min-width: 250px;"></span><br>
-                C. I.: <span class="dotted" style="min-width: 150px;">{{ $caso->estudiante->padres->skip(1)->first()->pfam_ci ?? '' }}</span><br>
-                Cel.: <span class="dotted" style="min-width: 150px;">{{ $caso->estudiante->padres->skip(1)->first()->pfam_celular ?? '' }}</span>
+            <div class="signature-item">
+                Firma: <span class="dotted" style="min-width: 250px;"></span>
+            </div>
+            <div class="signature-item">
+                Nombres: <span class="dotted" style="min-width: 200px;"></span>
+            </div>
+            <div class="signature-item">
+                Apellidos: <span class="dotted" style="min-width: 200px;"></span>
+            </div>
+            <div class="signature-item">
+                C. I.: <span class="dotted" style="min-width: 200px;"></span>
+            </div>
+            <div class="signature-item">
+                Cel.: <span class="dotted" style="min-width: 200px;"></span>
             </div>
         </div>
     </div>

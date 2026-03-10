@@ -4,29 +4,29 @@
     <meta charset="utf-8">
     <title>Solicitud de {{ $permiso->permiso_tipo }}</title>
     <style>
-        @page { margin: 10mm; size: 10cm 16cm; }
+        @page { margin: 8mm; size: 16cm 10cm; }
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: Arial, sans-serif; font-size: 8pt; }
-        .header { display: table; width: 100%; margin-bottom: 8px; }
-        .logo { display: table-cell; width: 50px; vertical-align: top; }
-        .logo img { width: 45px; height: auto; }
+        body { font-family: Arial, sans-serif; font-size: 7.5pt; }
+        .header { display: table; width: 100%; margin-bottom: 6px; }
+        .logo { display: table-cell; width: 45px; vertical-align: top; }
+        .logo img { width: 40px; height: auto; }
         .institucion { display: table-cell; vertical-align: top; padding-left: 5px; }
-        .institucion h3 { margin: 0; font-size: 7pt; line-height: 1.2; font-weight: bold; }
-        .numero-box { display: table-cell; width: 60px; text-align: right; vertical-align: top; }
-        .numero-box div { border: 1.5px solid #000; padding: 3px; text-align: center; }
-        .numero-box .label { font-size: 7pt; margin: 0; font-weight: bold; }
-        .numero-box .numero { font-size: 10pt; font-weight: bold; margin: 2px 0; }
-        .numero-box .fecha { font-size: 6pt; margin: 0; border-top: 1px solid #000; padding-top: 2px; }
-        .titulo { text-align: center; font-size: 10pt; font-weight: bold; margin: 8px 0; }
-        .info-line { margin: 4px 0; font-size: 7pt; }
+        .institucion h3 { margin: 0; font-size: 6.5pt; line-height: 1.2; font-weight: bold; }
+        .numero-box { display: table-cell; width: 55px; text-align: right; vertical-align: top; }
+        .numero-box div { border: 1.5px solid #000; padding: 2px; text-align: center; }
+        .numero-box .label { font-size: 6.5pt; margin: 0; font-weight: bold; }
+        .numero-box .numero { font-size: 9pt; font-weight: bold; margin: 2px 0; }
+        .numero-box .fecha { font-size: 5.5pt; margin: 0; border-top: 1px solid #000; padding-top: 2px; }
+        .titulo { text-align: center; font-size: 9pt; font-weight: bold; margin: 6px 0; }
+        .info-line { margin: 3px 0; font-size: 6.5pt; }
         .info-line strong { font-weight: bold; }
-        .grid-container { margin: 8px 0; }
-        .grid-row { display: table; width: 100%; margin-bottom: 3px; }
+        .grid-container { margin: 6px 0; }
+        .grid-row { display: table; width: 100%; margin-bottom: 2px; }
         .grid-cell { display: table-cell; width: 33.33%; padding: 1px; }
-        .grid-box { border: 1.5px solid #000; border-radius: 3px; height: 50px; position: relative; }
-        .grid-number { position: absolute; top: 3px; left: 5px; font-size: 9pt; font-weight: bold; background: white; padding: 0 3px; }
-        .footer { margin-top: 10px; }
-        .footer-line { margin: 4px 0; font-size: 7pt; }
+        .grid-box { border: 1.5px solid #000; border-radius: 3px; height: 45px; position: relative; }
+        .grid-number { position: absolute; top: 2px; left: 4px; font-size: 8pt; font-weight: bold; background: white; padding: 0 2px; }
+        .footer { margin-top: 6px; }
+        .footer-line { margin: 2px 0; font-size: 6.5pt; }
     </style>
 </head>
 <body>
@@ -42,7 +42,7 @@
         </div>
         <div class="numero-box">
             <div>
-                <p class="label">N° {{ $permiso->permiso_numero ?? 0 }}</p>
+                <p class="label">{{ $permiso->permiso_codigo }}</p>
                 <p class="fecha">{{ $permiso->permiso_fecha_inicio->format('d') }}</p>
                 <p class="fecha">{{ $permiso->permiso_fecha_inicio->format('m') }}</p>
                 <p class="fecha">{{ $permiso->permiso_fecha_inicio->format('Y') }}</p>
@@ -111,8 +111,8 @@
         <div class="footer-line">
             <strong>HORA:</strong> {{ now()->format('H:i:s') }}
         </div>
-        <div class="footer-line" style="font-size: 6pt; font-style: italic;">
-            Fecha y hora de impresión: {{ now()->format('d/m/Y H:i:s') }}
+        <div class="footer-line" style="font-size: 5.5pt; font-style: italic;">
+            Impreso: {{ now()->format('d/m/Y H:i:s') }}
         </div>
     </div>
 </body>

@@ -316,12 +316,21 @@
                 <div class="form-group">
                     <label>Curso</label>
                     <select id="cur_codigo_faltas" class="form-control select2-modal-faltas">
-                        <option value="todos">Todos los cursos</option>
+                        <option value="todos">Todos los cursos del turno</option>
                         @foreach($cursos as $curso)
                             <option value="{{ $curso->cur_codigo }}" data-cursos="{{ $curso->cur_codigo }}">{{ $curso->cur_nombre }}</option>
                         @endforeach
                     </select>
                     <small class="text-muted">Dejar en "Todos" para incluir todos los cursos del turno</small>
+                </div>
+                <div class="form-group">
+                    <div class="custom-control custom-checkbox">
+                        <input type="checkbox" class="custom-control-input" id="todos_cursos_horarios">
+                        <label class="custom-control-label" for="todos_cursos_horarios">
+                            Todos los cursos y horarios
+                        </label>
+                    </div>
+                    <small class="text-muted d-block mt-1">Marcar para incluir todos los cursos de todos los horarios configurados</small>
                 </div>
                 <div class="form-group">
                     <label>Fecha <span class="text-danger">*</span></label>
@@ -382,7 +391,6 @@ $('#turno_faltas').on('change', function() {
     const categoriaSeleccionada = optionSeleccionada.data('categoria');
     const turnoNombre = optionSeleccionada.data('turno');
     
-    
     if (!turnoSeleccionado) {
         $('#cur_codigo_faltas').val('todos').trigger('change');
         $('#cur_codigo_faltas option').show();
@@ -429,6 +437,16 @@ $('#turno_faltas').on('change', function() {
     });
 });
 
+$('#todos_cursos_horarios').on('change', function() {
+    if ($(this).is(':checked')) {
+        $('#turno_faltas').prop('disabled', true).val('').trigger('change');
+        $('#cur_codigo_faltas').prop('disabled', true).val('todos').trigger('change');
+    } else {
+        $('#turno_faltas').prop('disabled', false);
+        $('#cur_codigo_faltas').prop('disabled', false);
+    }
+});
+
 function generarReporteTrimestral(tipo) {
     const curso = $('#cur_codigo_trimestral').val();
     const trimestre = $('#trimestre').val();
@@ -461,19 +479,31 @@ function generarReporteAnual(tipo) {
 }
 
 function generarReporteFaltas() {
+    const todosCursosHorarios = $('#todos_cursos_horarios').is(':checked');
     const curso = $('#cur_codigo_faltas').val() || 'todos';
     const fecha = $('#fecha_faltas').val();
-    const optionSeleccionada = $('#turno_faltas').find(':selected');
-    const turnoNombre = optionSeleccionada.data('turno');
-    const categoria = optionSeleccionada.data('categoria');
     
-    if (!fecha || !turnoNombre) {
-        alert('Seleccione turno y fecha');
+    if (!fecha) {
+        alert('Seleccione una fecha');
         return;
     }
     
-    const url = '{{ route("asistencias.reporte-faltas") }}?cur_codigo=' + curso + '&fecha=' + fecha + '&turno=' + turnoNombre + '&categoria=' + categoria;
-    window.open(url, '_blank');
+    if (todosCursosHorarios) {
+        const url = '{{ route("asistencias.reporte-faltas") }}?cur_codigo=todos&fecha=' + fecha + '&todos_horarios=1';
+        window.open(url, '_blank');
+    } else {
+        const optionSeleccionada = $('#turno_faltas').find(':selected');
+        const turnoNombre = optionSeleccionada.data('turno');
+        const categoria = optionSeleccionada.data('categoria');
+        
+        if (!turnoNombre) {
+            alert('Seleccione un turno');
+            return;
+        }
+        
+        const url = '{{ route("asistencias.reporte-faltas") }}?cur_codigo=' + curso + '&fecha=' + fecha + '&turno=' + turnoNombre + '&categoria=' + categoria;
+        window.open(url, '_blank');
+    }
 }
 
 function exportarPDF() {

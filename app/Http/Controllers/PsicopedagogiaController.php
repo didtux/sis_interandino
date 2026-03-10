@@ -150,10 +150,36 @@ class PsicopedagogiaController extends Controller
         return $pdf->stream('reporte-psicopedagogia-' . date('Y-m-d') . '.pdf');
     }
 
-    public function compromisoPdf($id)
+    public function compromisoPdf($id, Request $request)
     {
         $caso = CasoPsicopedagogia::with('estudiante.curso', 'estudiante.padres')->findOrFail($id);
-        $pdf = Pdf::loadView('psicopedagogia.compromiso-pdf', compact('caso'))->setPaper('letter', 'portrait');
-        return $pdf->stream('compromiso-' . $caso->estudiante->est_codigo . '-' . date('Y-m-d') . '.pdf');
+        $tipo = $request->get('tipo', 'disciplinario1');
+        
+        $viewMap = [
+            'ppff' => 'psicopedagogia.compromisos.ppff',
+            'informacion' => 'psicopedagogia.compromisos.informacion',
+            'conformidad' => 'psicopedagogia.compromisos.conformidad',
+            'disciplinario1' => 'psicopedagogia.compromisos.disciplinario1',
+            'disciplinario1_alt' => 'psicopedagogia.compromisos.disciplinario1_alt',
+            'disciplinario1_alt2' => 'psicopedagogia.compromisos.disciplinario1_alt2',
+            'disciplinario1_alt3' => 'psicopedagogia.compromisos.disciplinario1_alt3',
+            'disciplinario2' => 'psicopedagogia.compromisos.disciplinario2',
+            'transferencia' => 'psicopedagogia.compromisos.transferencia',
+            'control' => 'psicopedagogia.compromisos.control',
+            'compromiso_diciplina' => 'psicopedagogia.compromisos.compromiso_diciplina',
+            'puntualidad' => 'psicopedagogia.compromisos.puntualidad',
+            'cumplimiento' => 'psicopedagogia.compromisos.cumplimiento',
+            'cumplimiento_alt' => 'psicopedagogia.compromisos.cumplimiento_alt',
+            'refaccion' => 'psicopedagogia.compromisos.refaccion',
+            'celular' => 'psicopedagogia.compromisos.celular',
+            'neurologico' => 'psicopedagogia.compromisos.neurologico',
+            'rendimiento' => 'psicopedagogia.compromisos.rendimiento',
+            'uniforme' => 'psicopedagogia.compromisos.uniforme',
+            'padres_estudiante' => 'psicopedagogia.compromisos.padres_estudiante'
+        ];
+        
+        $view = $viewMap[$tipo] ?? 'psicopedagogia.compromisos.disciplinario1';
+        $pdf = Pdf::loadView($view, compact('caso'))->setPaper('letter', 'portrait');
+        return $pdf->stream('compromiso-' . $tipo . '-' . $caso->estudiante->est_codigo . '.pdf');
     }
 }

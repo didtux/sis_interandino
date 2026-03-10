@@ -355,39 +355,57 @@ class ConfiguracionAsistenciaController extends Controller
             'estud_codigo' => 'required|exists:colegio_estudiantes,est_codigo',
             'permiso_tipo' => 'required|in:PERMISO,LICENCIA',
             'permiso_fecha_inicio' => 'required|date',
-            'permiso_fecha_fin' => 'required|date',
+            'permiso_fecha_fin' => 'required|date|after_or_equal:permiso_fecha_inicio',
             'permiso_origen' => 'required|in:PERSONAL,WHATSAPP,LLAMADA',
             'permiso_motivo' => 'required|string|max:200',
             'permiso_archivo' => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:2048'
         ]);
 
-        $ultimoNumero = Permiso::max('permiso_numero') ?? 0;
+        $fechaInicio = Carbon::parse($request->permiso_fecha_inicio);
+        $fechaFin = Carbon::parse($request->permiso_fecha_fin);
+        $diasDiferencia = $fechaInicio->diffInDays($fechaFin) + 1;
 
-        $data = [
-            'permiso_codigo' => 'PER' . time(),
-            'permiso_tipo' => $request->permiso_tipo,
-            'permiso_numero' => $ultimoNumero + 1,
-            'estud_codigo' => $request->estud_codigo,
-            'permiso_fecha_inicio' => $request->permiso_fecha_inicio,
-            'permiso_fecha_fin' => $request->permiso_fecha_fin,
-            'permiso_origen' => $request->permiso_origen,
-            'permiso_motivo' => $request->permiso_motivo,
-            'permiso_observacion' => $request->permiso_observacion,
-            'permiso_solicitante_pfam' => $request->permiso_solicitante_pfam,
-            'permiso_solicitante_nombre' => $request->permiso_solicitante_nombre,
-            'permiso_estado' => 1,
-            'permiso_aprobado_por' => auth()->user()->us_codigo
-        ];
-
-        if ($request->hasFile('permiso_archivo')) {
-            $file = $request->file('permiso_archivo');
-            $filename = 'permiso_' . time() . '.' . $file->getClientOriginalExtension();
-            $file->move(public_path('uploads/permisos'), $filename);
-            $data['permiso_archivo'] = $filename;
+        $ultimoCodigo = Permiso::where('permiso_codigo', 'like', 'PER%')
+            ->orderBy('permiso_codigo', 'desc')
+            ->first();
+        
+        $nuevoNumero = 1;
+        if ($ultimoCodigo) {
+            $numero = (int)substr($ultimoCodigo->permiso_codigo, 3);
+            $nuevoNumero = $numero + 1;
         }
 
-        Permiso::create($data);
-        return redirect()->back()->with('success', 'Permiso registrado exitosamente');
+        for ($i = 0; $i < $diasDiferencia; $i++) {
+            $fechaActual = $fechaInicio->copy()->addDays($i);
+            $codigoPermiso = 'PER' . str_pad($nuevoNumero + $i, 4, '0', STR_PAD_LEFT);
+
+            $data = [
+                'permiso_codigo' => $codigoPermiso,
+                'permiso_tipo' => $request->permiso_tipo,
+                'permiso_numero' => $nuevoNumero + $i,
+                'estud_codigo' => $request->estud_codigo,
+                'permiso_fecha_inicio' => $fechaActual->format('Y-m-d'),
+                'permiso_fecha_fin' => $fechaActual->format('Y-m-d'),
+                'permiso_origen' => $request->permiso_origen,
+                'permiso_motivo' => $request->permiso_motivo,
+                'permiso_observacion' => $request->permiso_observacion,
+                'permiso_solicitante_pfam' => $request->permiso_solicitante_pfam,
+                'permiso_solicitante_nombre' => $request->permiso_solicitante_nombre,
+                'permiso_estado' => 1,
+                'permiso_aprobado_por' => auth()->user()->us_codigo
+            ];
+
+            if ($request->hasFile('permiso_archivo') && $i == 0) {
+                $file = $request->file('permiso_archivo');
+                $filename = 'permiso_' . time() . '.' . $file->getClientOriginalExtension();
+                $file->move(public_path('uploads/permisos'), $filename);
+                $data['permiso_archivo'] = $filename;
+            }
+
+            Permiso::create($data);
+        }
+
+        return redirect()->back()->with('success', "Se registraron {$diasDiferencia} permiso(s) exitosamente");
     }
 
     public function updatePermiso(Request $request, $id)

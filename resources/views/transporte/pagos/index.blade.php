@@ -173,7 +173,7 @@
                                         @endif
                                     </td>
                                     <td>
-                                        <button class="btn btn-sm btn-info" onclick="generarReciboTransporte('{{ $p->tpago_codigo }}', '{{ addslashes($p->estudiante->est_nombres ?? 'Sin estudiante') }} {{ addslashes($p->estudiante->est_apellidos ?? '') }}', '{{ addslashes($p->estudiante->curso->cur_nombre ?? '') }}', '{{ ucfirst($p->tpago_tipo) }}', {{ $p->tpago_monto }}, '{{ $p->tpago_fecha_pago }}', '{{ $p->tpago_fecha_inicio }}', '{{ $p->tpago_fecha_fin }}')">
+                                        <button class="btn btn-sm btn-info" onclick="generarReciboTransporte('{{ $p->tpago_codigo }}', '{{ addslashes($p->estudiante->est_nombres ?? 'Sin estudiante') }} {{ addslashes($p->estudiante->est_apellidos ?? '') }}', '{{ addslashes($p->estudiante->curso->cur_nombre ?? '') }}', '{{ ucfirst($p->tpago_tipo) }}', {{ $p->tpago_monto }}, '{{ $p->tpago_fecha_pago }}', '{{ $p->tpago_fecha_inicio }}', '{{ $p->tpago_fecha_fin }}', '{{ addslashes($p->estudiante->padres->first()->pfam_nombres ?? '') }} {{ addslashes($p->estudiante->padres->first()->pfam_apellidos ?? '') }}')">
                                             <i class="fas fa-receipt"></i>
                                         </button>
                                         <a href="{{ route('pagos-transporte.edit', $p->tpago_id) }}" class="btn btn-sm btn-warning">
@@ -283,7 +283,7 @@ $(document).ready(function() {
     });
 });
 
-function generarReciboTransporte(codigo, estudiante, curso, tipo, monto, fechaPago, fechaInicio, fechaFin) {
+function generarReciboTransporte(codigo, estudiante, curso, tipo, monto, fechaPago, fechaInicio, fechaFin, nombrePadre) {
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF({
         unit: 'pt',
@@ -311,17 +311,37 @@ function generarReciboTransporte(codigo, estudiante, curso, tipo, monto, fechaPa
         const decenas = ['', '', 'Veinte', 'Treinta', 'Cuarenta', 'Cincuenta', 'Sesenta', 'Setenta', 'Ochenta', 'Noventa'];
         const especiales = ['Diez', 'Once', 'Doce', 'Trece', 'Catorce', 'Quince', 'Dieciséis', 'Diecisiete', 'Dieciocho', 'Diecinueve'];
         const centenas = ['', 'Ciento', 'Doscientos', 'Trescientos', 'Cuatrocientos', 'Quinientos', 'Seiscientos', 'Setecientos', 'Ochocientos', 'Novecientos'];
+        const miles = ['', 'Mil', 'Dos Mil', 'Tres Mil', 'Cuatro Mil', 'Cinco Mil', 'Seis Mil', 'Siete Mil', 'Ocho Mil', 'Nueve Mil'];
+        
+        num = Math.floor(num);
         
         if (num === 0) return 'Cero';
         if (num === 100) return 'Cien';
         
         let texto = '';
         
+        // Miles
+        if (num >= 1000) {
+            const mil = Math.floor(num / 1000);
+            if (mil === 1) {
+                texto = 'Mil ';
+            } else {
+                texto = miles[mil] + ' ';
+            }
+            num %= 1000;
+        }
+        
+        // Centenas
         if (num >= 100) {
+            if (num === 100) {
+                texto += 'Cien';
+                return texto.trim();
+            }
             texto += centenas[Math.floor(num / 100)] + ' ';
             num %= 100;
         }
         
+        // Decenas y unidades
         if (num >= 20) {
             texto += decenas[Math.floor(num / 10)];
             if (num % 10 > 0) texto += ' y ' + unidades[num % 10];
@@ -335,145 +355,105 @@ function generarReciboTransporte(codigo, estudiante, curso, tipo, monto, fechaPa
     }
     
     function dibujarRecibo(tipoRecibo) {
-        doc.setLineWidth(2);
+        // Borde principal
+        doc.setLineWidth(1.5);
         doc.setDrawColor(0, 0, 0);
         doc.rect(10, 10, 592, 376);
         
         // Encabezado izquierdo
-        doc.setFontSize(8);
-        doc.setFont(undefined, 'bold');
-        doc.text('U.E. PRIVADA INTERANDINO BOLIVIANO', 15, 25);
-        doc.setFontSize(6.5);
-        doc.setFont(undefined, 'normal');
-        doc.text('C/ VICTOR GUTIERREZ Nº 3339', 15, 35);
-        doc.text('TELÉFONO: 2840320 - 67304340', 15, 43);
-        
-        // Cuadro de fecha y monto (derecha)
-        doc.setLineWidth(1.5);
-        doc.rect(470, 15, 125, 45);
-        doc.setFontSize(6.5);
-        doc.setFont(undefined, 'normal');
-        doc.text('Día/Mes/Año', 532, 25, { align: 'center' });
         doc.setFontSize(9);
         doc.setFont(undefined, 'bold');
-        doc.text(fechaPago, 532, 35, { align: 'center' });
-        doc.setLineWidth(0.5);
-        doc.line(470, 40, 595, 40);
-        doc.setFontSize(7);
+        doc.setTextColor(100, 100, 100);
+        doc.text('U.E PRIVADA INTERANDINO BOLIVIANO', 15, 30);
+        doc.setFontSize(8);
         doc.setFont(undefined, 'normal');
-        doc.text('Bs.', 478, 52);
-        doc.setFontSize(10);
+        doc.text('C/ VICTOR GUTIERREZ N° 3339', 15, 42);
+        doc.text('TELEFONO: 2840320 - 67304340', 15, 52);
+        
+        // RECIBO grande centrado
+        doc.setFontSize(48);
         doc.setFont(undefined, 'bold');
-        doc.text(monto.toFixed(2), 535, 52, { align: 'right' });
-        doc.setFontSize(7);
+        doc.setTextColor(0, 0, 0);
+        doc.text('RECIBO', 306, 90, { align: 'center' });
+        
+        // Información derecha
+        doc.setFontSize(9);
+        doc.setTextColor(0, 0, 0);
         doc.setFont(undefined, 'normal');
-        doc.text('$us.', 545, 52);
+        const [anio, mes, dia] = fechaPago.split('-');
+        const fechaFormateada = dia + '/' + mes + '/' + anio;
+        doc.text('Fecha actual : ' + fechaFormateada, 15, 110);
+        doc.text('No. Recibo   : ' + codigo, 15, 125);
+        doc.text('Nombre       : ' + (nombrePadre || estudiante), 15, 140);
         
         // Línea separadora
-        doc.setLineWidth(1.5);
-        doc.line(15, 65, 597, 65);
+        doc.setLineWidth(1);
+        doc.line(15, 155, 597, 155);
         
-        // RECIBO con código
-        doc.setFontSize(16);
-        doc.setFont(undefined, 'bold');
-        doc.text('RECIBO - ' + codigo, 306, 85, { align: 'center' });
-        
-        // Cancelado por
+        // Tabla de conceptos - Encabezado
         doc.setFontSize(9);
         doc.setFont(undefined, 'bold');
-        doc.text('Cancelado por:', 15, 110);
-        doc.setFont(undefined, 'normal');
-        doc.setLineDash([2, 2]);
-        doc.line(85, 112, 585, 112);
-        doc.setLineDash([]);
-        doc.text(estudiante, 90, 110);
+        doc.setFillColor(240, 240, 240);
+        doc.rect(15, 165, 582, 20, 'F');
+        doc.text('NOMBRE ESTUDIANTE', 20, 178);
+        doc.text('CONCEPTO', 300, 178);
+        doc.text('MONTO', 550, 178, { align: 'right' });
         
-        // La suma de
-        doc.setFont(undefined, 'bold');
-        doc.text('La suma de:', 15, 130);
+        // Datos del pago con desglose
         doc.setFont(undefined, 'normal');
-        doc.setLineDash([2, 2]);
-        doc.line(70, 132, 585, 132);
-        doc.setLineDash([]);
+        let yPos = 195;
+        
+        // Calcular monto por cuota
+        const montoPorCuota = monto / cantidadMeses;
+        
+        // Mostrar tipo de pago y desglose
+        doc.setFont(undefined, 'bold');
+        doc.text(estudiante, 20, yPos);
+        doc.text('PAGO ' + tipo.toUpperCase() + ' - ' + cantidadMeses + ' CUOTAS', 300, yPos);
+        doc.setFont(undefined, 'normal');
+        yPos += 15;
+        
+        // Desglose de cuotas
+        for (let i = 1; i <= cantidadMeses; i++) {
+            if (yPos > 280) break; // Evitar salirse del espacio
+            const mesTexto = meses[i-1] || ('Cuota ' + i);
+            doc.text('  ' + i + '. ' + mesTexto, 300, yPos);
+            doc.text(montoPorCuota.toFixed(2), 580, yPos, { align: 'right' });
+            yPos += 10;
+        }
+        
+        // Línea antes del total
+        doc.setLineWidth(1);
+        doc.line(15, 300, 597, 300);
+        
+        // TOTAL
+        doc.setFontSize(11);
+        doc.setFont(undefined, 'bold');
+        doc.text('TOTAL', 480, 320);
+        doc.text(monto.toFixed(2), 580, 320, { align: 'right' });
+        
+        // Línea doble debajo del total
+        doc.setLineWidth(2);
+        doc.line(480, 325, 597, 325);
+        
+        // SON
         const parteEntera = Math.floor(monto);
         const parteDecimal = Math.round((monto - parteEntera) * 100);
         const montoLiteral = numeroATexto(parteEntera) + ' ' + String(parteDecimal).padStart(2, '0') + '/100';
-        doc.text(montoLiteral, 75, 130);
-        
-        // Por concepto de
-        doc.setFont(undefined, 'bold');
-        doc.text('Por concepto de:', 15, 150);
-        doc.setFont(undefined, 'normal');
-        doc.setLineDash([2, 2]);
-        doc.line(90, 152, 585, 152);
-        doc.setLineDash([]);
-        let concepto = 'Pago Transporte Escolar ' + tipo + ' - Est: ' + estudiante + ' - Curso: ' + curso;
-        if (meses.length > 0) {
-            concepto += '\nMeses: ' + meses.join(', ');
-        }
-        const conceptoLines = doc.splitTextToSize(concepto, 490);
-        let yConcepto = 150;
-        conceptoLines.forEach((line, index) => {
-            doc.text(line, 95, yConcepto + (index * 10));
-        });
-        
-        // Líneas punteadas
-        let yPos = 185;
-        for (let i = 0; i < 5; i++) {
-            doc.setLineDash([1, 2]);
-            doc.line(15, yPos, 597, yPos);
-            yPos += 20;
-        }
-        doc.setLineDash([]);
-        
-        // TOTAL
-        yPos = 295;
-        doc.setLineWidth(1.5);
-        doc.line(15, yPos, 597, yPos);
-        doc.setFontSize(10);
-        doc.setFont(undefined, 'bold');
-        doc.text('TOTAL', 480, yPos + 15);
-        doc.text(monto.toFixed(2), 585, yPos + 15, { align: 'right' });
-        
-        // Sección de firmas
-        yPos = 320;
-        doc.setLineWidth(1.5);
-        doc.line(15, yPos, 597, yPos);
-        
-        // Línea vertical divisoria
-        doc.line(306, yPos, 306, 386);
-        
-        // Izquierda - Solo línea punteada
-        doc.setFontSize(8);
-        doc.setFont(undefined, 'normal');
-        doc.setLineDash([1, 2]);
-        doc.line(50, yPos + 30, 260, yPos + 30);
-        doc.setLineDash([]);
         
         doc.setFontSize(9);
         doc.setFont(undefined, 'bold');
-        doc.text('RECIBÍ CONFORME', 150, yPos + 60, { align: 'center' });
+        doc.text('SON: ' + montoLiteral.toUpperCase(), 20, 345);
         
-        // Derecha - Firmas completas
-        doc.setFontSize(8);
+        // Usuario y hora
         doc.setFont(undefined, 'normal');
-        doc.text('Firma:', 320, yPos + 20);
-        doc.setLineDash([1, 2]);
-        doc.line(350, yPos + 22, 450, yPos + 22);
-        doc.setLineDash([]);
-        doc.text('C.I.:', 460, yPos + 20);
-        doc.setLineDash([1, 2]);
-        doc.line(480, yPos + 22, 580, yPos + 22);
-        doc.setLineDash([]);
-        
-        doc.text('Nom. Y Ap.:', 320, yPos + 38);
-        doc.setLineDash([1, 2]);
-        doc.line(370, yPos + 40, 580, yPos + 40);
-        doc.setLineDash([]);
-        
-        doc.setFontSize(9);
-        doc.setFont(undefined, 'bold');
-        doc.text('ENTREGUÉ CONFORME', 450, yPos + 60, { align: 'center' });
+        doc.setFontSize(8);
+        doc.text('Usuario: {{ auth()->user()->us_nombres ?? "SISTEMA" }}', 20, 365);
+        const ahora = new Date();
+        const hora = ahora.getHours().toString().padStart(2, '0') + ':' + 
+                     ahora.getMinutes().toString().padStart(2, '0') + ':' + 
+                     ahora.getSeconds().toString().padStart(2, '0');
+        doc.text('Hora: ' + hora, 20, 375);
     }
     
     dibujarRecibo('ORIGINAL');

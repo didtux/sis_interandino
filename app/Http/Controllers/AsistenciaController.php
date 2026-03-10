@@ -683,98 +683,162 @@ class AsistenciaController extends Controller
     public function reporteFaltas(Request $request)
     {
         $request->validate([
-            'cur_codigo' => 'required',
-            'fecha' => 'required|date',
-            'turno' => 'required',
-            'categoria' => 'required'
+            'fecha' => 'required|date'
         ]);
 
         $fecha = $request->fecha;
-        $turno = $request->turno;
-        $categoria = $request->categoria;
-        $todosCursos = $request->cur_codigo === 'todos';
+        $todosHorarios = $request->has('todos_horarios') && $request->todos_horarios == '1';
         
-        // Obtener configuración específica por turno Y categoría
-        $config = ConfiguracionAsistencia::activo()
-            ->where('config_turno', $turno)
-            ->where('config_categoria', $categoria)
-            ->first();
-        
-        if (!$config) {
-            return back()->with('error', 'No hay configuración para ' . $categoria . ' - ' . $turno);
-        }
-        
-        // Obtener cursos de esta configuración específica
-        $cursosPivote = \DB::table('asistencia_configuracion_cursos')
-            ->where('config_id', $config->config_id)
-            ->pluck('cur_codigo')
-            ->toArray();
-        
-        $aplicaATodos = empty($cursosPivote);
-        
-        if ($todosCursos) {
-            if ($aplicaATodos) {
-                // Si aplica a todos, obtener todos los cursos
-                $cursos = Curso::visible()->orderBy('cur_nombre')->get();
-            } else {
-                // Solo cursos de esta configuración específica
-                $cursos = Curso::visible()
-                    ->whereIn('cur_codigo', $cursosPivote)
-                    ->orderBy('cur_nombre')
-                    ->get();
+        if ($todosHorarios) {
+            $configuraciones = ConfiguracionAsistencia::activo()
+                ->orderBy('hora_entrada')
+                ->get();
+            
+            if ($configuraciones->isEmpty()) {
+                return back()->with('error', 'No hay configuraciones de horarios activas');
             }
+            
+            $datosPorCurso = [];
+            $cursosYaProcesados = [];
+            
+            foreach ($configuraciones as $config) {
+                $cursosPivote = \DB::table('asistencia_configuracion_cursos')
+                    ->where('config_id', $config->config_id)
+                    ->pluck('cur_codigo')
+                    ->toArray();
+                
+                $aplicaATodos = empty($cursosPivote);
+                
+                if ($aplicaATodos) {
+                    $cursos = Curso::visible()->orderBy('cur_nombre')->get();
+                } else {
+                    $cursos = Curso::visible()
+                        ->whereIn('cur_codigo', $cursosPivote)
+                        ->orderBy('cur_nombre')
+                        ->get();
+                }
+                
+                foreach ($cursos as $curso) {
+                    if (in_array($curso->cur_codigo, $cursosYaProcesados)) {
+                        continue;
+                    }
+                    $cursosYaProcesados[] = $curso->cur_codigo;
+                    
+                    $estudiantes = $curso->estudiantes()->visible()->orderBy('est_apellidos')->orderBy('est_nombres')->get();
+                    
+                    $asistencias = Asistencia::whereDate('asis_fecha', $fecha)
+                        ->whereIn('estud_codigo', $estudiantes->pluck('est_codigo'))
+                        ->pluck('estud_codigo')
+                        ->toArray();
+                    
+                    $estudiantesConPermiso = Permiso::where('permiso_estado', 1)
+                        ->whereDate('permiso_fecha_inicio', '<=', $fecha)
+                        ->whereDate('permiso_fecha_fin', '>=', $fecha)
+                        ->whereIn('estud_codigo', $estudiantes->pluck('est_codigo'))
+                        ->pluck('estud_codigo')
+                        ->toArray();
+                    
+                    $estudiantesSinAsistencia = $estudiantes->filter(function($est) use ($asistencias, $estudiantesConPermiso) {
+                        return !in_array($est->est_codigo, $asistencias) && !in_array($est->est_codigo, $estudiantesConPermiso);
+                    });
+                    
+                    if ($estudiantesSinAsistencia->count() > 0) {
+                        $datosPorCurso[] = [
+                            'curso' => $curso,
+                            'estudiantes' => $estudiantesSinAsistencia,
+                            'horario' => $config->config_turno . ' (' . substr($config->hora_entrada, 0, 5) . '-' . substr($config->hora_salida, 0, 5) . ')'
+                        ];
+                    }
+                }
+            }
+            
+            $turno = 'TODOS LOS HORARIOS';
+            $config = null;
+            
         } else {
-            $curso = Curso::where('cur_codigo', $request->cur_codigo)->first();
-            if (!$curso) {
-                return back()->with('error', 'Curso no encontrado');
+            $request->validate([
+                'turno' => 'required',
+                'categoria' => 'required',
+                'cur_codigo' => 'required'
+            ]);
+            
+            $turno = $request->turno;
+            $categoria = $request->categoria;
+            $todosCursos = $request->cur_codigo === 'todos';
+            
+            $config = ConfiguracionAsistencia::activo()
+                ->where('config_turno', $turno)
+                ->where('config_categoria', $categoria)
+                ->first();
+            
+            if (!$config) {
+                return back()->with('error', 'No hay configuración para ' . $categoria . ' - ' . $turno);
             }
             
-            // Verificar si el curso pertenece a esta configuración
-            if (!$aplicaATodos && !in_array($curso->cur_codigo, $cursosPivote)) {
-                return back()->with('error', 'El curso ' . $curso->cur_nombre . ' no pertenece a ' . $categoria . ' - ' . $turno);
+            $cursosPivote = \DB::table('asistencia_configuracion_cursos')
+                ->where('config_id', $config->config_id)
+                ->pluck('cur_codigo')
+                ->toArray();
+            
+            $aplicaATodos = empty($cursosPivote);
+            
+            if ($todosCursos) {
+                if ($aplicaATodos) {
+                    $cursos = Curso::visible()->orderBy('cur_nombre')->get();
+                } else {
+                    $cursos = Curso::visible()
+                        ->whereIn('cur_codigo', $cursosPivote)
+                        ->orderBy('cur_nombre')
+                        ->get();
+                }
+            } else {
+                $curso = Curso::where('cur_codigo', $request->cur_codigo)->first();
+                if (!$curso) {
+                    return back()->with('error', 'Curso no encontrado');
+                }
+                
+                if (!$aplicaATodos && !in_array($curso->cur_codigo, $cursosPivote)) {
+                    return back()->with('error', 'El curso ' . $curso->cur_nombre . ' no pertenece a ' . $categoria . ' - ' . $turno);
+                }
+                
+                $cursos = collect([$curso]);
             }
             
-            $cursos = collect([$curso]);
-        }
-        
-        $datosPorCurso = [];
-        
-        foreach ($cursos as $curso) {
-            // Obtener todos los estudiantes del curso
-            $estudiantes = $curso->estudiantes()->visible()->orderBy('est_apellidos')->orderBy('est_nombres')->get();
+            $datosPorCurso = [];
             
-            // Obtener estudiantes que SÍ marcaron asistencia
-            $asistencias = Asistencia::whereDate('asis_fecha', $fecha)
-                ->whereIn('estud_codigo', $estudiantes->pluck('est_codigo'))
-                ->pluck('estud_codigo')
-                ->toArray();
-            
-            // Obtener estudiantes con permiso activo en la fecha
-            $estudiantesConPermiso = Permiso::where('permiso_estado', 1)
-                ->whereDate('permiso_fecha_inicio', '<=', $fecha)
-                ->whereDate('permiso_fecha_fin', '>=', $fecha)
-                ->whereIn('estud_codigo', $estudiantes->pluck('est_codigo'))
-                ->pluck('estud_codigo')
-                ->toArray();
-            
-            // Filtrar estudiantes SIN asistencia y SIN permiso
-            $estudiantesSinAsistencia = $estudiantes->filter(function($est) use ($asistencias, $estudiantesConPermiso) {
-                return !in_array($est->est_codigo, $asistencias) && !in_array($est->est_codigo, $estudiantesConPermiso);
-            });
-            
-            if ($estudiantesSinAsistencia->count() > 0) {
-                $datosPorCurso[] = [
-                    'curso' => $curso,
-                    'estudiantes' => $estudiantesSinAsistencia
-                ];
+            foreach ($cursos as $curso) {
+                $estudiantes = $curso->estudiantes()->visible()->orderBy('est_apellidos')->orderBy('est_nombres')->get();
+                
+                $asistencias = Asistencia::whereDate('asis_fecha', $fecha)
+                    ->whereIn('estud_codigo', $estudiantes->pluck('est_codigo'))
+                    ->pluck('estud_codigo')
+                    ->toArray();
+                
+                $estudiantesConPermiso = Permiso::where('permiso_estado', 1)
+                    ->whereDate('permiso_fecha_inicio', '<=', $fecha)
+                    ->whereDate('permiso_fecha_fin', '>=', $fecha)
+                    ->whereIn('estud_codigo', $estudiantes->pluck('est_codigo'))
+                    ->pluck('estud_codigo')
+                    ->toArray();
+                
+                $estudiantesSinAsistencia = $estudiantes->filter(function($est) use ($asistencias, $estudiantesConPermiso) {
+                    return !in_array($est->est_codigo, $asistencias) && !in_array($est->est_codigo, $estudiantesConPermiso);
+                });
+                
+                if ($estudiantesSinAsistencia->count() > 0) {
+                    $datosPorCurso[] = [
+                        'curso' => $curso,
+                        'estudiantes' => $estudiantesSinAsistencia
+                    ];
+                }
             }
         }
         
         $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('asistencias.reporte-faltas-pdf', 
-            compact('datosPorCurso', 'fecha', 'turno', 'categoria', 'config', 'todosCursos'))
+            compact('datosPorCurso', 'fecha', 'turno', 'config'))
             ->setPaper('letter', 'portrait');
         
-        return $pdf->stream('reporte-faltas-' . $categoria . '-' . $turno . '-' . $fecha . '.pdf');
+        return $pdf->stream('reporte-faltas-' . $fecha . '.pdf');
     }
     
     public function cursosPorTurno(Request $request)

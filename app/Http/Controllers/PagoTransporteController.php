@@ -169,12 +169,15 @@ class PagoTransporteController extends Controller
         }
         
         $fechaFin = $this->calcularFechaFinHabil($fechaInicio, $request->meses_pagar);
+        
+        // Calcular monto total (monto mensual * cantidad de meses)
+        $montoTotal = $request->tpago_monto * $request->meses_pagar;
 
         PagoTransporte::create([
-            'tpago_codigo' => 'TPAGO' . time(),
+            'tpago_codigo' => 'TPAGO' . str_pad(PagoTransporte::max('tpago_id') + 1, 5, '0', STR_PAD_LEFT),
             'est_codigo' => $request->est_codigo,
             'tpago_tipo' => $request->tpago_tipo,
-            'tpago_monto' => $request->tpago_monto,
+            'tpago_monto' => $montoTotal,
             'tpago_fecha_pago' => $request->tpago_fecha_pago,
             'tpago_fecha_inicio' => $fechaInicio,
             'tpago_fecha_fin' => $fechaFin,
