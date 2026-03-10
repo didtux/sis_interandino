@@ -361,12 +361,8 @@ class ConfiguracionAsistenciaController extends Controller
             'permiso_archivo' => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:2048'
         ]);
 
-        $fechaInicio = Carbon::parse($request->permiso_fecha_inicio);
-        $fechaFin = Carbon::parse($request->permiso_fecha_fin);
-        $diasDiferencia = $fechaInicio->diffInDays($fechaFin) + 1;
-
-        $ultimoCodigo = Permiso::where('permiso_codigo', 'like', 'PER%')
-            ->orderBy('permiso_codigo', 'desc')
+        $ultimoCodigo = Permiso::where('permiso_codigo', 'REGEXP', '^PER[0-9]{4}$')
+            ->orderByRaw('CAST(SUBSTRING(permiso_codigo, 4) AS UNSIGNED) DESC')
             ->first();
         
         $nuevoNumero = 1;
@@ -374,6 +370,10 @@ class ConfiguracionAsistenciaController extends Controller
             $numero = (int)substr($ultimoCodigo->permiso_codigo, 3);
             $nuevoNumero = $numero + 1;
         }
+
+        $fechaInicio = Carbon::parse($request->permiso_fecha_inicio);
+        $fechaFin = Carbon::parse($request->permiso_fecha_fin);
+        $diasDiferencia = $fechaInicio->diffInDays($fechaFin) + 1;
 
         for ($i = 0; $i < $diasDiferencia; $i++) {
             $fechaActual = $fechaInicio->copy()->addDays($i);
