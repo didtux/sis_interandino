@@ -54,6 +54,7 @@ class PagoTransporteController extends Controller
         $gestionActual = date('Y');
         $pagos = PagoTransporte::where('est_codigo', $est_codigo)
             ->whereYear('tpago_fecha_pago', $gestionActual)
+            ->where('tpago_estado', '!=', 'cancelado')
             ->orderBy('tpago_fecha_inicio')
             ->get();
         
@@ -155,11 +156,20 @@ class PagoTransporteController extends Controller
     {
         $request->validate([
             'est_codigo' => 'required',
-            'tpago_tipo' => 'required|in:mensual,trimestral,semestral,anual',
             'tpago_monto' => 'required|numeric|min:0',
             'tpago_fecha_pago' => 'required|date',
-            'meses_pagar' => 'required|integer|min:1'
+            'meses_pagar' => 'required|integer|min:1|max:10'
         ]);
+
+        $mesesPagar = $request->meses_pagar;
+
+        // Determinar tipo según cantidad de meses
+        $tipos = [
+            1 => 'mensual', 2 => 'bimestral', 3 => 'trimestral',
+            4 => 'cuatrimestral', 5 => 'quinquemestral', 6 => 'semestral',
+            7 => '7 meses', 8 => '8 meses', 9 => '9 meses', 10 => 'anual'
+        ];
+        $tpagoTipo = $tipos[$mesesPagar] ?? $mesesPagar . ' meses';
 
         // Si hay vigencia previa, continuar desde ahí
         if ($request->filled('ultima_vigencia')) {
@@ -168,15 +178,15 @@ class PagoTransporteController extends Controller
             $fechaInicio = Carbon::parse($request->tpago_fecha_pago);
         }
         
-        $fechaFin = $this->calcularFechaFinHabil($fechaInicio, $request->meses_pagar);
+        $fechaFin = $this->calcularFechaFinHabil($fechaInicio, $mesesPagar);
         
-        // Calcular monto total (monto mensual * cantidad de meses)
-        $montoTotal = $request->tpago_monto * $request->meses_pagar;
+        // Monto total = monto mensual * cantidad de meses
+        $montoTotal = $request->tpago_monto * $mesesPagar;
 
         PagoTransporte::create([
             'tpago_codigo' => 'TPAGO' . str_pad(PagoTransporte::max('tpago_id') + 1, 5, '0', STR_PAD_LEFT),
             'est_codigo' => $request->est_codigo,
-            'tpago_tipo' => $request->tpago_tipo,
+            'tpago_tipo' => $tpagoTipo,
             'tpago_monto' => $montoTotal,
             'tpago_fecha_pago' => $request->tpago_fecha_pago,
             'tpago_fecha_inicio' => $fechaInicio,
@@ -191,11 +201,9 @@ class PagoTransporteController extends Controller
     {
         $fecha = $fechaInicio->copy()->addMonths($meses);
         
-        // Si cae en sábado, mover a viernes
         if ($fecha->isSaturday()) {
             $fecha->subDay();
         }
-        // Si cae en domingo, mover a viernes
         if ($fecha->isSunday()) {
             $fecha->subDays(2);
         }
@@ -214,15 +222,30 @@ class PagoTransporteController extends Controller
     {
         $pago = PagoTransporte::findOrFail($id);
         
-        $request->validate([
+        $rules = [
             'tpago_estado' => 'required|in:vigente,vencido,cancelado',
             'est_codigo' => 'nullable|exists:colegio_estudiantes,est_codigo'
-        ]);
+        ];
 
-        $pago->update([
+        // Validar monto solo si se envía y el pago no fue modificado antes
+        if ($request->filled('tpago_monto') && !$pago->tpago_monto_modificado) {
+            $rules['tpago_monto'] = 'numeric|min:0';
+        }
+
+        $request->validate($rules);
+
+        $data = [
             'tpago_estado' => $request->tpago_estado,
             'est_codigo' => $request->est_codigo ?? $pago->est_codigo
-        ]);
+        ];
+
+        // Actualizar monto solo si no fue modificado antes
+        if ($request->filled('tpago_monto') && !$pago->tpago_monto_modificado) {
+            $data['tpago_monto'] = $request->tpago_monto;
+            $data['tpago_monto_modificado'] = 1;
+        }
+
+        $pago->update($data);
         
         return redirect()->route('pagos-transporte.index')->with('success', 'Pago actualizado');
     }

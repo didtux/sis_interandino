@@ -110,7 +110,11 @@
                         <tbody>
                             @php $totalMonto = 0; @endphp
                             @forelse($pagos as $p)
-                                @php $totalMonto += $p->tpago_monto; @endphp
+                                @php 
+                                    if ($p->tpago_estado != 'cancelado') {
+                                        $totalMonto += $p->tpago_monto;
+                                    }
+                                @endphp
                                 <tr>
                                     <td>{{ $p->tpago_codigo }}</td>
                                     <td><strong>{{ $p->estudiante ? $p->estudiante->est_nombres . ' ' . $p->estudiante->est_apellidos : 'Sin estudiante' }}</strong></td>
@@ -364,96 +368,127 @@ function generarReciboTransporte(codigo, estudiante, curso, tipo, monto, fechaPa
         doc.setFontSize(9);
         doc.setFont(undefined, 'bold');
         doc.setTextColor(100, 100, 100);
-        doc.text('U.E PRIVADA INTERANDINO BOLIVIANO', 15, 30);
+        doc.text('U.E PRIVADA INTERANDINO BOLIVIANO', 15, 28);
         doc.setFontSize(8);
         doc.setFont(undefined, 'normal');
-        doc.text('C/ VICTOR GUTIERREZ N° 3339', 15, 42);
-        doc.text('TELEFONO: 2840320 - 67304340', 15, 52);
+        doc.text('C/ VICTOR GUTIERREZ N° 3339', 15, 39);
+        doc.text('TELEFONO: 2840320 - 67304340', 15, 49);
         
-        // RECIBO grande centrado
-        doc.setFontSize(48);
+        // Extraer solo la parte numérica del código
+        const soloNumero = codigo.replace(/\D/g, '');
+        const numeroFormateado = soloNumero.padStart(5, '0');
+        
+        // Número de recibo en esquina superior derecha
+        doc.setFontSize(18);
         doc.setFont(undefined, 'bold');
         doc.setTextColor(0, 0, 0);
-        doc.text('RECIBO', 306, 90, { align: 'center' });
+        doc.text('Nº ' + numeroFormateado, 597, 30, { align: 'right' });
         
-        // Información derecha
-        doc.setFontSize(9);
+        // RECIBO grande centrado
+        doc.setFontSize(36);
+        doc.setFont(undefined, 'bold');
+        doc.setTextColor(0, 0, 0);
+        doc.text('RECIBO', 306, 75, { align: 'center' });
+        
+        // Información compacta
+        doc.setFontSize(11);
         doc.setTextColor(0, 0, 0);
         doc.setFont(undefined, 'normal');
         const [anio, mes, dia] = fechaPago.split('-');
         const fechaFormateada = dia + '/' + mes + '/' + anio;
-        doc.text('Fecha actual : ' + fechaFormateada, 15, 110);
-        doc.text('No. Recibo   : ' + codigo, 15, 125);
-        doc.text('Nombre       : ' + (nombrePadre || estudiante), 15, 140);
+        doc.text('Fecha: ' + fechaFormateada, 15, 92);
+        doc.text('Nombre: ' + (nombrePadre || estudiante), 15, 106);
         
         // Línea separadora
         doc.setLineWidth(1);
-        doc.line(15, 155, 597, 155);
+        doc.line(15, 115, 597, 115);
         
         // Tabla de conceptos - Encabezado
-        doc.setFontSize(9);
+        doc.setFontSize(10);
         doc.setFont(undefined, 'bold');
         doc.setFillColor(240, 240, 240);
-        doc.rect(15, 165, 582, 20, 'F');
-        doc.text('NOMBRE ESTUDIANTE', 20, 178);
-        doc.text('CONCEPTO', 300, 178);
-        doc.text('MONTO', 550, 178, { align: 'right' });
+        doc.rect(15, 118, 582, 18, 'F');
+        doc.text('NOMBRE ESTUDIANTE', 20, 130);
+        doc.text('CONCEPTO', 280, 130);
+        doc.text('MONTO', 570, 130, { align: 'right' });
         
-        // Datos del pago con desglose
+        // Tipo de pago
+        doc.setFontSize(10);
+        doc.setFont(undefined, 'bold');
+        let yPos = 150;
+        doc.text(estudiante, 20, yPos);
+        doc.text('PAGO ' + tipo.toUpperCase() + ' - ' + cantidadMeses + ' CUOTAS', 280, yPos);
         doc.setFont(undefined, 'normal');
-        let yPos = 195;
+        yPos += 14;
         
         // Calcular monto por cuota
         const montoPorCuota = monto / cantidadMeses;
         
-        // Mostrar tipo de pago y desglose
-        doc.setFont(undefined, 'bold');
-        doc.text(estudiante, 20, yPos);
-        doc.text('PAGO ' + tipo.toUpperCase() + ' - ' + cantidadMeses + ' CUOTAS', 300, yPos);
-        doc.setFont(undefined, 'normal');
-        yPos += 15;
-        
-        // Desglose de cuotas
-        for (let i = 1; i <= cantidadMeses; i++) {
-            if (yPos > 280) break; // Evitar salirse del espacio
-            const mesTexto = meses[i-1] || ('Cuota ' + i);
-            doc.text('  ' + i + '. ' + mesTexto, 300, yPos);
-            doc.text(montoPorCuota.toFixed(2), 580, yPos, { align: 'right' });
-            yPos += 10;
+        // Desglose en 2 columnas si hay más de 5 cuotas
+        if (cantidadMeses > 5) {
+            const mitad = Math.ceil(cantidadMeses / 2);
+            const col1X = 20;
+            const col1MontoX = 230;
+            const col2X = 310;
+            const col2MontoX = 570;
+            const lineH = 12;
+            
+            for (let i = 0; i < mitad; i++) {
+                const mesTexto = meses[i] || ('Cuota ' + (i + 1));
+                doc.text((i + 1) + '. ' + mesTexto, col1X, yPos);
+                doc.text(montoPorCuota.toFixed(2), col1MontoX, yPos, { align: 'right' });
+                
+                const j = i + mitad;
+                if (j < cantidadMeses) {
+                    const mesTexto2 = meses[j] || ('Cuota ' + (j + 1));
+                    doc.text((j + 1) + '. ' + mesTexto2, col2X, yPos);
+                    doc.text(montoPorCuota.toFixed(2), col2MontoX, yPos, { align: 'right' });
+                }
+                yPos += lineH;
+            }
+        } else {
+            for (let i = 1; i <= cantidadMeses; i++) {
+                const mesTexto = meses[i-1] || ('Cuota ' + i);
+                doc.text('  ' + i + '. ' + mesTexto, 280, yPos);
+                doc.text(montoPorCuota.toFixed(2), 570, yPos, { align: 'right' });
+                yPos += 13;
+            }
         }
         
         // Línea antes del total
+        const lineaTotal = Math.max(yPos + 10, 290);
         doc.setLineWidth(1);
-        doc.line(15, 300, 597, 300);
+        doc.line(15, lineaTotal, 597, lineaTotal);
         
         // TOTAL
-        doc.setFontSize(11);
+        doc.setFontSize(13);
         doc.setFont(undefined, 'bold');
-        doc.text('TOTAL', 480, 320);
-        doc.text(monto.toFixed(2), 580, 320, { align: 'right' });
+        doc.text('TOTAL Bs.', 470, lineaTotal + 18);
+        doc.text(monto.toFixed(2), 580, lineaTotal + 18, { align: 'right' });
         
         // Línea doble debajo del total
         doc.setLineWidth(2);
-        doc.line(480, 325, 597, 325);
+        doc.line(465, lineaTotal + 23, 597, lineaTotal + 23);
         
         // SON
         const parteEntera = Math.floor(monto);
         const parteDecimal = Math.round((monto - parteEntera) * 100);
         const montoLiteral = numeroATexto(parteEntera) + ' ' + String(parteDecimal).padStart(2, '0') + '/100';
         
-        doc.setFontSize(9);
+        doc.setFontSize(10);
         doc.setFont(undefined, 'bold');
-        doc.text('SON: ' + montoLiteral.toUpperCase(), 20, 345);
+        doc.text('SON: ' + montoLiteral.toUpperCase(), 20, lineaTotal + 18);
         
         // Usuario y hora
         doc.setFont(undefined, 'normal');
         doc.setFontSize(8);
-        doc.text('Usuario: {{ auth()->user()->us_nombres ?? "SISTEMA" }}', 20, 365);
+        doc.text('Usuario: {{ auth()->user()->us_nombres ?? "SISTEMA" }}', 20, 370);
         const ahora = new Date();
         const hora = ahora.getHours().toString().padStart(2, '0') + ':' + 
                      ahora.getMinutes().toString().padStart(2, '0') + ':' + 
                      ahora.getSeconds().toString().padStart(2, '0');
-        doc.text('Hora: ' + hora, 20, 375);
+        doc.text('Hora: ' + hora, 200, 370);
+        doc.text(tipoRecibo, 597, 370, { align: 'right' });
     }
     
     dibujarRecibo('ORIGINAL');
@@ -533,10 +568,13 @@ function generarContenidoReportePDF(doc) {
     @endif
     yPos += 15;
     
-    // Recopilar datos con información completa
+    // Recopilar datos excluyendo cancelados
     var datos = [];
     $('#tablaPagos tbody tr').each(function() {
         if($(this).find('td').length > 1) {
+            var estado = $(this).find('td').eq(9).text().trim();
+            if (estado === 'Cancelado') return;
+            
             var codigo = $(this).find('td').eq(0).text().trim();
             var estudiante = $(this).find('td').eq(1).text().trim();
             var vehiculo = $(this).find('td').eq(2).text().trim();
@@ -546,7 +584,6 @@ function generarContenidoReportePDF(doc) {
             var monto = $(this).find('td').eq(6).text().trim();
             var fechaPago = $(this).find('td').eq(7).text().trim();
             var vigencia = $(this).find('td').eq(8).text().trim();
-            var estado = $(this).find('td').eq(9).text().trim();
             
             datos.push([codigo, estudiante, vehiculo, ruta, chofer, tipo, monto, fechaPago, vigencia, estado]);
         }

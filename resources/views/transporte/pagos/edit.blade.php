@@ -39,13 +39,25 @@
                             </div>
                         </div>
                         <div class="row">
-                            <div class="col-md-6">
+                            <div class="col-md-4">
                                 <div class="form-group">
-                                    <label>Monto</label>
-                                    <input type="text" class="form-control" value="Bs. {{ number_format($pago->tpago_monto, 2) }}" readonly>
+                                    <label>Monto (Bs.)</label>
+                                    @if(!$pago->tpago_monto_modificado)
+                                        <input type="number" name="tpago_monto" class="form-control" value="{{ $pago->tpago_monto }}" step="0.01" min="0">
+                                        <small class="text-warning"><i class="fas fa-exclamation-triangle"></i> Solo se puede modificar el monto una vez</small>
+                                    @else
+                                        <input type="text" class="form-control" value="Bs. {{ number_format($pago->tpago_monto, 2) }}" readonly>
+                                        <small class="text-muted"><i class="fas fa-lock"></i> El monto ya fue modificado anteriormente</small>
+                                    @endif
                                 </div>
                             </div>
-                            <div class="col-md-6">
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label>Vigencia</label>
+                                    <input type="text" class="form-control" value="{{ $pago->tpago_fecha_inicio }} - {{ $pago->tpago_fecha_fin }}" readonly>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
                                 <div class="form-group">
                                     <label>Estado *</label>
                                     <select name="tpago_estado" class="form-control" required>

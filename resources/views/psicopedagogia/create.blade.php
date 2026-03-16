@@ -44,7 +44,7 @@
                         </div>
 
                         <div class="form-group">
-                            <label>Acuerdo</label>
+                            <label>Kardex</label>
                             <textarea name="psico_acuerdo" class="form-control" rows="3"></textarea>
                         </div>
 

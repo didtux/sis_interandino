@@ -25,14 +25,21 @@
                             </div>
                             <div class="col-md-6">
                                 <div class="form-group">
-                                    <label>Tipo de Pago *</label>
-                                    <select name="tpago_tipo" id="tpago_tipo" class="form-control" required>
+                                    <label>Cantidad de Meses a Pagar *</label>
+                                    <select name="meses_pagar" id="meses_pagar" class="form-control" required>
                                         <option value="">Seleccione...</option>
-                                        <option value="mensual" data-meses="1">Mensual (1 mes)</option>
-                                        <option value="trimestral" data-meses="3">Trimestral (3 meses)</option>
-                                        <option value="semestral" data-meses="6">Semestral (6 meses)</option>
-                                        <option value="anual" data-meses="10">Anual (10 meses)</option>
+                                        <option value="1">1 mes (Mensual)</option>
+                                        <option value="2">2 meses (Bimestral)</option>
+                                        <option value="3">3 meses (Trimestral)</option>
+                                        <option value="4">4 meses (Cuatrimestral)</option>
+                                        <option value="5">5 meses</option>
+                                        <option value="6">6 meses (Semestral)</option>
+                                        <option value="7">7 meses</option>
+                                        <option value="8">8 meses</option>
+                                        <option value="9">9 meses</option>
+                                        <option value="10">10 meses (Anual)</option>
                                     </select>
+                                    <small class="text-muted" id="mesesDisponiblesInfo"></small>
                                 </div>
                             </div>
                         </div>
@@ -62,26 +69,19 @@
                         </div>
                         
                         <div class="row">
-                            <div class="col-md-3">
+                            <div class="col-md-4">
                                 <div class="form-group">
-                                    <label>Meses a Pagar *</label>
-                                    <input type="number" name="meses_pagar" id="meses_pagar" class="form-control" min="1" max="10" required readonly>
-                                    <small class="text-muted">Se calcula automáticamente</small>
-                                </div>
-                            </div>
-                            <div class="col-md-3">
-                                <div class="form-group">
-                                    <label>Monto (Bs.) *</label>
+                                    <label>Monto Mensual (Bs.) *</label>
                                     <input type="number" name="tpago_monto" id="tpago_monto" class="form-control" step="0.01" min="0" required>
                                 </div>
                             </div>
-                            <div class="col-md-3">
+                            <div class="col-md-4">
                                 <div class="form-group">
                                     <label>Fecha de Pago *</label>
                                     <input type="date" name="tpago_fecha_pago" class="form-control" value="{{ date('Y-m-d') }}" required>
                                 </div>
                             </div>
-                            <div class="col-md-3">
+                            <div class="col-md-4">
                                 <div class="form-group">
                                     <label>Total a Pagar</label>
                                     <input type="text" id="total_pagar" class="form-control" readonly style="font-weight:bold; font-size:1.1em;">
@@ -107,6 +107,7 @@
 @section('scripts')
 <script>
 let historialData = null;
+let mesesRestantesGlobal = 10;
 
 $(document).ready(function() {
     $('.select2').select2({
@@ -120,12 +121,14 @@ $(document).ready(function() {
             cargarHistorial(estCodigo);
         } else {
             $('#historialContainer').hide();
-            $('#tpago_tipo').val('').prop('disabled', false);
+            $('#detalleNuevoPago').hide();
+            mesesRestantesGlobal = 10;
+            actualizarOpcionesMeses();
         }
     });
     
-    $('#tpago_tipo').on('change', function() {
-        calcularMesesPagar();
+    $('#meses_pagar').on('change', function() {
+        calcularDetalle();
     });
     
     $('#tpago_monto').on('input', function() {
@@ -139,83 +142,96 @@ function cargarHistorial(estCodigo) {
         
         let totalPagado = 0;
         if (data.pagos.length > 0) {
-            let html = '<table class="table table-sm table-bordered mt-2"><thead><tr><th>Tipo</th><th>Monto</th><th>Fecha Pago</th><th>Vigencia</th></tr></thead><tbody>';
+            let html = '<table class="table table-sm table-bordered mt-2"><thead><tr><th>Tipo</th><th>Monto</th><th>Fecha Pago</th><th>Vigencia</th><th>Estado</th></tr></thead><tbody>';
             data.pagos.forEach(p => {
                 totalPagado += parseFloat(p.tpago_monto);
-                html += `<tr><td>${p.tpago_tipo}</td><td>Bs. ${p.tpago_monto}</td><td>${formatDate(p.tpago_fecha_pago)}</td><td>${formatDate(p.tpago_fecha_inicio)} al ${formatDate(p.tpago_fecha_fin)}</td></tr>`;
+                html += `<tr><td>${p.tpago_tipo}</td><td>Bs. ${parseFloat(p.tpago_monto).toFixed(2)}</td><td>${formatDate(p.tpago_fecha_pago)}</td><td>${formatDate(p.tpago_fecha_inicio)} al ${formatDate(p.tpago_fecha_fin)}</td><td><span class="badge badge-success">${p.tpago_estado}</span></td></tr>`;
             });
             html += '</tbody></table>';
             $('#historialContent').html(html);
-            $('#mesesPagados').text(data.mesesPagados);
-            $('#ultimaVigencia').text(data.ultimaVigencia || '-');
-            $('#totalPagado').text(totalPagado.toFixed(2));
-            $('#ultima_vigencia').val(data.ultimaVigencia ? data.ultimaVigencia.split('-').reverse().join('-') : '');
-            $('#historialContainer').show();
         } else {
             $('#historialContent').html('<p class="mb-0">No hay pagos registrados en esta gestión</p>');
-            $('#mesesPagados').text('0');
-            $('#ultimaVigencia').text('-');
-            $('#totalPagado').text('0.00');
-            $('#ultima_vigencia').val('');
-            $('#historialContainer').show();
         }
         
-        calcularMesesPagar();
+        $('#mesesPagados').text(data.mesesPagados);
+        $('#ultimaVigencia').text(data.ultimaVigencia || '-');
+        $('#totalPagado').text(totalPagado.toFixed(2));
+        $('#ultima_vigencia').val(data.ultimaVigencia ? data.ultimaVigencia.split('-').reverse().join('-') : '');
+        $('#historialContainer').show();
+        
+        mesesRestantesGlobal = 10 - data.mesesPagados;
+        actualizarOpcionesMeses();
+        
+        // Reset selección
+        $('#meses_pagar').val('');
+        $('#detalleNuevoPago').hide();
+        $('#total_pagar').val('');
     });
 }
 
-function calcularMesesPagar() {
-    const tipo = $('#tpago_tipo').val();
-    if (!tipo || !historialData) return;
-    
-    const mesesTipo = parseInt($('#tpago_tipo option:selected').data('meses'));
-    const mesesPagados = historialData.mesesPagados;
-    const mesesRestantes = 10 - mesesPagados;
-    
-    let mesesPagar = Math.min(mesesTipo, mesesRestantes);
-    if (mesesPagar < 1) mesesPagar = 0;
-    
-    $('#meses_pagar').val(mesesPagar);
-    
-    if (mesesPagar > 0) {
-        let inicio, fin;
-        const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
-        
-        if (historialData.ultimaVigencia) {
-            const partes = historialData.ultimaVigencia.split('-');
-            const fecha = new Date(partes[2], partes[1] - 1, partes[0]);
-            fecha.setDate(fecha.getDate() + 1);
-            inicio = new Date(fecha);
-            fin = new Date(fecha);
-            fin.setMonth(fin.getMonth() + mesesPagar);
-        } else {
-            inicio = new Date();
-            fin = new Date();
-            fin.setMonth(fin.getMonth() + mesesPagar);
+function actualizarOpcionesMeses() {
+    const select = $('#meses_pagar');
+    select.find('option').each(function() {
+        const val = parseInt($(this).val());
+        if (val) {
+            $(this).prop('disabled', val > mesesRestantesGlobal);
         }
-        
-        // Generar lista de meses
-        let listaMeses = '<strong>Meses incluidos:</strong><br>';
-        let current = new Date(inicio);
-        for(let i = 0; i < mesesPagar; i++) {
-            listaMeses += '<span class="badge badge-primary mr-1 mb-1">' + meses[current.getMonth()] + ' ' + current.getFullYear() + '</span>';
-            current.setMonth(current.getMonth() + 1);
-        }
-        $('#listaMesesPagar').html(listaMeses);
-        
-        const mesInicio = meses[inicio.getMonth()];
-        const mesFin = meses[fin.getMonth() - 1];
-        const listaMesesTexto = mesInicio === mesFin ? mesInicio : `${mesInicio} - ${mesFin}`;
-        
-        $('#mesesDetalle').text(`${listaMesesTexto} (${mesesPagar} ${mesesPagar === 1 ? 'mes' : 'meses'})`);
-        $('#vigenciaDetalle').text(`${formatDateObj(inicio)} al ${formatDateObj(fin)}`);
-        $('#detalleNuevoPago').show();
-        
-        calcularTotal();
+    });
+    
+    if (mesesRestantesGlobal <= 0) {
+        $('#mesesDisponiblesInfo').html('<span class="text-danger font-weight-bold">Ya se completaron los 10 meses del año escolar</span>');
+        select.prop('disabled', true);
     } else {
-        $('#detalleNuevoPago').hide();
-        alert('Ya se completaron los 10 meses del año escolar');
+        $('#mesesDisponiblesInfo').html('Meses disponibles: <strong>' + mesesRestantesGlobal + '</strong>');
+        select.prop('disabled', false);
     }
+}
+
+function calcularDetalle() {
+    const mesesPagar = parseInt($('#meses_pagar').val());
+    if (!mesesPagar || !historialData) return;
+    
+    if (mesesPagar > mesesRestantesGlobal) {
+        alert('Solo quedan ' + mesesRestantesGlobal + ' meses disponibles');
+        $('#meses_pagar').val('');
+        return;
+    }
+    
+    const mesesNombres = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+    let inicio, fin;
+    
+    if (historialData.ultimaVigencia) {
+        const partes = historialData.ultimaVigencia.split('-');
+        const fecha = new Date(partes[2], partes[1] - 1, partes[0]);
+        fecha.setDate(fecha.getDate() + 1);
+        inicio = new Date(fecha);
+        fin = new Date(fecha);
+        fin.setMonth(fin.getMonth() + mesesPagar);
+    } else {
+        inicio = new Date();
+        fin = new Date();
+        fin.setMonth(fin.getMonth() + mesesPagar);
+    }
+    
+    // Generar lista de meses
+    let listaMeses = '<strong>Meses incluidos:</strong><br>';
+    let current = new Date(inicio);
+    for(let i = 0; i < mesesPagar; i++) {
+        listaMeses += '<span class="badge badge-primary mr-1 mb-1">' + mesesNombres[current.getMonth()] + ' ' + current.getFullYear() + '</span>';
+        current.setMonth(current.getMonth() + 1);
+    }
+    $('#listaMesesPagar').html(listaMeses);
+    
+    const mesInicio = mesesNombres[inicio.getMonth()];
+    const idxFin = fin.getMonth() === 0 ? 11 : fin.getMonth() - 1;
+    const mesFin = mesesNombres[idxFin];
+    const listaMesesTexto = mesInicio === mesFin ? mesInicio : `${mesInicio} - ${mesFin}`;
+    
+    $('#mesesDetalle').text(`${listaMesesTexto} (${mesesPagar} ${mesesPagar === 1 ? 'mes' : 'meses'})`);
+    $('#vigenciaDetalle').text(`${formatDateObj(inicio)} al ${formatDateObj(fin)}`);
+    $('#detalleNuevoPago').show();
+    
+    calcularTotal();
 }
 
 function calcularTotal() {

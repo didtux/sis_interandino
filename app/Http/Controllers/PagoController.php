@@ -37,14 +37,55 @@ class PagoController extends Controller
         }
 
         $pagos = $query->orderBy('pagos_fecha', 'desc')->paginate(20);
+
+        // Agrupar pagos por pagos_codigo para recibos conjuntos y vista agrupada
+        $codigosEnPagina = $pagos->pluck('pagos_codigo')->unique()->values();
+        $pagosRecibo = [];
+        $codigosConjuntos = []; // códigos que tienen >1 pago
+        if ($codigosEnPagina->isNotEmpty()) {
+            $todos = Pago::with('estudiante.curso')
+                ->whereIn('pagos_codigo', $codigosEnPagina)
+                ->orderBy('est_codigo')
+                ->get();
+            foreach ($todos->groupBy('pagos_codigo') as $codigo => $grupo) {
+                $items = $grupo->map(function($p) {
+                    return [
+                        'pagos_id' => $p->pagos_id,
+                        'estudiante' => ($p->estudiante->est_nombres ?? '') . ' ' . ($p->estudiante->est_apellidos ?? ''),
+                        'curso' => $p->estudiante->curso->cur_nombre ?? 'N/A',
+                        'concepto' => $p->concepto,
+                        'monto' => $p->pagos_precio - $p->pagos_descuento,
+                        'estado' => $p->pagos_estado,
+                    ];
+                })->values()->toArray();
+                $pagosRecibo[$codigo] = $items;
+                if (count($items) > 1) {
+                    $codigosConjuntos[] = $codigo;
+                }
+            }
+        }
+
         $estudiantes = Estudiante::visible()->get();
         $cursos = Curso::visible()->get();
-        return view('pagos.index', compact('pagos', 'estudiantes', 'cursos'));
+        return view('pagos.index', compact('pagos', 'estudiantes', 'cursos', 'pagosRecibo', 'codigosConjuntos'));
     }
 
     public function create()
     {
         $year = date('Y');
+
+        // Cargar padres que tienen estudiantes inscritos
+        $padres = PadreFamilia::activo()
+            ->whereHas('estudiantes', function($q) use ($year) {
+                $q->where('est_visible', 1)
+                  ->whereHas('inscripcion', function($qi) use ($year) {
+                      $qi->where('insc_gestion', $year)->where('insc_estado', 1);
+                  });
+            })
+            ->orderBy('pfam_nombres')
+            ->get();
+
+        // Preparar datos de estudiantes inscritos con su info de pagos
         $estudiantes = Estudiante::visible()
             ->with([
                 'curso',
@@ -59,61 +100,83 @@ class PagoController extends Controller
                 $q->where('insc_gestion', $year)->where('insc_estado', 1);
             })
             ->get();
-        
-        // Agregar conteo de pagos realizados y meses pagados
-        foreach ($estudiantes as $estudiante) {
-            if ($estudiante->inscripcion) {
-                $pagos = Pago::where('est_codigo', $estudiante->est_codigo)
-                    ->whereYear('pagos_fecha', $year)
-                    ->where('pagos_estado', 1)
-                    ->orderBy('pagos_fecha', 'asc')
-                    ->get();
-                
-                $estudiante->inscripcion->pagos_realizados = $pagos->count();
-                $estudiante->inscripcion->historial_pagos = $pagos;
-                
-                // Calcular meses pagados y próxima cuota
-                $mesesPagados = [];
-                $montoMensualidad = $estudiante->inscripcion->insc_monto_final / 10;
-                $montoPagadoInicial = 300; // Pago de inscripción
-                $saldoAcumulado = 0; // Solo pagos de mensualidades
-                
-                foreach ($pagos as $pago) {
-                    $saldoAcumulado += $pago->pagos_precio;
+
+        $estudiantesData = [];
+        foreach ($estudiantes as $est) {
+            if (!$est->inscripcion) continue;
+
+            $insc = $est->inscripcion;
+            $montoFinal = $insc->insc_monto_final ?? 0;
+            $montoMensualidad = $montoFinal > 0 ? $montoFinal / 10 : 0;
+            $primeraCuota = max(0, $montoMensualidad - 300);
+
+            // Pagos activos del año
+            $pagos = Pago::where('est_codigo', $est->est_codigo)
+                ->whereYear('pagos_fecha', $year)
+                ->where('pagos_estado', 1)
+                ->orderBy('pagos_fecha', 'asc')
+                ->get();
+
+            $saldoAcumulado = $pagos->sum('pagos_precio');
+            $mesesPagados = [];
+
+            if ($saldoAcumulado >= $primeraCuota && $primeraCuota > 0) {
+                $mesesPagados[] = 2;
+                $saldoRestante = $saldoAcumulado - $primeraCuota;
+                $mesesAdicionales = $montoMensualidad > 0 ? floor($saldoRestante / $montoMensualidad) : 0;
+                for ($i = 1; $i <= $mesesAdicionales && ($i + 2) <= 11; $i++) {
+                    $mesesPagados[] = $i + 2;
                 }
-                
-                // Calcular cuántos meses completos se han pagado
-                // Primera mensualidad = mensualidad - 300
-                $primeraMensualidad = $montoMensualidad - $montoPagadoInicial;
-                
-                if ($saldoAcumulado >= $primeraMensualidad) {
-                    $mesesPagados[] = 2; // Febrero pagado
-                    $saldoRestante = $saldoAcumulado - $primeraMensualidad;
-                    
-                    // Calcular meses adicionales pagados
-                    $mesesAdicionales = floor($saldoRestante / $montoMensualidad);
-                    for ($i = 1; $i <= $mesesAdicionales && ($i + 2) <= 11; $i++) {
-                        $mesesPagados[] = $i + 2;
-                    }
-                }
-                
-                $estudiante->inscripcion->meses_pagados = $mesesPagados;
-                
-                // Próxima cuota: si no ha pagado nada, es primera cuota (mensualidad - 300), sino es cuota completa
-                if (count($mesesPagados) == 0) {
-                    $estudiante->inscripcion->proxima_cuota = $primeraMensualidad;
-                } else {
-                    $estudiante->inscripcion->proxima_cuota = $montoMensualidad;
+            } elseif ($saldoAcumulado > 0 && $primeraCuota == 0) {
+                $mesesAdicionales = $montoMensualidad > 0 ? floor($saldoAcumulado / $montoMensualidad) : 0;
+                for ($i = 0; $i < $mesesAdicionales && ($i + 2) <= 11; $i++) {
+                    $mesesPagados[] = $i + 2;
                 }
             }
+
+            $proximaCuota = count($mesesPagados) == 0 ? $primeraCuota : $montoMensualidad;
+
+            // Historial de pagos para mostrar en la vista
+            $historial = $pagos->map(function($p) {
+                return [
+                    'fecha' => $p->pagos_fecha ? $p->pagos_fecha->format('d/m/Y') : '-',
+                    'concepto' => $p->concepto,
+                    'monto' => $p->pagos_precio,
+                    'codigo' => $p->pagos_codigo,
+                ];
+            })->values()->toArray();
+
+            // Descuentos aplicados
+            $descuentos = $insc->descuentos->map(function($d) {
+                return $d->desc_nombre . ' (-Bs. ' . number_format($d->pivot->inscdesc_monto_descuento, 2) . ')';
+            })->toArray();
+
+            $estudiantesData[$est->est_codigo] = [
+                'est_codigo' => $est->est_codigo,
+                'nombre' => $est->est_nombres . ' ' . $est->est_apellidos,
+                'curso' => $est->curso->cur_nombre ?? 'N/A',
+                'mensualidad' => $montoMensualidad,
+                'proxima_cuota' => $proximaCuota,
+                'meses_pagados' => $mesesPagados,
+                'sin_factura' => $insc->insc_sin_factura ?? 0,
+                'padres' => $est->padres->pluck('pfam_codigo')->toArray(),
+                'monto_total' => $insc->insc_monto_total ?? 0,
+                'monto_descuento' => $insc->insc_monto_descuento ?? 0,
+                'monto_final' => $montoFinal,
+                'primera_cuota' => $primeraCuota,
+                'total_pagado' => $saldoAcumulado,
+                'saldo_pendiente' => max(0, $montoFinal - $saldoAcumulado),
+                'descuentos' => $descuentos,
+                'historial' => $historial,
+            ];
         }
-        
-        return view('pagos.create', compact('estudiantes'));
+
+        return view('pagos.create', compact('padres', 'estudiantesData'));
     }
 
     public function store(Request $request)
     {
-        // Si se ingresó un nuevo padre, crearlo
+        // Crear padre nuevo si aplica
         if ($request->filled('pfam_nombre_nuevo')) {
             $padre = PadreFamilia::create([
                 'pfam_codigo' => 'Pad' . str_pad(PadreFamilia::max('pfam_id') + 1, 5, '0', STR_PAD_LEFT),
@@ -121,84 +184,78 @@ class PagoController extends Controller
                 'pfam_ci' => '0000000',
                 'pfam_estado' => 1
             ]);
-            
-            // Vincular padre con estudiante
-            \DB::table('rela_estudiantespadres')->insert([
-                'est_id' => $request->est_codigo,
-                'pfam_id' => $padre->pfam_codigo,
-                'estpad_estado' => 1
-            ]);
-            
             $pfamCodigo = $padre->pfam_codigo;
         } else {
             $request->validate(['pfam_codigo' => 'required']);
             $pfamCodigo = $request->pfam_codigo;
         }
 
-        $request->validate([
-            'est_codigo' => 'required',
-            'pagos_precio' => 'required|numeric',
-            'mes' => 'required|integer|min:2|max:11',
-            'cantidad_cuotas' => 'required|integer|min:1|max:10',
-            'sin_factura' => 'required|in:0,1'
-        ]);
+        $estudiantesInput = $request->input('estudiantes', []);
+        if (empty($estudiantesInput)) {
+            return back()->withErrors(['error' => 'Debe seleccionar al menos un estudiante.'])->withInput();
+        }
 
-        $cantidadCuotas = $request->cantidad_cuotas;
-        $mesInicio = $request->mes;
         $year = date('Y');
-        $sinFactura = $request->sin_factura == 1;
         $mesesNombres = ['', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 
-        // Validar que no existan pagos duplicados
-        for ($i = 0; $i < $cantidadCuotas; $i++) {
-            $mesActual = $mesInicio + $i;
-            if ($mesActual > 11) break;
+        // Un solo código de recibo para toda la transacción
+        $sinFactura = intval($estudiantesInput[array_key_first($estudiantesInput)]['sin_factura'] ?? 0);
+        if ($sinFactura) {
+            $ultimo = Pago::where('pagos_codigo', 'like', 'TAL%')->max('pagos_codigo');
+            $codigoRecibo = 'TAL' . str_pad(($ultimo ? intval(substr($ultimo, 3)) : 0) + 1, 5, '0', STR_PAD_LEFT);
+        } else {
+            $ultimo = Pago::where('pagos_codigo', 'like', 'REC%')->max('pagos_codigo');
+            $codigoRecibo = 'REC' . str_pad(($ultimo ? intval(substr($ultimo, 3)) : 0) + 1, 5, '0', STR_PAD_LEFT);
+        }
 
-            $pagoExistente = Pago::where('est_codigo', $request->est_codigo)
-                ->whereYear('pagos_fecha', $year)
-                ->whereMonth('pagos_fecha', $mesActual)
-                ->where('pagos_estado', 1)
-                ->exists();
+        foreach ($estudiantesInput as $estData) {
+            $estCodigo = $estData['est_codigo'];
+            $mesInicio = intval($estData['mes']);
+            $cantidadCuotas = intval($estData['cantidad_cuotas']);
+            $montoCuota = floatval($estData['pagos_precio']);
+            $sinFactura = intval($estData['sin_factura'] ?? 0);
 
-            if ($pagoExistente) {
-                return back()->withErrors(['error' => 'El estudiante ya tiene registrado el pago de ' . $mesesNombres[$mesActual] . '.'])->withInput();
+            // Validar duplicados
+            for ($i = 0; $i < $cantidadCuotas; $i++) {
+                $mesActual = $mesInicio + $i;
+                if ($mesActual > 11) break;
+
+                $existe = Pago::where('est_codigo', $estCodigo)
+                    ->whereYear('pagos_fecha', $year)
+                    ->where('pagos_estado', 1)
+                    ->where('concepto', 'like', '%' . $mesesNombres[$mesActual] . '%')
+                    ->exists();
+
+                if ($existe) {
+                    $est = Estudiante::where('est_codigo', $estCodigo)->first();
+                    return back()->withErrors(['error' => ($est->est_nombres ?? '') . ' ya tiene pagado ' . $mesesNombres[$mesActual] . '.'])->withInput();
+                }
+            }
+
+            // Registrar pagos — todos con el mismo código de recibo
+            for ($i = 0; $i < $cantidadCuotas; $i++) {
+                $mesActual = $mesInicio + $i;
+                if ($mesActual > 11) break;
+
+                Pago::create([
+                    'pagos_codigo' => $codigoRecibo,
+                    'men_codigo' => 'PAGO' . str_pad(Pago::max('pagos_id') + 1, 5, '0', STR_PAD_LEFT),
+                    'est_codigo' => $estCodigo,
+                    'pfam_codigo' => $pfamCodigo,
+                    'prod_codigo' => 'MENSUALIDAD',
+                    'pagos_precio' => $montoCuota,
+                    'pagos_nombres' => 'Mensualidad ' . $mesesNombres[$mesActual],
+                    'pagos_usuario' => auth()->user()->us_codigo ?? 'ADMIN',
+                    'pagos_descuento' => 0,
+                    'concepto' => 'Mensualidad ' . $mesesNombres[$mesActual],
+                    'tipo' => 1,
+                    'pagos_fecha' => now(),
+                    'pagos_sin_factura' => $sinFactura ? 1 : 0
+                ]);
             }
         }
 
-        // Registrar pagos
-        for ($i = 0; $i < $cantidadCuotas; $i++) {
-            $mesActual = $mesInicio + $i;
-            if ($mesActual > 11) break;
-
-            // Generar código según tipo de factura
-            if ($sinFactura) {
-                $ultimoTAL = Pago::where('pagos_codigo', 'like', 'TAL%')->max('pagos_codigo');
-                $numeroTAL = $ultimoTAL ? intval(substr($ultimoTAL, 3)) + 1 : 1;
-                $codigo = 'TAL' . str_pad($numeroTAL, 5, '0', STR_PAD_LEFT);
-            } else {
-                $ultimoREC = Pago::where('pagos_codigo', 'like', 'REC%')->max('pagos_codigo');
-                $numeroREC = $ultimoREC ? intval(substr($ultimoREC, 3)) + 1 : 1;
-                $codigo = 'REC' . str_pad($numeroREC, 5, '0', STR_PAD_LEFT);
-            }
-
-            Pago::create([
-                'pagos_codigo' => $codigo,
-                'men_codigo' => 'PAGO' . str_pad(Pago::max('pagos_id') + 1, 5, '0', STR_PAD_LEFT),
-                'est_codigo' => $request->est_codigo,
-                'pfam_codigo' => $pfamCodigo,
-                'prod_codigo' => 'MENSUALIDAD',
-                'pagos_precio' => $request->pagos_precio,
-                'pagos_nombres' => $request->pagos_nombres ?? 'Mensualidad ' . $mesesNombres[$mesActual],
-                'pagos_usuario' => auth()->user()->us_codigo ?? 'ADMIN',
-                'pagos_descuento' => 0,
-                'concepto' => 'Mensualidad ' . $mesesNombres[$mesActual],
-                'tipo' => 1,
-                'pagos_fecha' => now(),
-                'pagos_sin_factura' => $sinFactura ? 1 : 0
-            ]);
-        }
-
-        return redirect()->route('pagos.index')->with('success', 'Mensualidad(es) registrada(s) exitosamente');
+        return redirect()->route('pagos.index')->with('success', 'Pago(s) registrado(s) exitosamente');
     }
 
     public function show($id)
@@ -259,7 +316,6 @@ class PagoController extends Controller
             ->first();
         
         if ($estudiante && $estudiante->inscripcion) {
-            // Contar pagos de mensualidades realizados
             $pagosRealizados = Pago::where('est_codigo', $est_codigo)
                 ->whereYear('pagos_fecha', $year)
                 ->where('pagos_estado', 1)
@@ -277,10 +333,10 @@ class PagoController extends Controller
     public function anular($id)
     {
         $pago = Pago::findOrFail($id);
-        $pago->pagos_estado = 0;
-        $pago->save();
+        // Anular todos los pagos con el mismo código (pago conjunto)
+        Pago::where('pagos_codigo', $pago->pagos_codigo)->update(['pagos_estado' => 0]);
         
-        return response()->json(['success' => true, 'message' => 'Pago anulado']);
+        return response()->json(['success' => true, 'message' => 'Pago(s) anulado(s)']);
     }
 
     public function resumenAnual()
@@ -338,7 +394,6 @@ class PagoController extends Controller
         $year = date('Y');
         $mesActual = date('n');
         
-        // Obtener TODOS los estudiantes visibles con pagos del año
         $query = Estudiante::visible()
             ->with([
                 'curso',
@@ -359,9 +414,7 @@ class PagoController extends Controller
 
         $estudiantes = $query->orderBy('cur_codigo')->orderBy('est_apellidos')->get();
         
-        // Filtrar estudiantes en mora (con o sin inscripción)
         $estudiantesEnMora = $estudiantes->filter(function($est) use ($mesActual, $year) {
-            // Si tiene pagos del año, verificar si pagó el mes actual
             if ($est->pagos->count() > 0) {
                 $mesesPagados = [];
                 foreach($est->pagos as $pago) {
@@ -374,7 +427,6 @@ class PagoController extends Controller
                     return !in_array($mesActual, $mesesPagados);
                 }
             }
-            // Si tiene inscripción pero no pagos, está en mora
             elseif ($est->inscripcion && $mesActual >= 2 && $mesActual <= 11) {
                 return true;
             }

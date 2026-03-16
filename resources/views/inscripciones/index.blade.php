@@ -517,54 +517,59 @@ function generarRecibo(recibo, estudiante, padre, curso, gestion, concepto, mont
         doc.text('$us.', 478, 63);
         doc.line(505, 61, 588, 61);
         
-        // RECIBO con código
-        doc.setFontSize(16);
+        // RECIBO con código numérico
+        const soloNumero = recibo.replace(/\D/g, '');
+        const numeroFormateado = soloNumero.padStart(5, '0');
+        doc.setFontSize(28);
         doc.setFont(undefined, 'bold');
-        doc.text('RECIBO - ' + recibo, 306, 85, { align: 'center' });
+        doc.text('RECIBO-' + numeroFormateado, 306, 85, { align: 'center' });
         
         // Cancelado por
-        doc.setFontSize(9);
+        doc.setFontSize(11);
         doc.setFont(undefined, 'bold');
         doc.text('Cancelado por:', 15, 110);
         doc.setFont(undefined, 'normal');
         doc.setLineDash([0.5, 1]);
-        doc.line(85, 112, 585, 112);
+        doc.line(100, 112, 585, 112);
         doc.setLineDash([]);
-        doc.text(padre, 90, 110);
+        doc.text(padre, 105, 110);
         
         // La suma de
         const parteEntera = Math.floor(monto);
         const parteDecimal = Math.round((monto - parteEntera) * 100);
         const montoLiteral = numeroATexto(parteEntera) + ' ' + String(parteDecimal).padStart(2, '0') + '/100';
         
+        doc.setFontSize(11);
         doc.setFont(undefined, 'bold');
         doc.text('La suma de:', 15, 130);
         doc.setFont(undefined, 'normal');
         doc.setLineDash([0.5, 1]);
-        doc.line(70, 132, 585, 132);
+        doc.line(85, 132, 585, 132);
         doc.setLineDash([]);
-        doc.text(montoLiteral, 75, 130);
+        doc.text(montoLiteral, 90, 130);
         
-        // Por concepto de
+        // Por concepto de - concepto arriba, estudiante y curso abajo
+        doc.setFontSize(11);
         doc.setFont(undefined, 'bold');
         doc.text('Por concepto de:', 15, 150);
         doc.setFont(undefined, 'normal');
         doc.setLineDash([0.5, 1]);
-        doc.line(90, 152, 585, 152);
+        doc.line(110, 152, 585, 152);
         doc.setLineDash([]);
-        let conceptoCompleto = concepto + ' - Est: ' + estudiante + ' - Curso: ' + curso + ' - Gestión: ' + gestion;
-        const conceptoLines = doc.splitTextToSize(conceptoCompleto, 490);
-        let yConcepto = 150;
-        conceptoLines.forEach((line, index) => {
-            doc.text(line, 95, yConcepto + (index * 10));
-        });
+        doc.text(concepto + ' - Gestión: ' + gestion, 115, 150);
+        
+        // Estudiante y curso en línea siguiente
+        doc.setLineDash([0.5, 1]);
+        doc.line(15, 172, 585, 172);
+        doc.setLineDash([]);
+        doc.text('Est: ' + estudiante + '  -  Curso: ' + curso, 15, 170);
         
         // Líneas punteadas
-        let yPos = 185;
-        for (let i = 0; i < 5; i++) {
+        let yPos = 190;
+        for (let i = 0; i < 4; i++) {
             doc.setLineDash([0.5, 1]);
             doc.line(15, yPos, 597, yPos);
-            yPos += 20;
+            yPos += 22;
         }
         doc.setLineDash([]);
         
@@ -574,7 +579,7 @@ function generarRecibo(recibo, estudiante, padre, curso, gestion, concepto, mont
         doc.setLineDash([0.5, 1]);
         doc.line(15, yPos, 597, yPos);
         doc.setLineDash([]);
-        doc.setFontSize(10);
+        doc.setFontSize(13);
         doc.setFont(undefined, 'bold');
         doc.text('TOTAL', 480, yPos + 15);
         doc.text(monto.toFixed(2), 585, yPos + 15, { align: 'right' });

@@ -39,7 +39,7 @@
                             </div>
                             <div class="col-md-6">
                                 <div class="form-group">
-                                    <label>Ruta *</label>
+                                    <label>Ruta/Bus *</label>
                                     <select name="ruta_codigo" id="ruta-select" class="form-control select2" required>
                                         <option value="">Seleccione...</option>
                                         @foreach($rutas as $r)

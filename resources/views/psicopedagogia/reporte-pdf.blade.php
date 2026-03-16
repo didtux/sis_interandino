@@ -124,7 +124,7 @@
                 <th style="width: 10%;">CURSO</th>
                 <th style="width: 20%;">CASO</th>
                 <th style="width: 15%;">SOLUCIÓN</th>
-                <th style="width: 12%;">ACUERDO</th>
+                <th style="width: 12%;">KARDEX</th>
                 <th style="width: 8%;">TIPO</th>
                 <th style="width: 6%;">CONTACTO</th>
             </tr>

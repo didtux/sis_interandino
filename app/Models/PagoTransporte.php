@@ -14,7 +14,7 @@ class PagoTransporte extends Model
     protected $fillable = [
         'tpago_codigo', 'est_codigo', 'tpago_tipo', 'tpago_monto',
         'tpago_fecha_pago', 'tpago_fecha_inicio', 'tpago_fecha_fin',
-        'tpago_estado', 'tpago_usuario_registro'
+        'tpago_estado', 'tpago_usuario_registro', 'tpago_monto_modificado'
     ];
 
     public function estudiante()

@@ -68,7 +68,7 @@
                                 <th>Curso</th>
                                 <th>Caso</th>
                                 <th>Solución</th>
-                                <th>Acuerdo</th>
+                                <th>Kardex</th>
                                 <th>Observaciones</th>
                                 <th>Tipo Acuerdo</th>
                                 <th>Acciones</th>
