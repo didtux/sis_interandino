@@ -1,101 +1,144 @@
 @extends('layouts.app')
 
 @section('content')
+<style>
+    .info-panel { background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 8px; padding: 15px; margin-bottom: 15px; }
+    .info-panel .panel-title { font-size: 14px; font-weight: 600; color: #495057; margin-bottom: 10px; border-bottom: 2px solid #17a2b8; padding-bottom: 5px; }
+    .info-panel .info-row { display: flex; justify-content: space-between; padding: 3px 0; font-size: 13px; }
+    .info-panel .info-row .label { color: #6c757d; }
+    .info-panel .info-row .value { font-weight: 600; }
+    .mes-badge { display: inline-block; padding: 3px 8px; border-radius: 4px; font-size: 11px; margin: 2px; font-weight: 600; }
+    .mes-pagado { background: #d4edda; color: #155724; }
+    .mes-pendiente { background: #fff3cd; color: #856404; }
+    .mes-vencido { background: #f8d7da; color: #721c24; text-decoration: line-through; }
+    .historial-table { font-size: 12px; }
+    .historial-table th { background: #e9ecef; font-size: 11px; text-transform: uppercase; }
+    .student-detail-panel { display: none; border-left: 3px solid #17a2b8; background: #fff; padding: 15px; margin: 10px 0; border-radius: 0 8px 8px 0; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+</style>
+
 <div class="section-body">
     <div class="row">
         <div class="col-12">
             <div class="card">
                 <div class="card-header">
-                    <h4><i class="fas fa-money-bill mr-2"></i>Nuevo Pago de Transporte</h4>
+                    <h4><i class="fas fa-bus mr-2"></i>Nuevo Pago de Transporte</h4>
                 </div>
                 <div class="card-body">
+                    @if($errors->any())
+                        <div class="alert alert-danger">
+                            <i class="fas fa-exclamation-circle mr-2"></i>
+                            @foreach($errors->all() as $error) {{ $error }}<br> @endforeach
+                        </div>
+                    @endif
+
                     <form action="{{ route('pagos-transporte.store') }}" method="POST" id="formPago">
                         @csrf
+
+                        {{-- PASO 1: Seleccionar padre --}}
                         <div class="row">
-                            <div class="col-md-6">
+                            <div class="col-md-5" id="divPadreSelect">
                                 <div class="form-group">
-                                    <label>Estudiante *</label>
-                                    <select name="est_codigo" id="est_codigo" class="form-control select2" required>
-                                        <option value="">Seleccione...</option>
-                                        @foreach($estudiantes as $e)
-                                            <option value="{{ $e->est_codigo }}">{{ $e->est_nombres }} {{ $e->est_apellidos }}</option>
+                                    <label>Padre de Familia <span class="text-danger">*</span></label>
+                                    <select id="padre-select" class="form-control select2">
+                                        <option value="">Seleccione un padre...</option>
+                                        @foreach($padres as $padre)
+                                            <option value="{{ $padre->pfam_codigo }}">
+                                                {{ $padre->pfam_nombres }} - CI: {{ $padre->pfam_ci ?? 'N/A' }}
+                                            </option>
                                         @endforeach
                                     </select>
                                 </div>
                             </div>
-                            <div class="col-md-6">
+                            <div class="col-md-5" id="divOtroPadre" style="display:none;">
                                 <div class="form-group">
-                                    <label>Cantidad de Meses a Pagar *</label>
-                                    <select name="meses_pagar" id="meses_pagar" class="form-control" required>
-                                        <option value="">Seleccione...</option>
-                                        <option value="1">1 mes (Mensual)</option>
-                                        <option value="2">2 meses (Bimestral)</option>
-                                        <option value="3">3 meses (Trimestral)</option>
-                                        <option value="4">4 meses (Cuatrimestral)</option>
-                                        <option value="5">5 meses</option>
-                                        <option value="6">6 meses (Semestral)</option>
-                                        <option value="7">7 meses</option>
-                                        <option value="8">8 meses</option>
-                                        <option value="9">9 meses</option>
-                                        <option value="10">10 meses (Anual)</option>
-                                    </select>
-                                    <small class="text-muted" id="mesesDisponiblesInfo"></small>
+                                    <label>Nombre del Padre/Tutor <span class="text-danger">*</span></label>
+                                    <input type="text" name="pfam_nombre_nuevo" id="pfam_nombre_nuevo" class="form-control" placeholder="Ingrese nombre completo">
                                 </div>
                             </div>
-                        </div>
-                        
-                        <div id="historialContainer" style="display:none;">
-                            <div class="alert alert-info">
-                                <h6><i class="fas fa-history"></i> Historial de Pagos - Gestión {{ date('Y') }}</h6>
-                                <div id="historialContent"></div>
-                                <hr>
-                                <strong>Meses pagados: <span id="mesesPagados">0</span>/10</strong><br>
-                                <strong>Última vigencia: <span id="ultimaVigencia">-</span></strong><br>
-                                <strong>Total pagado: Bs. <span id="totalPagado">0.00</span></strong>
-                            </div>
-                        </div>
-                        
-                        <div id="detalleNuevoPago" class="alert alert-warning" style="display:none;">
-                            <h6><i class="fas fa-calendar-alt"></i> Detalle del Nuevo Pago</h6>
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <strong>Meses a cancelar:</strong> <span id="mesesDetalle"></span><br>
-                                    <strong>Vigencia:</strong> <span id="vigenciaDetalle"></span>
-                                </div>
-                                <div class="col-md-6">
-                                    <div id="listaMesesPagar" style="font-size: 0.9em;"></div>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="row">
-                            <div class="col-md-4">
+                            <div class="col-md-1">
                                 <div class="form-group">
-                                    <label>Monto Mensual (Bs.) *</label>
-                                    <input type="number" name="tpago_monto" id="tpago_monto" class="form-control" step="0.01" min="0" required>
+                                    <label>&nbsp;</label>
+                                    <div class="form-check">
+                                        <input type="checkbox" class="form-check-input" id="checkOtroPadre">
+                                        <label class="form-check-label" for="checkOtroPadre">Otro</label>
+                                    </div>
                                 </div>
                             </div>
-                            <div class="col-md-4">
+                            <div class="col-md-3">
                                 <div class="form-group">
                                     <label>Fecha de Pago *</label>
                                     <input type="date" name="tpago_fecha_pago" class="form-control" value="{{ date('Y-m-d') }}" required>
                                 </div>
                             </div>
-                            <div class="col-md-4">
-                                <div class="form-group">
-                                    <label>Total a Pagar</label>
-                                    <input type="text" id="total_pagar" class="form-control" readonly style="font-weight:bold; font-size:1.1em;">
+                        </div>
+
+                        {{-- Selector de estudiantes para "Otro" --}}
+                        <div id="divAgregarEstudiante" style="display:none;">
+                            <div class="row">
+                                <div class="col-md-5">
+                                    <div class="form-group">
+                                        <label>Agregar Estudiante</label>
+                                        <select id="est-select-otro" class="form-control select2-est">
+                                            <option value="">Buscar estudiante...</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="col-md-2">
+                                    <div class="form-group">
+                                        <label>&nbsp;</label>
+                                        <button type="button" class="btn btn-success btn-block" id="btnAgregarEst">
+                                            <i class="fas fa-plus"></i> Agregar
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
-                        
-                        <input type="hidden" name="ultima_vigencia" id="ultima_vigencia">
-                        
-                        <div class="alert alert-info">
-                            <i class="fas fa-info-circle"></i> Las fechas se calculan automáticamente considerando solo días hábiles (lunes a viernes). Si la fecha fin cae en fin de semana, se ajustará al viernes anterior.
+
+                        {{-- PASO 2: Tabla de estudiantes --}}
+                        <div id="hijos-container" style="display:none;">
+                            <hr>
+                            <h5><i class="fas fa-users mr-2"></i>Estudiantes</h5>
+                            <div class="table-responsive">
+                                <table class="table table-bordered" id="tabla-hijos">
+                                    <thead class="thead-light">
+                                        <tr>
+                                            <th style="width:40px"><input type="checkbox" id="checkAll"></th>
+                                            <th>Estudiante</th>
+                                            <th>Curso</th>
+                                            <th>Ruta</th>
+                                            <th>Meses a Pagar</th>
+                                            <th>Monto Mensual</th>
+                                            <th>Subtotal</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="hijos-tbody"></tbody>
+                                </table>
+                            </div>
+
+                            <div id="paneles-detalle"></div>
+
+                            <div class="row mt-3">
+                                <div class="col-md-12">
+                                    <div class="alert alert-success">
+                                        <div class="row">
+                                            <div class="col-md-8"><div id="detalle-pago"></div></div>
+                                            <div class="col-md-4 text-right">
+                                                <h4>TOTAL: Bs. <span id="total-pagar">0.00</span></h4>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <button type="submit" class="btn btn-primary btn-lg" id="btnGuardar" disabled>
+                                    <i class="fas fa-save"></i> Registrar Pago
+                                </button>
+                                <a href="{{ route('pagos-transporte.index') }}" class="btn btn-secondary">
+                                    <i class="fas fa-arrow-left"></i> Volver
+                                </a>
+                            </div>
                         </div>
-                        <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Guardar</button>
-                        <a href="{{ route('pagos-transporte.index') }}" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Volver</a>
                     </form>
                 </div>
             </div>
@@ -106,148 +149,252 @@
 
 @section('scripts')
 <script>
-let historialData = null;
-let mesesRestantesGlobal = 10;
+var estudiantesData = @json($estudiantesData);
+var mesesNombres = ['', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre'];
+var mesActual = {{ (int)date('n') }}; // 1-12
+var idxGlobal = 0;
+var estudiantesAgregados = [];
+
+// Obtener meses pagables (no pagados Y >= mes actual)
+function getMesesPagables(est) {
+    var pagables = [];
+    for (var m = 2; m <= 11; m++) {
+        if (!est.meses_pagados.includes(m) && m >= mesActual) pagables.push(m);
+    }
+    return pagables;
+}
 
 $(document).ready(function() {
-    $('.select2').select2({
-        theme: 'bootstrap4',
-        width: '100%'
-    });
-    
-    $('#est_codigo').on('change', function() {
-        const estCodigo = $(this).val();
-        if (estCodigo) {
-            cargarHistorial(estCodigo);
+    $('#padre-select').select2({ placeholder: 'Buscar padre de familia...', allowClear: true, width: '100%', theme: 'bootstrap4' });
+
+    $('#checkOtroPadre').on('change', function() {
+        var esOtro = $(this).is(':checked');
+        $('#divPadreSelect').toggle(!esOtro);
+        $('#divOtroPadre').toggle(esOtro);
+        $('#divAgregarEstudiante').toggle(esOtro);
+        if (esOtro) {
+            $('#padre-select').val('').trigger('change');
+            limpiarTabla();
+            cargarSelectEstudiantes();
+            $('#hijos-container').show();
         } else {
-            $('#historialContainer').hide();
-            $('#detalleNuevoPago').hide();
-            mesesRestantesGlobal = 10;
-            actualizarOpcionesMeses();
+            $('#pfam_nombre_nuevo').val('');
+            limpiarTabla();
+            $('#hijos-container').hide();
         }
     });
-    
-    $('#meses_pagar').on('change', function() {
-        calcularDetalle();
+
+    $('#padre-select').on('change', function() {
+        limpiarTabla();
+        var pfamCodigo = $(this).val();
+        if (pfamCodigo) {
+            cargarHijosDePadre(pfamCodigo);
+        } else {
+            $('#hijos-container').hide();
+        }
     });
-    
-    $('#tpago_monto').on('input', function() {
-        calcularTotal();
+
+    $('#btnAgregarEst').on('click', function() {
+        var estCodigo = $('#est-select-otro').val();
+        if (!estCodigo) return;
+        if (estudiantesAgregados.includes(estCodigo)) { alert('Ya fue agregado'); return; }
+        var est = estudiantesData[estCodigo];
+        if (!est) return;
+        agregarFilaEstudiante(est);
+        $('#est-select-otro').val('').trigger('change');
+    });
+
+    $('#checkAll').on('change', function() {
+        $('.check-estudiante').prop('checked', $(this).is(':checked')).trigger('change');
     });
 });
 
-function cargarHistorial(estCodigo) {
-    $.get(`{{ url('pagos-transporte/historial') }}/${estCodigo}`, function(data) {
-        historialData = data;
-        
-        let totalPagado = 0;
-        if (data.pagos.length > 0) {
-            let html = '<table class="table table-sm table-bordered mt-2"><thead><tr><th>Tipo</th><th>Monto</th><th>Fecha Pago</th><th>Vigencia</th><th>Estado</th></tr></thead><tbody>';
-            data.pagos.forEach(p => {
-                totalPagado += parseFloat(p.tpago_monto);
-                html += `<tr><td>${p.tpago_tipo}</td><td>Bs. ${parseFloat(p.tpago_monto).toFixed(2)}</td><td>${formatDate(p.tpago_fecha_pago)}</td><td>${formatDate(p.tpago_fecha_inicio)} al ${formatDate(p.tpago_fecha_fin)}</td><td><span class="badge badge-success">${p.tpago_estado}</span></td></tr>`;
-            });
-            html += '</tbody></table>';
-            $('#historialContent').html(html);
-        } else {
-            $('#historialContent').html('<p class="mb-0">No hay pagos registrados en esta gestión</p>');
-        }
-        
-        $('#mesesPagados').text(data.mesesPagados);
-        $('#ultimaVigencia').text(data.ultimaVigencia || '-');
-        $('#totalPagado').text(totalPagado.toFixed(2));
-        $('#ultima_vigencia').val(data.ultimaVigencia ? data.ultimaVigencia.split('-').reverse().join('-') : '');
-        $('#historialContainer').show();
-        
-        mesesRestantesGlobal = 10 - data.mesesPagados;
-        actualizarOpcionesMeses();
-        
-        // Reset selección
-        $('#meses_pagar').val('');
-        $('#detalleNuevoPago').hide();
-        $('#total_pagar').val('');
-    });
+function limpiarTabla() {
+    $('#hijos-tbody').empty();
+    $('#paneles-detalle').empty();
+    idxGlobal = 0;
+    estudiantesAgregados = [];
+    recalcular();
 }
 
-function actualizarOpcionesMeses() {
-    const select = $('#meses_pagar');
-    select.find('option').each(function() {
-        const val = parseInt($(this).val());
-        if (val) {
-            $(this).prop('disabled', val > mesesRestantesGlobal);
-        }
-    });
-    
-    if (mesesRestantesGlobal <= 0) {
-        $('#mesesDisponiblesInfo').html('<span class="text-danger font-weight-bold">Ya se completaron los 10 meses del año escolar</span>');
-        select.prop('disabled', true);
-    } else {
-        $('#mesesDisponiblesInfo').html('Meses disponibles: <strong>' + mesesRestantesGlobal + '</strong>');
-        select.prop('disabled', false);
+function cargarSelectEstudiantes() {
+    var sel = $('#est-select-otro');
+    sel.empty().append('<option value="">Buscar estudiante...</option>');
+    for (var key in estudiantesData) {
+        var est = estudiantesData[key];
+        sel.append('<option value="' + est.est_codigo + '">' + est.nombre + ' - ' + est.curso + ' - ' + est.ruta + '</option>');
     }
+    if (sel.hasClass('select2-hidden-accessible')) sel.select2('destroy');
+    sel.select2({ placeholder: 'Buscar estudiante...', allowClear: true, width: '100%', theme: 'bootstrap4' });
 }
 
-function calcularDetalle() {
-    const mesesPagar = parseInt($('#meses_pagar').val());
-    if (!mesesPagar || !historialData) return;
-    
-    if (mesesPagar > mesesRestantesGlobal) {
-        alert('Solo quedan ' + mesesRestantesGlobal + ' meses disponibles');
-        $('#meses_pagar').val('');
+function cargarHijosDePadre(pfamCodigo) {
+    var hijos = [];
+    for (var key in estudiantesData) {
+        var est = estudiantesData[key];
+        if (est.padres && est.padres.includes(pfamCodigo)) hijos.push(est);
+    }
+    if (hijos.length === 0) {
+        $('#hijos-tbody').append('<tr><td colspan="7" class="text-center text-muted">Este padre no tiene estudiantes con transporte</td></tr>');
+        $('#hijos-container').show();
         return;
     }
-    
-    const mesesNombres = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
-    let inicio, fin;
-    
-    if (historialData.ultimaVigencia) {
-        const partes = historialData.ultimaVigencia.split('-');
-        const fecha = new Date(partes[2], partes[1] - 1, partes[0]);
-        fecha.setDate(fecha.getDate() + 1);
-        inicio = new Date(fecha);
-        fin = new Date(fecha);
-        fin.setMonth(fin.getMonth() + mesesPagar);
+    hijos.forEach(function(est) { agregarFilaEstudiante(est); });
+    $('#hijos-container').show();
+}
+
+function agregarFilaEstudiante(est) {
+    var idx = idxGlobal++;
+    estudiantesAgregados.push(est.est_codigo);
+
+    var mesesPagables = getMesesPagables(est);
+    var maxCuotas = mesesPagables.length;
+
+    var esOtro = $('#checkOtroPadre').is(':checked');
+
+    var row = '<tr data-est="' + est.est_codigo + '" data-idx="' + idx + '">' +
+        '<td><input type="checkbox" class="check-estudiante" data-idx="' + idx + '" data-est="' + est.est_codigo + '"></td>' +
+        '<td><strong>' + est.nombre + '</strong>' +
+            '<input type="hidden" name="estudiantes[' + idx + '][est_codigo]" value="' + est.est_codigo + '" disabled>' +
+            '<input type="hidden" name="estudiantes[' + idx + '][ultima_vigencia]" value="' + (est.ultima_vigencia || '') + '" disabled>' +
+        '</td>' +
+        '<td>' + est.curso + '</td>' +
+        '<td><small>' + est.ruta + (est.ruta === 'Sin asignar' ? ' <span class="badge badge-warning">Pendiente</span>' : '') + '</small></td>' +
+        '<td><select name="estudiantes[' + idx + '][meses_pagar]" class="form-control form-control-sm meses-select" data-idx="' + idx + '" disabled>';
+
+    for (var i = 1; i <= 10; i++) {
+        var dis = i > maxCuotas ? 'disabled' : '';
+        var label = i + (i === 1 ? ' mes' : ' meses');
+        row += '<option value="' + i + '" ' + dis + '>' + label + '</option>';
+    }
+
+    var mesesVencidos = 0;
+    for (var mv = 2; mv < mesActual; mv++) {
+        if (!est.meses_pagados.includes(mv)) mesesVencidos++;
+    }
+    var infoDisp = maxCuotas + ' disponible' + (maxCuotas !== 1 ? 's' : '');
+    if (mesesVencidos > 0) infoDisp += ' <span class="text-danger">(' + mesesVencidos + ' vencido' + (mesesVencidos !== 1 ? 's' : '') + ')</span>';
+    row += '</select><small class="text-muted">' + infoDisp + '</small></td>' +
+        '<td><input type="number" name="estudiantes[' + idx + '][monto_mensual]" class="form-control form-control-sm monto-mensual" data-idx="' + idx + '" step="0.01" min="0" value="0" disabled></td>' +
+        '<td class="subtotal-cell"><strong>Bs. 0.00</strong></td>' +
+        '</tr>';
+
+    $('#hijos-tbody').append(row);
+    $('#paneles-detalle').append(crearPanelDetalle(est, idx));
+
+    var $row = $('#hijos-tbody tr:last');
+    $row.find('.check-estudiante').on('change', function() {
+        var tr = $(this).closest('tr');
+        var checked = $(this).is(':checked');
+        var estCode = $(this).data('est');
+        tr.find('select, input[type="number"], input[type="hidden"]').prop('disabled', !checked);
+        if (!checked) tr.find('.subtotal-cell strong').text('Bs. 0.00');
+        $('#panel-' + estCode).slideToggle(200, function() {
+            $(this).css('display', checked ? 'block' : 'none');
+        });
+        recalcular();
+    });
+    $row.find('.meses-select, .monto-mensual').on('change input', function() { recalcular(); });
+
+    if (esOtro) {
+        $row.find('.check-estudiante').prop('checked', true).trigger('change');
+    }
+}
+
+function crearPanelDetalle(est, idx) {
+    var mesesHtml = '';
+    for (var m = 2; m <= 11; m++) {
+        var clase, icono;
+        if (est.meses_pagados.includes(m)) {
+            clase = 'mes-pagado'; icono = '✓';
+        } else if (m < mesActual) {
+            clase = 'mes-vencido'; icono = '✗';
+        } else {
+            clase = 'mes-pendiente'; icono = '○';
+        }
+        mesesHtml += '<span class="mes-badge ' + clase + '">' + icono + ' ' + mesesNombres[m] + '</span>';
+    }
+    mesesHtml += '<div class="mt-1" style="font-size:11px;"><span class="mes-badge mes-pagado">✓ Pagado</span> <span class="mes-badge mes-pendiente">○ Pendiente</span> <span class="mes-badge mes-vencido">✗ Vencido</span></div>';
+
+    var historialHtml = '';
+    if (est.historial && est.historial.length > 0) {
+        historialHtml = '<table class="table table-sm table-bordered historial-table mt-2 mb-0">' +
+            '<thead><tr><th>Código</th><th>Fecha</th><th>Tipo</th><th>Monto</th><th>Vigencia</th></tr></thead><tbody>';
+        var totalHist = 0;
+        est.historial.forEach(function(h) {
+            totalHist += h.monto;
+            historialHtml += '<tr><td>' + h.codigo + '</td><td>' + h.fecha + '</td><td>' + h.tipo + '</td><td class="text-right">Bs. ' + h.monto.toFixed(2) + '</td><td>' + h.vigencia + '</td></tr>';
+        });
+        historialHtml += '<tr class="font-weight-bold"><td colspan="3" class="text-right">Total pagado:</td><td class="text-right">Bs. ' + totalHist.toFixed(2) + '</td><td></td></tr>';
+        historialHtml += '</tbody></table>';
     } else {
-        inicio = new Date();
-        fin = new Date();
-        fin.setMonth(fin.getMonth() + mesesPagar);
+        historialHtml = '<p class="text-muted mb-0" style="font-size:12px;">No hay pagos registrados en esta gestión</p>';
     }
-    
-    // Generar lista de meses
-    let listaMeses = '<strong>Meses incluidos:</strong><br>';
-    let current = new Date(inicio);
-    for(let i = 0; i < mesesPagar; i++) {
-        listaMeses += '<span class="badge badge-primary mr-1 mb-1">' + mesesNombres[current.getMonth()] + ' ' + current.getFullYear() + '</span>';
-        current.setMonth(current.getMonth() + 1);
-    }
-    $('#listaMesesPagar').html(listaMeses);
-    
-    const mesInicio = mesesNombres[inicio.getMonth()];
-    const idxFin = fin.getMonth() === 0 ? 11 : fin.getMonth() - 1;
-    const mesFin = mesesNombres[idxFin];
-    const listaMesesTexto = mesInicio === mesFin ? mesInicio : `${mesInicio} - ${mesFin}`;
-    
-    $('#mesesDetalle').text(`${listaMesesTexto} (${mesesPagar} ${mesesPagar === 1 ? 'mes' : 'meses'})`);
-    $('#vigenciaDetalle').text(`${formatDateObj(inicio)} al ${formatDateObj(fin)}`);
-    $('#detalleNuevoPago').show();
-    
-    calcularTotal();
+
+    return '<div class="student-detail-panel" id="panel-' + est.est_codigo + '">' +
+        '<div class="row">' +
+            '<div class="col-md-4">' +
+                '<div class="info-panel">' +
+                    '<div class="panel-title"><i class="fas fa-bus mr-1"></i> Info Transporte</div>' +
+                    '<div class="info-row"><span class="label">Estudiante:</span><span class="value">' + est.nombre + '</span></div>' +
+                    '<div class="info-row"><span class="label">Curso:</span><span class="value">' + est.curso + '</span></div>' +
+                    '<div class="info-row"><span class="label">Ruta:</span><span class="value">' + est.ruta + (est.ruta === 'Sin asignar' ? ' <span class="badge badge-warning">Pendiente</span>' : '') + '</span></div>' +
+                    '<div class="info-row"><span class="label">Vehículo:</span><span class="value">' + est.vehiculo + '</span></div>' +
+                    '<div class="info-row"><span class="label">Chofer:</span><span class="value">' + est.chofer + '</span></div>' +
+                    '<hr style="margin:5px 0">' +
+                    '<div class="info-row"><span class="label">Total Pagado:</span><span class="value text-success">Bs. ' + est.total_pagado.toFixed(2) + '</span></div>' +
+                    '<div class="info-row"><span class="label">Meses Pagados:</span><span class="value">' + est.meses_pagados.length + ' / 10</span></div>' +
+                '</div>' +
+            '</div>' +
+            '<div class="col-md-8">' +
+                '<div class="info-panel">' +
+                    '<div class="panel-title"><i class="fas fa-calendar-check mr-1"></i> Estado de Meses</div>' +
+                    '<div>' + mesesHtml + '</div>' +
+                '</div>' +
+                '<div class="info-panel">' +
+                    '<div class="panel-title"><i class="fas fa-history mr-1"></i> Historial de Pagos</div>' +
+                    historialHtml +
+                '</div>' +
+            '</div>' +
+        '</div>' +
+    '</div>';
 }
 
-function calcularTotal() {
-    const meses = parseInt($('#meses_pagar').val()) || 0;
-    const monto = parseFloat($('#tpago_monto').val()) || 0;
-    const total = meses * monto;
-    $('#total_pagar').val(total > 0 ? `Bs. ${total.toFixed(2)}` : '');
-}
+function recalcular() {
+    var total = 0;
+    var detalle = '';
+    var haySeleccionados = false;
 
-function formatDate(dateStr) {
-    const d = new Date(dateStr);
-    return `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}-${d.getFullYear()}`;
-}
+    $('#hijos-tbody tr').each(function() {
+        var row = $(this);
+        var checked = row.find('.check-estudiante').is(':checked');
+        if (!checked) return;
 
-function formatDateObj(d) {
-    return `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}-${d.getFullYear()}`;
+        haySeleccionados = true;
+        var estCodigo = row.find('input[name$="[est_codigo]"]').val();
+        var est = estudiantesData[estCodigo];
+        if (!est) return;
+
+        var meses = parseInt(row.find('.meses-select').val()) || 1;
+        var montoMensual = parseFloat(row.find('.monto-mensual').val()) || 0;
+        var subtotal = meses * montoMensual;
+
+        row.find('.subtotal-cell strong').text('Bs. ' + subtotal.toFixed(2));
+        total += subtotal;
+
+        // Calcular meses que se pagarán (solo desde mes actual)
+        var mesesPagablesEst = getMesesPagables(est);
+        var mesesList = [];
+        for (var mi = 0; mi < mesesPagablesEst.length && mesesList.length < meses; mi++) {
+            mesesList.push(mesesNombres[mesesPagablesEst[mi]]);
+        }
+
+        detalle += '<div><strong>' + est.nombre + ':</strong> ' + mesesList.join(', ') + ' = Bs. ' + subtotal.toFixed(2) + '</div>';
+    });
+
+    $('#total-pagar').text(total.toFixed(2));
+    $('#detalle-pago').html(detalle || '<span class="text-muted">Seleccione estudiantes</span>');
+    $('#btnGuardar').prop('disabled', !haySeleccionados);
 }
 </script>
 @endsection

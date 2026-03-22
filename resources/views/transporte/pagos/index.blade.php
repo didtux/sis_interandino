@@ -1,18 +1,29 @@
 @extends('layouts.app')
 
 @section('content')
+<style>
+    .grupo-header { cursor: pointer; background: #f0f7ff !important; }
+    .grupo-header:hover { background: #e3f0ff !important; }
+    .grupo-header td { border-bottom: none !important; }
+    .grupo-detalle { display: none; }
+    .grupo-detalle td { padding: 6px 12px !important; background: #fafbfc; font-size: 13px; }
+    .grupo-badge { background: #17a2b8; color: #fff; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+    .grupo-chevron { transition: transform 0.2s; display: inline-block; margin-right: 5px; }
+    .grupo-header.open .grupo-chevron { transform: rotate(90deg); }
+</style>
+
 <div class="section-body">
     <div class="row">
         <div class="col-12">
             <div class="card">
                 <div class="card-header d-flex justify-content-between">
-                    <h4><i class="fas fa-money-bill mr-2"></i>Pagos de Transporte</h4>
+                    <h4><i class="fas fa-bus mr-2"></i>Pagos de Transporte</h4>
                     <div>
                         <button class="btn btn-success" data-toggle="modal" data-target="#modalReporteIngresos">
-                            <i class="fas fa-file-invoice-dollar"></i> Reporte de Ingresos
+                            <i class="fas fa-file-invoice-dollar"></i> Reporte Ingresos
                         </button>
                         <button class="btn btn-danger" onclick="exportarPDF()">
-                            <i class="fas fa-file-pdf"></i> Exportar PDF
+                            <i class="fas fa-file-pdf"></i> PDF
                         </button>
                         <a href="{{ route('pagos-transporte.create') }}" class="btn btn-primary">
                             <i class="fas fa-plus"></i> Nuevo Pago
@@ -20,71 +31,43 @@
                     </div>
                 </div>
                 <div class="card-body">
+                    @if(session('success'))
+                        <div class="alert alert-success">{{ session('success') }}</div>
+                    @endif
+
                     <form method="GET" class="mb-3">
                         <div class="row">
                             <div class="col-md-3">
-                                <div class="form-group">
-                                    <label>Fecha Inicio</label>
-                                    <input type="date" name="fecha_inicio" class="form-control" value="{{ request('fecha_inicio') }}">
-                                </div>
+                                <label>Fecha Inicio</label>
+                                <input type="date" name="fecha_inicio" class="form-control" value="{{ request('fecha_inicio') }}">
                             </div>
                             <div class="col-md-3">
-                                <div class="form-group">
-                                    <label>Fecha Fin</label>
-                                    <input type="date" name="fecha_fin" class="form-control" value="{{ request('fecha_fin') }}">
-                                </div>
+                                <label>Fecha Fin</label>
+                                <input type="date" name="fecha_fin" class="form-control" value="{{ request('fecha_fin') }}">
                             </div>
                             <div class="col-md-3">
-                                <div class="form-group">
-                                    <label>Estudiante</label>
-                                    <select name="estudiante" id="estudiante-select" class="form-control select2">
-                                        <option value="">Todos</option>
-                                        @foreach(\App\Models\Estudiante::visible()->get() as $est)
-                                            <option value="{{ $est->est_codigo }}" {{ request('estudiante') == $est->est_codigo ? 'selected' : '' }}>
-                                                {{ $est->est_nombres }} {{ $est->est_apellidos }}
-                                            </option>
-                                        @endforeach
-                                    </select>
-                                </div>
+                                <label>Estudiante</label>
+                                <select name="estudiante" class="form-control select2">
+                                    <option value="">Todos</option>
+                                    @foreach($estudiantes as $est)
+                                        <option value="{{ $est->est_codigo }}" {{ request('estudiante') == $est->est_codigo ? 'selected' : '' }}>
+                                            {{ $est->est_nombres }} {{ $est->est_apellidos }}
+                                        </option>
+                                    @endforeach
+                                </select>
                             </div>
                             <div class="col-md-3">
-                                <div class="form-group">
-                                    <label>Ruta</label>
-                                    <select name="ruta" id="ruta-select" class="form-control select2">
-                                        <option value="">Todas</option>
-                                        @foreach(\App\Models\Ruta::where('ruta_estado', 1)->with('asignaciones.vehiculo')->get() as $ruta)
-                                            @php
-                                                $asignacion = $ruta->asignaciones ? $ruta->asignaciones->where('asig_estado', 1)->first() : null;
-                                                $nombreBus = '';
-                                                if ($asignacion && $asignacion->vehiculo) {
-                                                    if ($asignacion->vehiculo->veh_numero_bus) {
-                                                        $nombreBus = ' - Bus ' . $asignacion->vehiculo->veh_numero_bus;
-                                                    }
-                                                    $nombreBus .= ' - ' . $asignacion->vehiculo->veh_placa;
-                                                }
-                                            @endphp
-                                            <option value="{{ $ruta->ruta_codigo }}" {{ request('ruta') == $ruta->ruta_codigo ? 'selected' : '' }}>
-                                                {{ $ruta->ruta_nombre }}{{ $nombreBus }}
-                                            </option>
-                                        @endforeach
-                                    </select>
-                                </div>
+                                <label>Estado</label>
+                                <select name="estado" class="form-control">
+                                    <option value="">Todos</option>
+                                    <option value="vigente" {{ request('estado') == 'vigente' ? 'selected' : '' }}>Vigente</option>
+                                    <option value="vencido" {{ request('estado') == 'vencido' ? 'selected' : '' }}>Vencido</option>
+                                    <option value="cancelado" {{ request('estado') == 'cancelado' ? 'selected' : '' }}>Cancelado</option>
+                                </select>
                             </div>
                         </div>
-                        <div class="row">
-                            <div class="col-md-3">
-                                <div class="form-group">
-                                    <label>Estado</label>
-                                    <select name="estado" class="form-control">
-                                        <option value="">Todos</option>
-                                        <option value="vigente" {{ request('estado') == 'vigente' ? 'selected' : '' }}>Vigente</option>
-                                        <option value="vencido" {{ request('estado') == 'vencido' ? 'selected' : '' }}>Vencido</option>
-                                        <option value="cancelado" {{ request('estado') == 'cancelado' ? 'selected' : '' }}>Cancelado</option>
-                                    </select>
-                                </div>
-                            </div>
-                            <div class="col-md-9">
-                                <label>&nbsp;</label><br>
+                        <div class="row mt-2">
+                            <div class="col-md-12">
                                 <button type="submit" class="btn btn-primary"><i class="fas fa-search"></i> Filtrar</button>
                                 <a href="{{ route('pagos-transporte.index') }}" class="btn btn-secondary"><i class="fas fa-redo"></i> Limpiar</a>
                             </div>
@@ -96,9 +79,6 @@
                             <tr>
                                 <th>Código</th>
                                 <th>Estudiante</th>
-                                <th>Vehículo</th>
-                                <th>Ruta</th>
-                                <th>Chofer</th>
                                 <th>Tipo</th>
                                 <th>Monto</th>
                                 <th>Fecha Pago</th>
@@ -108,101 +88,132 @@
                             </tr>
                         </thead>
                         <tbody>
-                            @php $totalMonto = 0; @endphp
+                            @php $codigosMostrados = []; $totalMonto = 0; @endphp
                             @forelse($pagos as $p)
-                                @php 
-                                    if ($p->tpago_estado != 'cancelado') {
-                                        $totalMonto += $p->tpago_monto;
-                                    }
-                                @endphp
-                                <tr>
-                                    <td>{{ $p->tpago_codigo }}</td>
-                                    <td><strong>{{ $p->estudiante ? $p->estudiante->est_nombres . ' ' . $p->estudiante->est_apellidos : 'Sin estudiante' }}</strong></td>
-                                    <td>
+                                @if(in_array($p->tpago_codigo, $codigosConjuntos))
+                                    @if(!in_array($p->tpago_codigo, $codigosMostrados))
                                         @php
-                                            $vehiculoInfo = '';
-                                            if ($p->estudiante && $p->estudiante->rutaTransporte && $p->estudiante->rutaTransporte->ruta) {
-                                                $asignacion = $p->estudiante->rutaTransporte->ruta->asignaciones->where('asig_estado', 1)->first();
-                                                if ($asignacion && $asignacion->vehiculo) {
-                                                    $vehiculoInfo = $asignacion->vehiculo->veh_placa;
-                                                }
+                                            $codigosMostrados[] = $p->tpago_codigo;
+                                            $itemsGrupo = $pagosRecibo[$p->tpago_codigo] ?? [];
+                                            $totalGrupo = array_sum(array_column($itemsGrupo, 'monto'));
+                                            $cantItems = count($itemsGrupo);
+                                            $porEstudiante = [];
+                                            foreach ($itemsGrupo as $it) {
+                                                $porEstudiante[$it['estudiante']][] = $it;
                                             }
+                                            $todosVigentes = collect($itemsGrupo)->every(fn($i) => $i['estado'] != 'cancelado');
+                                            if ($todosVigentes) $totalMonto += $totalGrupo;
                                         @endphp
-                                        @if($vehiculoInfo)
-                                            <span class="badge badge-secondary">{{ $vehiculoInfo }}</span>
-                                        @else
-                                            <span class="text-muted">-</span>
-                                        @endif
-                                    </td>
-                                    <td>
-                                        @php
-                                            $rutaInfo = '';
-                                            if ($p->estudiante && $p->estudiante->rutaTransporte && $p->estudiante->rutaTransporte->ruta) {
-                                                $rutaInfo = $p->estudiante->rutaTransporte->ruta->ruta_nombre;
-                                            }
-                                        @endphp
-                                        @if($rutaInfo)
-                                            <small>{{ $rutaInfo }}</small>
-                                        @else
-                                            <span class="text-muted">-</span>
-                                        @endif
-                                    </td>
-                                    <td>
-                                        @php
-                                            $choferInfo = '';
-                                            if ($p->estudiante && $p->estudiante->rutaTransporte && $p->estudiante->rutaTransporte->ruta) {
-                                                $asignacion = $p->estudiante->rutaTransporte->ruta->asignaciones->where('asig_estado', 1)->first();
-                                                if ($asignacion && $asignacion->chofer) {
-                                                    $choferInfo = $asignacion->chofer->chof_nombres . ' ' . $asignacion->chofer->chof_apellidos;
-                                                }
-                                            }
-                                        @endphp
-                                        @if($choferInfo)
-                                            <small>{{ $choferInfo }}</small>
-                                        @else
-                                            <span class="text-muted">-</span>
-                                        @endif
-                                    </td>
-                                    <td><span class="badge badge-info">{{ ucfirst($p->tpago_tipo) }}</span></td>
-                                    <td>Bs. {{ number_format($p->tpago_monto, 2) }}</td>
-                                    <td>{{ $p->tpago_fecha_pago }}</td>
-                                    <td>{{ $p->tpago_fecha_inicio }} - {{ $p->tpago_fecha_fin }}</td>
-                                    <td>
-                                        @if($p->tpago_estado == 'vigente')
-                                            <span class="badge badge-success">Vigente</span>
-                                        @elseif($p->tpago_estado == 'vencido')
-                                            <span class="badge badge-danger">Vencido</span>
-                                        @else
-                                            <span class="badge badge-secondary">Cancelado</span>
-                                        @endif
-                                    </td>
-                                    <td>
-                                        <button class="btn btn-sm btn-info" onclick="generarReciboTransporte('{{ $p->tpago_codigo }}', '{{ addslashes($p->estudiante->est_nombres ?? 'Sin estudiante') }} {{ addslashes($p->estudiante->est_apellidos ?? '') }}', '{{ addslashes($p->estudiante->curso->cur_nombre ?? '') }}', '{{ ucfirst($p->tpago_tipo) }}', {{ $p->tpago_monto }}, '{{ $p->tpago_fecha_pago }}', '{{ $p->tpago_fecha_inicio }}', '{{ $p->tpago_fecha_fin }}', '{{ addslashes($p->estudiante->padres->first()->pfam_nombres ?? '') }} {{ addslashes($p->estudiante->padres->first()->pfam_apellidos ?? '') }}')">
-                                            <i class="fas fa-receipt"></i>
-                                        </button>
-                                        <a href="{{ route('pagos-transporte.edit', $p->tpago_id) }}" class="btn btn-sm btn-warning">
-                                            <i class="fas fa-edit"></i>
-                                        </a>
-                                        <form action="{{ route('pagos-transporte.destroy', $p->tpago_id) }}" method="POST" style="display:inline;">
-                                            @csrf
-                                            @method('DELETE')
-                                            <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('¿Cancelar pago?')">
-                                                <i class="fas fa-ban"></i>
-                                            </button>
-                                        </form>
-                                    </td>
-                                </tr>
+                                        <tr class="grupo-header" data-codigo="{{ $p->tpago_codigo }}">
+                                            <td>
+                                                <span class="grupo-chevron"><i class="fas fa-chevron-right"></i></span>
+                                                {{ $p->tpago_codigo }}
+                                                <span class="grupo-badge">{{ $cantItems }} pagos</span>
+                                            </td>
+                                            <td>
+                                                @foreach($porEstudiante as $nombre => $items)
+                                                    <div><strong>{{ $nombre }}</strong> <small class="text-muted">({{ $items[0]['curso'] }})</small></div>
+                                                @endforeach
+                                            </td>
+                                            <td>
+                                                @foreach($itemsGrupo as $it)
+                                                    <span class="badge badge-info">{{ ucfirst($it['tipo']) }}</span>
+                                                @endforeach
+                                            </td>
+                                            <td><strong>Bs. {{ number_format($totalGrupo, 2) }}</strong></td>
+                                            <td>{{ $p->tpago_fecha_pago }}</td>
+                                            <td>
+                                                @foreach($itemsGrupo as $it)
+                                                    <div><small>{{ $it['fecha_inicio'] }} - {{ $it['fecha_fin'] }}</small></div>
+                                                @endforeach
+                                            </td>
+                                            <td>
+                                                @if($todosVigentes)
+                                                    <span class="badge badge-success">Vigente</span>
+                                                @else
+                                                    <span class="badge badge-secondary">Cancelado</span>
+                                                @endif
+                                            </td>
+                                            <td>
+                                                @if($todosVigentes)
+                                                    <button class="btn btn-sm btn-info" onclick="event.stopPropagation(); generarReciboGrupo('{{ $p->tpago_codigo }}')" title="Recibo">
+                                                        <i class="fas fa-receipt"></i>
+                                                    </button>
+                                                    <button class="btn btn-sm btn-danger" onclick="event.stopPropagation(); anularPago({{ $p->tpago_id }})" title="Anular grupo">
+                                                        <i class="fas fa-ban"></i>
+                                                    </button>
+                                                @endif
+                                            </td>
+                                        </tr>
+                                        @foreach($itemsGrupo as $item)
+                                            <tr class="grupo-detalle" data-grupo="{{ $p->tpago_codigo }}">
+                                                <td></td>
+                                                <td>{{ $item['estudiante'] }} <small class="text-muted">({{ $item['curso'] }})</small></td>
+                                                <td><span class="badge badge-info">{{ ucfirst($item['tipo']) }}</span></td>
+                                                <td>Bs. {{ number_format($item['monto'], 2) }}</td>
+                                                <td></td>
+                                                <td><small>{{ $item['fecha_inicio'] }} - {{ $item['fecha_fin'] }}</small></td>
+                                                <td>
+                                                    @if($item['estado'] == 'cancelado')
+                                                        <span class="badge badge-secondary">Cancelado</span>
+                                                    @else
+                                                        <span class="badge badge-success">Vigente</span>
+                                                    @endif
+                                                </td>
+                                                <td></td>
+                                            </tr>
+                                        @endforeach
+                                    @endif
+                                @else
+                                    @php if ($p->tpago_estado != 'cancelado') $totalMonto += $p->tpago_monto; @endphp
+                                    <tr>
+                                        <td>{{ $p->tpago_codigo }}</td>
+                                        <td><strong>{{ $p->estudiante ? $p->estudiante->est_nombres . ' ' . $p->estudiante->est_apellidos : 'N/A' }}</strong>
+                                            <small class="text-muted">({{ $p->estudiante->curso->cur_nombre ?? '' }})</small>
+                                        </td>
+                                        <td><span class="badge badge-info">{{ ucfirst($p->tpago_tipo) }}</span></td>
+                                        <td>Bs. {{ number_format($p->tpago_monto, 2) }}</td>
+                                        <td>{{ $p->tpago_fecha_pago }}</td>
+                                        <td><small>{{ $p->tpago_fecha_inicio }} - {{ $p->tpago_fecha_fin }}</small></td>
+                                        <td>
+                                            @if($p->tpago_estado == 'vigente')
+                                                <span class="badge badge-success">Vigente</span>
+                                            @elseif($p->tpago_estado == 'vencido')
+                                                <span class="badge badge-danger">Vencido</span>
+                                            @else
+                                                <span class="badge badge-secondary">Cancelado</span>
+                                            @endif
+                                        </td>
+                                        <td>
+                                            @if($p->tpago_estado != 'cancelado')
+                                                <button class="btn btn-sm btn-info" onclick="generarReciboGrupo('{{ $p->tpago_codigo }}')" title="Recibo">
+                                                    <i class="fas fa-receipt"></i>
+                                                </button>
+                                                <a href="{{ route('pagos-transporte.edit', $p->tpago_id) }}" class="btn btn-sm btn-warning" title="Editar">
+                                                    <i class="fas fa-edit"></i>
+                                                </a>
+                                                <button class="btn btn-sm btn-danger" onclick="anularPago({{ $p->tpago_id }})" title="Anular">
+                                                    <i class="fas fa-ban"></i>
+                                                </button>
+                                            @endif
+                                        </td>
+                                    </tr>
+                                @endif
                             @empty
-                                <tr><td colspan="11" class="text-center">No hay pagos registrados</td></tr>
+                                <tr><td colspan="8" class="text-center">No hay pagos registrados</td></tr>
                             @endforelse
                         </tbody>
                         <tfoot>
                             <tr class="table-info">
-                                <td colspan="5" class="text-right"><strong>TOTAL:</strong></td>
-                                <td colspan="6"><strong>Bs. {{ number_format($totalMonto, 2) }}</strong></td>
+                                <td colspan="3" class="text-right"><strong>TOTAL:</strong></td>
+                                <td colspan="5"><strong>Bs. {{ number_format($totalMonto, 2) }}</strong></td>
                             </tr>
                         </tfoot>
                     </table>
+
+                    <div class="d-flex justify-content-center">
+                        {{ $pagos->appends(request()->all())->links() }}
+                    </div>
                 </div>
             </div>
         </div>
@@ -225,48 +236,26 @@
                     </div>
                     <div class="row">
                         <div class="col-md-6">
-                            <div class="form-group">
-                                <label>Mes Inicio</label>
-                                <select name="mes_inicio" class="form-control" required>
-                                    <option value="1">Enero</option>
-                                    <option value="2" selected>Febrero</option>
-                                    <option value="3">Marzo</option>
-                                    <option value="4">Abril</option>
-                                    <option value="5">Mayo</option>
-                                    <option value="6">Junio</option>
-                                    <option value="7">Julio</option>
-                                    <option value="8">Agosto</option>
-                                    <option value="9">Septiembre</option>
-                                    <option value="10">Octubre</option>
-                                    <option value="11">Noviembre</option>
-                                    <option value="12">Diciembre</option>
-                                </select>
-                            </div>
+                            <label>Mes Inicio</label>
+                            <select name="mes_inicio" class="form-control">
+                                @for($i = 1; $i <= 12; $i++)
+                                    <option value="{{ $i }}" {{ $i == 2 ? 'selected' : '' }}>{{ ['','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'][$i] }}</option>
+                                @endfor
+                            </select>
                         </div>
                         <div class="col-md-6">
-                            <div class="form-group">
-                                <label>Mes Fin</label>
-                                <select name="mes_fin" class="form-control" required>
-                                    <option value="1">Enero</option>
-                                    <option value="2">Febrero</option>
-                                    <option value="3">Marzo</option>
-                                    <option value="4">Abril</option>
-                                    <option value="5">Mayo</option>
-                                    <option value="6">Junio</option>
-                                    <option value="7">Julio</option>
-                                    <option value="8">Agosto</option>
-                                    <option value="9">Septiembre</option>
-                                    <option value="10">Octubre</option>
-                                    <option value="11" selected>Noviembre</option>
-                                    <option value="12">Diciembre</option>
-                                </select>
-                            </div>
+                            <label>Mes Fin</label>
+                            <select name="mes_fin" class="form-control">
+                                @for($i = 1; $i <= 12; $i++)
+                                    <option value="{{ $i }}" {{ $i == 11 ? 'selected' : '' }}>{{ ['','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'][$i] }}</option>
+                                @endfor
+                            </select>
                         </div>
                     </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-success"><i class="fas fa-file-pdf"></i> Generar Reporte</button>
+                    <button type="submit" class="btn btn-success"><i class="fas fa-file-pdf"></i> Generar</button>
                 </div>
             </form>
         </div>
@@ -278,93 +267,64 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
 <script>
+var pagosRecibo = @json($pagosRecibo);
+
 $(document).ready(function() {
-    $('.select2').select2({
-        theme: 'bootstrap4',
-        width: '100%',
-        placeholder: 'Seleccione una opción',
-        allowClear: true
+    $('.select2').select2({ theme: 'bootstrap4', width: '100%', allowClear: true });
+    $('.grupo-header').on('click', function() {
+        var codigo = $(this).data('codigo');
+        $(this).toggleClass('open');
+        $('tr.grupo-detalle[data-grupo="' + codigo + '"]').slideToggle(200);
     });
 });
 
-function generarReciboTransporte(codigo, estudiante, curso, tipo, monto, fechaPago, fechaInicio, fechaFin, nombrePadre) {
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF({
-        unit: 'pt',
-        format: [612, 396],
-        orientation: 'landscape'
-    });
-    
-    const inicio = new Date(fechaInicio);
-    const fin = new Date(fechaFin);
-    const meses = [];
-    const mesesNombres = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
-    
-    let current = new Date(inicio.getFullYear(), inicio.getMonth(), 1);
-    const finMes = new Date(fin.getFullYear(), fin.getMonth(), 1);
-    
-    while (current < finMes) {
-        meses.push(mesesNombres[current.getMonth()] + ' ' + current.getFullYear());
-        current.setMonth(current.getMonth() + 1);
+function numeroATexto(num) {
+    var unidades = ['', 'Uno', 'Dos', 'Tres', 'Cuatro', 'Cinco', 'Seis', 'Siete', 'Ocho', 'Nueve'];
+    var decenas = ['', '', 'Veinte', 'Treinta', 'Cuarenta', 'Cincuenta', 'Sesenta', 'Setenta', 'Ochenta', 'Noventa'];
+    var especiales = ['Diez', 'Once', 'Doce', 'Trece', 'Catorce', 'Quince', 'Dieciséis', 'Diecisiete', 'Dieciocho', 'Diecinueve'];
+    var centenas = ['', 'Ciento', 'Doscientos', 'Trescientos', 'Cuatrocientos', 'Quinientos', 'Seiscientos', 'Setecientos', 'Ochocientos', 'Novecientos'];
+    num = Math.floor(num);
+    if (num === 0) return 'Cero';
+    if (num === 100) return 'Cien';
+    var texto = '';
+    if (num >= 1000) { var mil = Math.floor(num / 1000); texto += (mil === 1 ? 'Mil' : numeroATexto(mil) + ' Mil') + ' '; num %= 1000; }
+    if (num >= 100) { texto += centenas[Math.floor(num / 100)] + ' '; num %= 100; }
+    if (num >= 20) { texto += decenas[Math.floor(num / 10)]; if (num % 10 > 0) texto += ' y ' + unidades[num % 10]; }
+    else if (num >= 10) { texto += especiales[num - 10]; }
+    else if (num > 0) { texto += unidades[num]; }
+    return texto.trim();
+}
+
+function generarReciboGrupo(codigo) {
+    var items = pagosRecibo[codigo];
+    if (!items || items.length === 0) return;
+    items = items.filter(function(it) { return it.estado !== 'cancelado'; });
+    if (items.length === 0) return;
+
+    var montoTotal = 0;
+    items.forEach(function(it) { montoTotal += parseFloat(it.monto); });
+
+    var { jsPDF } = window.jspdf;
+    var doc = new jsPDF({ unit: 'pt', format: [612, 396], orientation: 'landscape' });
+
+    var mesesNombres = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+
+    function getMeses(fi, ff) {
+        var inicio = new Date(fi), fin = new Date(ff), meses = [];
+        var current = new Date(inicio.getFullYear(), inicio.getMonth(), 1);
+        var finMes = new Date(fin.getFullYear(), fin.getMonth(), 1);
+        while (current < finMes) {
+            meses.push(mesesNombres[current.getMonth()] + ' ' + current.getFullYear());
+            current.setMonth(current.getMonth() + 1);
+        }
+        return meses;
     }
-    
-    const cantidadMeses = meses.length;
-    
-    function numeroATexto(num) {
-        const unidades = ['', 'Uno', 'Dos', 'Tres', 'Cuatro', 'Cinco', 'Seis', 'Siete', 'Ocho', 'Nueve'];
-        const decenas = ['', '', 'Veinte', 'Treinta', 'Cuarenta', 'Cincuenta', 'Sesenta', 'Setenta', 'Ochenta', 'Noventa'];
-        const especiales = ['Diez', 'Once', 'Doce', 'Trece', 'Catorce', 'Quince', 'Dieciséis', 'Diecisiete', 'Dieciocho', 'Diecinueve'];
-        const centenas = ['', 'Ciento', 'Doscientos', 'Trescientos', 'Cuatrocientos', 'Quinientos', 'Seiscientos', 'Setecientos', 'Ochocientos', 'Novecientos'];
-        const miles = ['', 'Mil', 'Dos Mil', 'Tres Mil', 'Cuatro Mil', 'Cinco Mil', 'Seis Mil', 'Siete Mil', 'Ocho Mil', 'Nueve Mil'];
-        
-        num = Math.floor(num);
-        
-        if (num === 0) return 'Cero';
-        if (num === 100) return 'Cien';
-        
-        let texto = '';
-        
-        // Miles
-        if (num >= 1000) {
-            const mil = Math.floor(num / 1000);
-            if (mil === 1) {
-                texto = 'Mil ';
-            } else {
-                texto = miles[mil] + ' ';
-            }
-            num %= 1000;
-        }
-        
-        // Centenas
-        if (num >= 100) {
-            if (num === 100) {
-                texto += 'Cien';
-                return texto.trim();
-            }
-            texto += centenas[Math.floor(num / 100)] + ' ';
-            num %= 100;
-        }
-        
-        // Decenas y unidades
-        if (num >= 20) {
-            texto += decenas[Math.floor(num / 10)];
-            if (num % 10 > 0) texto += ' y ' + unidades[num % 10];
-        } else if (num >= 10) {
-            texto += especiales[num - 10];
-        } else if (num > 0) {
-            texto += unidades[num];
-        }
-        
-        return texto.trim();
-    }
-    
+
     function dibujarRecibo(tipoRecibo) {
-        // Borde principal
         doc.setLineWidth(1.5);
         doc.setDrawColor(0, 0, 0);
         doc.rect(10, 10, 592, 376);
-        
-        // Encabezado izquierdo
+
         doc.setFontSize(9);
         doc.setFont(undefined, 'bold');
         doc.setTextColor(100, 100, 100);
@@ -373,275 +333,177 @@ function generarReciboTransporte(codigo, estudiante, curso, tipo, monto, fechaPa
         doc.setFont(undefined, 'normal');
         doc.text('C/ VICTOR GUTIERREZ N° 3339', 15, 39);
         doc.text('TELEFONO: 2840320 - 67304340', 15, 49);
-        
-        // Extraer solo la parte numérica del código
-        const soloNumero = codigo.replace(/\D/g, '');
-        const numeroFormateado = soloNumero.padStart(5, '0');
-        
-        // Número de recibo en esquina superior derecha
+
+        var soloNumero = codigo.replace(/\D/g, '').padStart(5, '0');
         doc.setFontSize(18);
         doc.setFont(undefined, 'bold');
         doc.setTextColor(0, 0, 0);
-        doc.text('Nº ' + numeroFormateado, 597, 30, { align: 'right' });
-        
-        // RECIBO grande centrado
+        doc.text('Nº ' + soloNumero, 597, 30, { align: 'right' });
+
         doc.setFontSize(36);
-        doc.setFont(undefined, 'bold');
-        doc.setTextColor(0, 0, 0);
         doc.text('RECIBO', 306, 75, { align: 'center' });
-        
-        // Información compacta
+
         doc.setFontSize(11);
-        doc.setTextColor(0, 0, 0);
         doc.setFont(undefined, 'normal');
-        const [anio, mes, dia] = fechaPago.split('-');
-        const fechaFormateada = dia + '/' + mes + '/' + anio;
-        doc.text('Fecha: ' + fechaFormateada, 15, 92);
-        doc.text('Nombre: ' + (nombrePadre || estudiante), 15, 106);
-        
-        // Línea separadora
+        var fechaPago = items[0].fecha_inicio ? items[0].fecha_inicio : '';
+        doc.text('Fecha: ' + new Date().toLocaleDateString('es-BO'), 15, 92);
+
         doc.setLineWidth(1);
-        doc.line(15, 115, 597, 115);
-        
-        // Tabla de conceptos - Encabezado
+        doc.line(15, 100, 597, 100);
+
+        // Encabezado tabla
         doc.setFontSize(10);
         doc.setFont(undefined, 'bold');
         doc.setFillColor(240, 240, 240);
-        doc.rect(15, 118, 582, 18, 'F');
-        doc.text('NOMBRE ESTUDIANTE', 20, 130);
-        doc.text('CONCEPTO', 280, 130);
-        doc.text('MONTO', 570, 130, { align: 'right' });
-        
-        // Tipo de pago
-        doc.setFontSize(10);
-        doc.setFont(undefined, 'bold');
-        let yPos = 150;
-        doc.text(estudiante, 20, yPos);
-        doc.text('PAGO ' + tipo.toUpperCase() + ' - ' + cantidadMeses + ' CUOTAS', 280, yPos);
-        doc.setFont(undefined, 'normal');
-        yPos += 14;
-        
-        // Calcular monto por cuota
-        const montoPorCuota = monto / cantidadMeses;
-        
-        // Desglose en 2 columnas si hay más de 5 cuotas
-        if (cantidadMeses > 5) {
-            const mitad = Math.ceil(cantidadMeses / 2);
-            const col1X = 20;
-            const col1MontoX = 230;
-            const col2X = 310;
-            const col2MontoX = 570;
-            const lineH = 12;
-            
-            for (let i = 0; i < mitad; i++) {
-                const mesTexto = meses[i] || ('Cuota ' + (i + 1));
-                doc.text((i + 1) + '. ' + mesTexto, col1X, yPos);
-                doc.text(montoPorCuota.toFixed(2), col1MontoX, yPos, { align: 'right' });
-                
-                const j = i + mitad;
-                if (j < cantidadMeses) {
-                    const mesTexto2 = meses[j] || ('Cuota ' + (j + 1));
-                    doc.text((j + 1) + '. ' + mesTexto2, col2X, yPos);
-                    doc.text(montoPorCuota.toFixed(2), col2MontoX, yPos, { align: 'right' });
+        doc.rect(15, 103, 582, 18, 'F');
+        doc.text('ESTUDIANTE', 20, 115);
+        doc.text('CONCEPTO', 280, 115);
+        doc.text('MONTO', 570, 115, { align: 'right' });
+
+        var yPos = 135;
+
+        if (items.length === 1) {
+            var item = items[0];
+            var meses = getMeses(item.fecha_inicio, item.fecha_fin);
+            var cantMeses = meses.length;
+            var montoPorMes = parseFloat(item.monto) / Math.max(cantMeses, 1);
+
+            doc.setFontSize(10);
+            doc.setFont(undefined, 'bold');
+            doc.text(item.estudiante, 20, yPos);
+            doc.text('TRANSPORTE ' + item.tipo.toUpperCase() + ' - ' + cantMeses + ' CUOTAS', 280, yPos);
+            doc.setFont(undefined, 'normal');
+            yPos += 14;
+
+            if (cantMeses > 5) {
+                var mitad = Math.ceil(cantMeses / 2);
+                for (var i = 0; i < mitad; i++) {
+                    doc.text((i + 1) + '. ' + (meses[i] || ''), 20, yPos);
+                    doc.text(montoPorMes.toFixed(2), 230, yPos, { align: 'right' });
+                    var j = i + mitad;
+                    if (j < cantMeses) {
+                        doc.text((j + 1) + '. ' + (meses[j] || ''), 310, yPos);
+                        doc.text(montoPorMes.toFixed(2), 570, yPos, { align: 'right' });
+                    }
+                    yPos += 12;
                 }
-                yPos += lineH;
+            } else {
+                for (var i = 0; i < cantMeses; i++) {
+                    doc.text('  ' + (i + 1) + '. ' + (meses[i] || ''), 280, yPos);
+                    doc.text(montoPorMes.toFixed(2), 570, yPos, { align: 'right' });
+                    yPos += 13;
+                }
             }
         } else {
-            for (let i = 1; i <= cantidadMeses; i++) {
-                const mesTexto = meses[i-1] || ('Cuota ' + i);
-                doc.text('  ' + i + '. ' + mesTexto, 280, yPos);
-                doc.text(montoPorCuota.toFixed(2), 570, yPos, { align: 'right' });
-                yPos += 13;
+            // Agrupar por estudiante
+            var porEstudiante = {};
+            items.forEach(function(it) {
+                if (!porEstudiante[it.estudiante]) porEstudiante[it.estudiante] = { curso: it.curso, pagos: [], subtotal: 0 };
+                porEstudiante[it.estudiante].pagos.push(it);
+                porEstudiante[it.estudiante].subtotal += parseFloat(it.monto);
+            });
+
+            doc.setFontSize(10);
+            for (var nombre in porEstudiante) {
+                var est = porEstudiante[nombre];
+                doc.setFont(undefined, 'bold');
+                doc.text(nombre + '  (' + est.curso + ')', 20, yPos);
+                doc.text('Bs. ' + est.subtotal.toFixed(2), 570, yPos, { align: 'right' });
+                doc.setLineDash([0.5, 1]);
+                doc.line(15, yPos + 3, 597, yPos + 3);
+                doc.setLineDash([]);
+                yPos += 14;
+
+                doc.setFont(undefined, 'normal');
+                doc.setFontSize(9);
+                est.pagos.forEach(function(pago) {
+                    var meses = getMeses(pago.fecha_inicio, pago.fecha_fin);
+                    doc.text('   Transporte ' + pago.tipo + ': ' + meses.join(', '), 30, yPos);
+                    yPos += 12;
+                });
+                doc.setFontSize(10);
+                yPos += 3;
             }
         }
-        
-        // Línea antes del total
-        const lineaTotal = Math.max(yPos + 10, 290);
+
+        // TOTAL
+        var lineaTotal = Math.max(yPos + 10, 290);
         doc.setLineWidth(1);
         doc.line(15, lineaTotal, 597, lineaTotal);
-        
-        // TOTAL
         doc.setFontSize(13);
         doc.setFont(undefined, 'bold');
         doc.text('TOTAL Bs.', 470, lineaTotal + 18);
-        doc.text(monto.toFixed(2), 580, lineaTotal + 18, { align: 'right' });
-        
-        // Línea doble debajo del total
+        doc.text(montoTotal.toFixed(2), 580, lineaTotal + 18, { align: 'right' });
         doc.setLineWidth(2);
         doc.line(465, lineaTotal + 23, 597, lineaTotal + 23);
-        
+
         // SON
-        const parteEntera = Math.floor(monto);
-        const parteDecimal = Math.round((monto - parteEntera) * 100);
-        const montoLiteral = numeroATexto(parteEntera) + ' ' + String(parteDecimal).padStart(2, '0') + '/100';
-        
+        var parteEntera = Math.floor(montoTotal);
+        var parteDecimal = Math.round((montoTotal - parteEntera) * 100);
+        var montoLiteral = numeroATexto(parteEntera) + ' ' + String(parteDecimal).padStart(2, '0') + '/100';
         doc.setFontSize(10);
         doc.setFont(undefined, 'bold');
         doc.text('SON: ' + montoLiteral.toUpperCase(), 20, lineaTotal + 18);
-        
-        // Usuario y hora
+
         doc.setFont(undefined, 'normal');
         doc.setFontSize(8);
         doc.text('Usuario: {{ auth()->user()->us_nombres ?? "SISTEMA" }}', 20, 370);
-        const ahora = new Date();
-        const hora = ahora.getHours().toString().padStart(2, '0') + ':' + 
-                     ahora.getMinutes().toString().padStart(2, '0') + ':' + 
-                     ahora.getSeconds().toString().padStart(2, '0');
-        doc.text('Hora: ' + hora, 200, 370);
+        var ahora = new Date();
+        doc.text('Hora: ' + ahora.getHours().toString().padStart(2, '0') + ':' + ahora.getMinutes().toString().padStart(2, '0'), 200, 370);
         doc.text(tipoRecibo, 597, 370, { align: 'right' });
     }
-    
+
     dibujarRecibo('ORIGINAL');
     doc.addPage([612, 396]);
     dibujarRecibo('COPIA');
-    
     doc.save('recibo_transporte_' + codigo + '.pdf');
 }
 
-function exportarPDF() {
-    try {
-        const { jsPDF } = window.jspdf;
-        const doc = new jsPDF('landscape', 'pt', 'letter');
-        
-        // Cargar logo
-        const logoPath = '{{ asset("img/logo.png") }}';
-        const img = new Image();
-        img.crossOrigin = 'Anonymous';
-        
-        img.onload = function() {
-            doc.addImage(img, 'PNG', 20, 15, 30, 30);
-            generarContenidoReportePDF(doc);
-        };
-        
-        img.onerror = function() {
-            generarContenidoReportePDF(doc);
-        };
-        
-        img.src = logoPath;
-    } catch (error) {
-        console.error('Error al generar PDF:', error);
-        alert('Error al generar el PDF: ' + error.message);
+function anularPago(id) {
+    if (confirm('¿Está seguro de anular este pago? Se anularán todos los pagos del mismo recibo.')) {
+        $.ajax({
+            url: '/pagos-transporte/' + id + '/anular',
+            type: 'PUT',
+            data: { _token: '{{ csrf_token() }}' },
+            success: function() { alert('Pago(s) anulado(s)'); location.reload(); },
+            error: function() { alert('Error al anular'); }
+        });
     }
 }
 
-function generarContenidoReportePDF(doc) {
-    // Badge de fecha
-    doc.setFillColor(220, 53, 69);
-    doc.roundedRect(720, 15, 50, 18, 3, 3, 'F');
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(8);
-    doc.setFont(undefined, 'bold');
-    doc.text('Fecha', 745, 22, { align: 'center' });
-    doc.text(new Date().toLocaleDateString('es-BO'), 745, 30, { align: 'center' });
-    
-    // Encabezado institucional
+function exportarPDF() {
+    var { jsPDF } = window.jspdf;
+    var doc = new jsPDF('landscape', 'pt', 'letter');
+
     doc.setTextColor(0, 0, 0);
     doc.setFontSize(12);
     doc.setFont(undefined, 'bold');
-    doc.text('Unidad Educativa', 400, 20, { align: 'center' });
-    doc.setFontSize(13);
-    doc.text('INTERANDINO BOLIVIANO', 400, 35, { align: 'center' });
-    doc.setFontSize(8);
-    doc.setFont(undefined, 'normal');
-    doc.text('Dir. Calle Victor Gutierrez Nro 3339 - Tel: 2840320', 400, 47, { align: 'center' });
-    
-    // Línea separadora
-    doc.setLineWidth(0.5);
-    doc.line(20, 52, 780, 52);
-    
-    // Título
+    doc.text('Unidad Educativa INTERANDINO BOLIVIANO', 400, 25, { align: 'center' });
     doc.setFontSize(14);
-    doc.setFont(undefined, 'bold');
-    doc.text('REPORTE DE PAGOS DE TRANSPORTE', 400, 65, { align: 'center' });
-    
-    // Información del reporte
+    doc.text('REPORTE DE PAGOS DE TRANSPORTE', 400, 45, { align: 'center' });
     doc.setFontSize(9);
     doc.setFont(undefined, 'normal');
-    let yPos = 78;
-    doc.text('Usuario: {{ auth()->user()->us_nombres }} {{ auth()->user()->us_apellidos }}', 20, yPos);
-    
-    @if(request('fecha_inicio') && request('fecha_fin'))
-    doc.text('Periodo: {{ request("fecha_inicio") }} - {{ request("fecha_fin") }}', 400, yPos);
-    @endif
-    @if(request('estado'))
-    doc.text('Estado: {{ ucfirst(request("estado")) }}', 650, yPos);
-    @endif
-    yPos += 15;
-    
-    // Recopilar datos excluyendo cancelados
+    doc.text('Usuario: {{ auth()->user()->us_nombres }} {{ auth()->user()->us_apellidos }}', 20, 60);
+    doc.text('Fecha: ' + new Date().toLocaleDateString('es-BO'), 700, 60, { align: 'right' });
+
     var datos = [];
-    $('#tablaPagos tbody tr').each(function() {
-        if($(this).find('td').length > 1) {
-            var estado = $(this).find('td').eq(9).text().trim();
-            if (estado === 'Cancelado') return;
-            
-            var codigo = $(this).find('td').eq(0).text().trim();
-            var estudiante = $(this).find('td').eq(1).text().trim();
-            var vehiculo = $(this).find('td').eq(2).text().trim();
-            var ruta = $(this).find('td').eq(3).text().trim();
-            var chofer = $(this).find('td').eq(4).text().trim();
-            var tipo = $(this).find('td').eq(5).text().trim();
-            var monto = $(this).find('td').eq(6).text().trim();
-            var fechaPago = $(this).find('td').eq(7).text().trim();
-            var vigencia = $(this).find('td').eq(8).text().trim();
-            
-            datos.push([codigo, estudiante, vehiculo, ruta, chofer, tipo, monto, fechaPago, vigencia, estado]);
+    $('#tablaPagos tbody tr:not(.grupo-detalle)').each(function() {
+        if ($(this).find('td').length > 1) {
+            var fila = [];
+            $(this).find('td').each(function(i) { if (i < 7) fila.push($(this).text().trim()); });
+            if (fila.length > 0) datos.push(fila);
         }
     });
-    
-    // Tabla con formato horizontal
+
     doc.autoTable({
-        head: [['Cód.', 'Estudiante', 'Vehículo', 'Ruta', 'Chofer', 'Tipo', 'Monto', 'F. Pago', 'Vigencia', 'Estado']],
+        head: [['Código', 'Estudiante', 'Tipo', 'Monto', 'Fecha', 'Vigencia', 'Estado']],
         body: datos,
-        startY: yPos,
-        margin: { left: 20, right: 20 },
-        headStyles: { 
-            fillColor: [44, 62, 80],
-            textColor: [255, 255, 255],
-            fontStyle: 'bold',
-            fontSize: 7,
-            halign: 'center'
-        },
-        styles: { 
-            fontSize: 6,
-            cellPadding: 2,
-            overflow: 'linebreak',
-            cellWidth: 'wrap'
-        },
-        columnStyles: {
-            0: { cellWidth: 40 },
-            1: { cellWidth: 90 },
-            2: { cellWidth: 50, halign: 'center' },
-            3: { cellWidth: 80 },
-            4: { cellWidth: 80 },
-            5: { cellWidth: 40, halign: 'center' },
-            6: { cellWidth: 50, halign: 'right' },
-            7: { cellWidth: 55, halign: 'center' },
-            8: { cellWidth: 90, halign: 'center' },
-            9: { cellWidth: 45, halign: 'center' }
-        },
-        alternateRowStyles: {
-            fillColor: [245, 245, 245]
-        },
-        foot: [['', '', '', '', '', 'TOTAL:', 'Bs. {{ number_format($totalMonto, 2) }}', '', '', '']],
-        footStyles: { 
-            fillColor: [44, 62, 80],
-            textColor: [255, 255, 255],
-            fontStyle: 'bold',
-            fontSize: 7
-        }
+        startY: 75,
+        headStyles: { fillColor: [44, 62, 80], fontSize: 8 },
+        styles: { fontSize: 7, cellPadding: 3 },
+        alternateRowStyles: { fillColor: [245, 245, 245] }
     });
-    
-    // Footer
-    const pageCount = doc.internal.getNumberOfPages();
-    for(let i = 1; i <= pageCount; i++) {
-        doc.setPage(i);
-        doc.setFontSize(7);
-        doc.setTextColor(128, 128, 128);
-        doc.text('Fecha y hora de impresión: ' + new Date().toLocaleString('es-BO'), 20, 585);
-        doc.text('Página ' + i + ' de ' + pageCount, 780, 585, { align: 'right' });
-    }
-    
+
     doc.save('pagos_transporte_' + new Date().getTime() + '.pdf');
 }
 </script>

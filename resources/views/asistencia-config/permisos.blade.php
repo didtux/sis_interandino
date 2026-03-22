@@ -58,6 +58,7 @@
                                 <th>Tipo</th>
                                 <th>Estudiante</th>
                                 <th>Curso</th>
+                                <th>Horario</th>
                                 <th>Desde</th>
                                 <th>Hasta</th>
                                 <th>Origen</th>
@@ -74,6 +75,14 @@
                                     <td><span class="badge badge-{{ $p->permiso_tipo == 'LICENCIA' ? 'info' : 'secondary' }}">{{ $p->permiso_tipo }}</span></td>
                                     <td>{{ $p->estudiante->est_nombres ?? 'N/A' }} {{ $p->estudiante->est_apellidos ?? '' }}</td>
                                     <td>{{ $p->estudiante->curso->cur_nombre ?? 'N/A' }}</td>
+                                    <td>
+                                        @if($p->configuracion)
+                                            <span class="badge badge-primary">{{ $p->configuracion->config_categoria }}</span>
+                                            <br><small>{{ substr($p->configuracion->hora_entrada, 0, 5) }} - {{ substr($p->configuracion->hora_salida, 0, 5) }}</small>
+                                        @else
+                                            <span class="text-muted">Todos</span>
+                                        @endif
+                                    </td>
                                     <td>{{ $p->permiso_fecha_inicio ? $p->permiso_fecha_inicio->format('d/m/Y') : '-' }}</td>
                                     <td>{{ $p->permiso_fecha_fin ? $p->permiso_fecha_fin->format('d/m/Y') : '-' }}</td>
                                     <td><span class="badge badge-secondary">{{ $p->permiso_origen ?? 'PERSONAL' }}</span></td>
@@ -104,7 +113,7 @@
                                     </td>
                                 </tr>
                             @empty
-                                <tr><td colspan="11" class="text-center">No hay permisos</td></tr>
+                                <tr><td colspan="12" class="text-center">No hay permisos</td></tr>
                             @endforelse
                         </tbody>
                     </table>
@@ -140,7 +149,7 @@
                             <select name="estud_codigo" id="selectEstudiante" class="form-control select2" required style="width: 100%">
                                 <option value="">Seleccione un estudiante...</option>
                                 @foreach($estudiantes as $e)
-                                    <option value="{{ $e->est_codigo }}">{{ $e->est_codigo }} - {{ $e->est_nombres }} {{ $e->est_apellidos }} - {{ $e->curso->cur_nombre ?? 'Sin curso' }}</option>
+                                    <option value="{{ $e->est_codigo }}" data-curso="{{ $e->cur_codigo }}">{{ $e->est_codigo }} - {{ $e->est_nombres }} {{ $e->est_apellidos }} - {{ $e->curso->cur_nombre ?? 'Sin curso' }}</option>
                                 @endforeach
                             </select>
                         </div>
@@ -163,6 +172,19 @@
                     </div>
                     <div class="row mt-3">
                         <div class="col-md-3">
+                            <label>Horario / Turno</label>
+                            <select name="config_id" id="selectHorario" class="form-control">
+                                <option value="">Todos los horarios</option>
+                                @foreach($horarios as $h)
+                                    <option value="{{ $h->config_id }}"
+                                        data-cursos="{{ $h->cursos->pluck('cur_codigo')->toJson() }}">
+                                        {{ $h->config_categoria }} ({{ substr($h->hora_entrada, 0, 5) }} - {{ substr($h->hora_salida, 0, 5) }})
+                                    </option>
+                                @endforeach
+                            </select>
+                            <small class="text-muted" id="horarioInfo">Dejar vacío para aplicar a todos los turnos</small>
+                        </div>
+                        <div class="col-md-3">
                             <label>Fecha Inicio *</label>
                             <input type="date" name="permiso_fecha_inicio" id="fecha_inicio" class="form-control" required>
                         </div>
@@ -178,7 +200,9 @@
                                 <option value="LLAMADA">Llamada</option>
                             </select>
                         </div>
-                        <div class="col-md-3" id="divNumeroLicencia" style="display:none;">
+                    </div>
+                    <div class="row mt-3" id="divNumeroLicencia" style="display:none;">
+                        <div class="col-md-3">
                             <label>N° Licencia (solo lectura)</label>
                             <input type="text" id="numero_licencia_display" class="form-control" readonly>
                         </div>
@@ -209,57 +233,77 @@
         </div>
     </div>
 </div>
+@endsection
 
 @section('scripts')
 <script>
 const permisos = @json($permisos->items());
+const horariosData = {!! $horarios->map(function($h) {
+    return [
+        'config_id' => $h->config_id,
+        'config_categoria' => $h->config_categoria,
+        'cursos' => $h->cursos->pluck('cur_codigo'),
+    ];
+})->toJson() !!};
 
-// Inicializar select2 para filtros
 $(document).ready(function() {
-    $('.select2-curso').select2({
-        theme: 'bootstrap4',
-        width: '100%',
-        allowClear: true
-    });
+    $('.select2-curso').select2({ theme: 'bootstrap4', width: '100%', allowClear: true });
 });
 
-// Inicializar select2 para modal
-$('.select2').select2({
-    theme: 'bootstrap4',
-    width: '100%',
-    dropdownParent: $('#modalPermiso')
-});
+$('.select2').select2({ theme: 'bootstrap4', width: '100%', dropdownParent: $('#modalPermiso') });
 
 $('#selectEstudiante').select2({
-    theme: 'bootstrap4',
-    width: '100%',
-    dropdownParent: $('#modalPermiso'),
-    placeholder: 'Buscar estudiante por nombre, código o curso...',
-    allowClear: true
+    theme: 'bootstrap4', width: '100%', dropdownParent: $('#modalPermiso'),
+    placeholder: 'Buscar estudiante por nombre, código o curso...', allowClear: true
 }).on('change', function() {
-    const estCodigo = $(this).val();
+    var estCodigo = $(this).val();
     if (estCodigo) {
+        // Cargar padres
         $.get('{{ url("/api/estudiantes") }}/' + estCodigo + '/padres', function(data) {
             $('#selectPadre').empty().append('<option value="">Seleccione padre/tutor...</option>');
-            data.forEach(padre => {
-                $('#selectPadre').append(`<option value="${padre.pfam_codigo}">${padre.pfam_nombres}</option>`);
+            data.forEach(function(padre) {
+                $('#selectPadre').append('<option value="' + padre.pfam_codigo + '">' + padre.pfam_nombres + '</option>');
             });
             $('#selectPadre').prop('disabled', false);
-        }).fail(function() {
-            alert('Error al cargar los padres del estudiante');
-            $('#selectPadre').empty().append('<option value="">Error al cargar padres</option>').prop('disabled', true);
         });
+
+        // Filtrar horarios según el curso del estudiante
+        var curCodigo = $(this).find(':selected').data('curso');
+        filtrarHorarios(curCodigo);
     } else {
         $('#selectPadre').empty().append('<option value="">Primero seleccione estudiante...</option>').prop('disabled', true);
+        $('#selectHorario option').show();
+        $('#horarioInfo').text('Dejar vacío para aplicar a todos los turnos');
     }
 });
 
+function filtrarHorarios(curCodigo) {
+    var hayCoincidencia = false;
+    $('#selectHorario option').each(function() {
+        var val = $(this).val();
+        if (!val) return; // opción "Todos"
+        var cursosStr = $(this).data('cursos');
+        var cursos = typeof cursosStr === 'string' ? JSON.parse(cursosStr) : cursosStr;
+        if (cursos && cursos.length > 0 && !cursos.includes(curCodigo)) {
+            $(this).hide();
+        } else {
+            $(this).show();
+            hayCoincidencia = true;
+        }
+    });
+
+    if (hayCoincidencia) {
+        $('#horarioInfo').html('<span class="text-info">Mostrando horarios del curso del estudiante</span>');
+    } else {
+        $('#selectHorario option').show();
+        $('#horarioInfo').html('<span class="text-warning">No hay horario específico para este curso</span>');
+    }
+    $('#selectHorario').val('');
+}
+
 $('#selectPadre').select2({
-    theme: 'bootstrap4',
-    width: '100%',
-    dropdownParent: $('#modalPermiso'),
-    placeholder: 'Seleccione padre/tutor...',
-    allowClear: true
+    theme: 'bootstrap4', width: '100%', dropdownParent: $('#modalPermiso'),
+    placeholder: 'Seleccione padre/tutor...', allowClear: true
 });
 
 $('#checkOtroSolicitante').on('change', function() {
@@ -277,11 +321,7 @@ $('#checkOtroSolicitante').on('change', function() {
 });
 
 $('#permiso_tipo').on('change', function() {
-    if ($(this).val() === 'LICENCIA') {
-        $('#divNumeroLicencia').show();
-    } else {
-        $('#divNumeroLicencia').hide();
-    }
+    $('#divNumeroLicencia').toggle($(this).val() === 'LICENCIA');
 });
 
 $('#searchPermiso').on('keyup', function() {
@@ -299,74 +339,75 @@ $('#modalPermiso').on('hidden.bs.modal', function() {
     $('#formPermiso')[0].reset();
     $('#selectEstudiante').val('').trigger('change');
     $('#selectPadre').empty().append('<option value="">Primero seleccione estudiante...</option>').prop('disabled', true);
+    $('#selectHorario').val('');
+    $('#selectHorario option').show();
+    $('#horarioInfo').text('Dejar vacío para aplicar a todos los turnos');
     $('#divNumeroLicencia').hide();
     $('#checkOtroSolicitante').prop('checked', false).trigger('change');
 });
 
 function editarPermiso(id) {
-    const permiso = permisos.find(p => p.permiso_id == id);
-    if (!permiso) {
-        console.error('Permiso no encontrado:', id);
-        return;
-    }
-    
+    var permiso = permisos.find(function(p) { return p.permiso_id == id; });
+    if (!permiso) return;
+
     $('#tituloModal').text('Editar Permiso');
     $('#formPermiso').attr('action', '{{ url("asistencia-config/permisos") }}/' + id);
     $('#methodPermiso').val('PUT');
     $('#permiso_id').val(id);
-    
+
     $('#permiso_tipo').val(permiso.permiso_tipo).trigger('change');
     $('#selectEstudiante').val(permiso.estud_codigo).trigger('change');
-    
-    // Verificar si tiene padre o nombre de solicitante
+
+    // Horario
+    setTimeout(function() {
+        $('#selectHorario').val(permiso.config_id || '');
+    }, 200);
+
     if (permiso.permiso_solicitante_pfam) {
         $('#checkOtroSolicitante').prop('checked', false).trigger('change');
-        setTimeout(() => {
+        setTimeout(function() {
             $.get('{{ url("/api/estudiantes") }}/' + permiso.estud_codigo + '/padres', function(data) {
                 $('#selectPadre').empty().append('<option value="">Seleccione padre/tutor...</option>');
-                data.forEach(padre => {
-                    const selected = padre.pfam_codigo == permiso.permiso_solicitante_pfam ? 'selected' : '';
-                    $('#selectPadre').append(`<option value="${padre.pfam_codigo}" ${selected}>${padre.pfam_nombres}</option>`);
+                data.forEach(function(padre) {
+                    var selected = padre.pfam_codigo == permiso.permiso_solicitante_pfam ? 'selected' : '';
+                    $('#selectPadre').append('<option value="' + padre.pfam_codigo + '" ' + selected + '>' + padre.pfam_nombres + '</option>');
                 });
                 $('#selectPadre').prop('disabled', false).trigger('change');
-            }).fail(function() {
-                alert('Error al cargar los padres del estudiante');
             });
         }, 300);
     } else if (permiso.permiso_solicitante_nombre) {
         $('#checkOtroSolicitante').prop('checked', true).trigger('change');
         $('#solicitante_nombre').val(permiso.permiso_solicitante_nombre);
     }
-    
-    const fechaInicio = permiso.permiso_fecha_inicio ? permiso.permiso_fecha_inicio.split('T')[0] : '';
-    const fechaFin = permiso.permiso_fecha_fin ? permiso.permiso_fecha_fin.split('T')[0] : '';
-    
+
+    var fechaInicio = permiso.permiso_fecha_inicio ? permiso.permiso_fecha_inicio.split('T')[0] : '';
+    var fechaFin = permiso.permiso_fecha_fin ? permiso.permiso_fecha_fin.split('T')[0] : '';
+
     $('#fecha_inicio').val(fechaInicio);
     $('#fecha_fin').val(fechaFin);
     $('#motivo').val(permiso.permiso_motivo);
     $('#permiso_origen').val(permiso.permiso_origen || 'PERSONAL').trigger('change');
     $('#observacion').val(permiso.permiso_observacion || '');
-    
+
     if (permiso.permiso_tipo === 'LICENCIA' && permiso.permiso_numero_licencia) {
         $('#divNumeroLicencia').show();
         $('#numero_licencia_display').val(permiso.permiso_numero_licencia);
     }
-    
+
     $('#modalPermiso').modal('show');
 }
 
 function generarReportePermisos() {
-    const params = new URLSearchParams();
-    const fechaInicio = document.querySelector('input[name="fecha_inicio"]').value;
-    const fechaFin = document.querySelector('input[name="fecha_fin"]').value;
-    const curCodigo = document.querySelector('select[name="cur_codigo"]').value;
-    
+    var params = new URLSearchParams();
+    var fechaInicio = document.querySelector('input[name="fecha_inicio"]').value;
+    var fechaFin = document.querySelector('input[name="fecha_fin"]').value;
+    var curCodigo = document.querySelector('select[name="cur_codigo"]').value;
+
     if (fechaInicio) params.append('fecha_inicio', fechaInicio);
     if (fechaFin) params.append('fecha_fin', fechaFin);
     if (curCodigo) params.append('cur_codigo', curCodigo);
-    
+
     window.open('{{ route("asistencia-config.permisos.reporte-pdf") }}?' + params.toString(), '_blank');
 }
 </script>
-@endsection
 @endsection

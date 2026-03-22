@@ -208,22 +208,17 @@ class AsistenciaController extends Controller
         
         if ($esFeriado) return false;
         
-        // Verificar si tiene permiso
-        $tienePermiso = $permisos->where('estud_codigo', $asistencia->estud_codigo)
+        // Buscar permisos del estudiante para esta fecha
+        $permisosEstudiante = $permisos->where('estud_codigo', $asistencia->estud_codigo)
             ->where('permiso_fecha_inicio', '<=', $asistencia->asis_fecha->format('Y-m-d'))
-            ->where('permiso_fecha_fin', '>=', $asistencia->asis_fecha->format('Y-m-d'))
-            ->first();
-        
-        if ($tienePermiso) return false;
+            ->where('permiso_fecha_fin', '>=', $asistencia->asis_fecha->format('Y-m-d'));
         
         // Obtener configuraciones específicas del curso o generales
         $configs = ConfiguracionAsistencia::activo()
             ->where(function($q) use ($asistencia) {
-                // Buscar configuraciones que tengan el curso específico
                 $q->whereHas('cursos', function($subQ) use ($asistencia) {
                     $subQ->where('colegio_cursos.cur_codigo', $asistencia->estudiante->cur_codigo);
                 })
-                // O configuraciones sin cursos específicos (aplican a todos)
                 ->orWhereDoesntHave('cursos');
             })
             ->get();
@@ -252,7 +247,6 @@ class AsistenciaController extends Controller
             $minutosEntrada = ((int)$entradaPartes[0] * 60) + (int)$entradaPartes[1];
             $minutosSalida = ((int)$salidaPartes[0] * 60) + (int)$salidaPartes[1];
             
-            // Verificar si está en el rango del turno
             if ($minutosLlegada >= ($minutosEntrada - 120) && $minutosLlegada <= ($minutosSalida + 120)) {
                 $diferencia = abs($minutosLlegada - $minutosEntrada);
                 if ($diferencia < $menorDiferencia) {
@@ -263,6 +257,14 @@ class AsistenciaController extends Controller
         }
         
         if (!$config) $config = $configs->first();
+        
+        // Verificar si algún permiso cubre este turno específico
+        // config_id NULL = aplica a todos los turnos, específico = solo ese turno
+        foreach ($permisosEstudiante as $permiso) {
+            if (!$permiso->config_id || $permiso->config_id == $config->config_id) {
+                return false;
+            }
+        }
         
         // La tolerancia es la hora límite completa
         $tolerancia = is_object($config->tolerancia_atraso) 
@@ -731,12 +733,16 @@ class AsistenciaController extends Controller
                         ->pluck('estud_codigo')
                         ->toArray();
                     
-                    $estudiantesConPermiso = Permiso::where('permiso_estado', 1)
+                    // Permisos: solo excluir si config_id es NULL (todos) o coincide con este config
+                    $permisosActivos = Permiso::where('permiso_estado', 1)
                         ->whereDate('permiso_fecha_inicio', '<=', $fecha)
                         ->whereDate('permiso_fecha_fin', '>=', $fecha)
                         ->whereIn('estud_codigo', $estudiantes->pluck('est_codigo'))
-                        ->pluck('estud_codigo')
-                        ->toArray();
+                        ->get();
+                    
+                    $estudiantesConPermiso = $permisosActivos->filter(function($p) use ($config) {
+                        return !$p->config_id || $p->config_id == $config->config_id;
+                    })->pluck('estud_codigo')->unique()->toArray();
                     
                     $estudiantesSinAsistencia = $estudiantes->filter(function($est) use ($asistencias, $estudiantesConPermiso) {
                         return !in_array($est->est_codigo, $asistencias) && !in_array($est->est_codigo, $estudiantesConPermiso);
@@ -814,12 +820,16 @@ class AsistenciaController extends Controller
                     ->pluck('estud_codigo')
                     ->toArray();
                 
-                $estudiantesConPermiso = Permiso::where('permiso_estado', 1)
+                // Permisos: solo excluir si config_id es NULL (todos) o coincide con este config
+                $permisosActivos = Permiso::where('permiso_estado', 1)
                     ->whereDate('permiso_fecha_inicio', '<=', $fecha)
                     ->whereDate('permiso_fecha_fin', '>=', $fecha)
                     ->whereIn('estud_codigo', $estudiantes->pluck('est_codigo'))
-                    ->pluck('estud_codigo')
-                    ->toArray();
+                    ->get();
+                
+                $estudiantesConPermiso = $permisosActivos->filter(function($p) use ($config) {
+                    return !$p->config_id || $p->config_id == $config->config_id;
+                })->pluck('estud_codigo')->unique()->toArray();
                 
                 $estudiantesSinAsistencia = $estudiantes->filter(function($est) use ($asistencias, $estudiantesConPermiso) {
                     return !in_array($est->est_codigo, $asistencias) && !in_array($est->est_codigo, $estudiantesConPermiso);

@@ -15,6 +15,7 @@ class Permiso extends Model
         'permiso_tipo',
         'permiso_numero',
         'estud_codigo',
+        'config_id',
         'permiso_fecha_inicio',
         'permiso_fecha_fin',
         'permiso_origen',
@@ -40,6 +41,11 @@ class Permiso extends Model
     public function estudiante()
     {
         return $this->belongsTo(Estudiante::class, 'estud_codigo', 'est_codigo');
+    }
+
+    public function configuracion()
+    {
+        return $this->belongsTo(ConfiguracionAsistencia::class, 'config_id', 'config_id');
     }
 
     public function solicitantePadre()

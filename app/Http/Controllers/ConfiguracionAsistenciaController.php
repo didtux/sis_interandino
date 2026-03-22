@@ -155,13 +155,12 @@ class ConfiguracionAsistenciaController extends Controller
     {
         if (!$asistencia->estudiante) return false;
         
-        $tienePermiso = $permisos->where('estud_codigo', $asistencia->estud_codigo)
+        // Buscar permiso que cubra esta fecha
+        $permisosEstudiante = $permisos->where('estud_codigo', $asistencia->estud_codigo)
             ->where('permiso_fecha_inicio', '<=', $asistencia->asis_fecha->format('Y-m-d'))
-            ->where('permiso_fecha_fin', '>=', $asistencia->asis_fecha->format('Y-m-d'))
-            ->first();
+            ->where('permiso_fecha_fin', '>=', $asistencia->asis_fecha->format('Y-m-d'));
         
-        if ($tienePermiso) return false;
-        
+        // Determinar la configuración que aplica a esta asistencia
         $configs = ConfiguracionAsistencia::activo()
             ->where(function($q) use ($asistencia) {
                 $q->where('cur_codigo', $asistencia->estudiante->cur_codigo)
@@ -198,6 +197,14 @@ class ConfiguracionAsistenciaController extends Controller
         }
         
         if (!$config) $config = $configs->first();
+        
+        // Verificar si algún permiso cubre este turno
+        foreach ($permisosEstudiante as $permiso) {
+            // config_id NULL = aplica a todos los turnos
+            if (!$permiso->config_id || $permiso->config_id == $config->config_id) {
+                return false;
+            }
+        }
         
         $tolerancia = strlen($config->tolerancia_atraso) > 8 ? substr($config->tolerancia_atraso, 11, 5) : substr($config->tolerancia_atraso, 0, 5);
         $toleranciaPartes = explode(':', $tolerancia);
@@ -328,7 +335,7 @@ class ConfiguracionAsistenciaController extends Controller
     // ========== GESTIÓN DE PERMISOS ==========
     public function permisos(Request $request)
     {
-        $query = Permiso::with('estudiante.curso', 'solicitantePadre')->orderBy('permiso_fecha_registro', 'desc');
+        $query = Permiso::with('estudiante.curso', 'solicitantePadre', 'configuracion')->orderBy('permiso_fecha_registro', 'desc');
         
         if ($request->filled('fecha_inicio')) {
             $query->whereDate('permiso_fecha_inicio', '>=', $request->fecha_inicio);
@@ -346,7 +353,8 @@ class ConfiguracionAsistenciaController extends Controller
         $estudiantes = Estudiante::visible()->get();
         $cursos = Curso::visible()->get();
         $padres = \App\Models\PadreFamilia::activo()->orderBy('pfam_nombres')->get();
-        return view('asistencia-config.permisos', compact('permisos', 'estudiantes', 'cursos', 'padres'));
+        $horarios = ConfiguracionAsistencia::activo()->with('cursos')->get();
+        return view('asistencia-config.permisos', compact('permisos', 'estudiantes', 'cursos', 'padres', 'horarios'));
     }
 
     public function storePermiso(Request $request)
@@ -384,6 +392,7 @@ class ConfiguracionAsistenciaController extends Controller
                 'permiso_tipo' => $request->permiso_tipo,
                 'permiso_numero' => $nuevoNumero + $i,
                 'estud_codigo' => $request->estud_codigo,
+                'config_id' => $request->config_id,
                 'permiso_fecha_inicio' => $fechaActual->format('Y-m-d'),
                 'permiso_fecha_fin' => $fechaActual->format('Y-m-d'),
                 'permiso_origen' => $request->permiso_origen,

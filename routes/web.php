@@ -148,6 +148,7 @@ Route::middleware(['auth'])->group(function () {
     Route::resource('asignaciones-transporte', App\Http\Controllers\AsignacionTransporteController::class);
     Route::get('pagos-transporte/historial/{est_codigo}', [App\Http\Controllers\PagoTransporteController::class, 'historialPagos']);
     Route::get('pagos-transporte/reporte-ingresos', [App\Http\Controllers\PagoTransporteController::class, 'reporteIngresos'])->name('pagos-transporte.reporte-ingresos');
+    Route::put('pagos-transporte/{id}/anular', [App\Http\Controllers\PagoTransporteController::class, 'anular'])->name('pagos-transporte.anular');
     Route::resource('pagos-transporte', App\Http\Controllers\PagoTransporteController::class);
     Route::resource('estudiantes-rutas', App\Http\Controllers\EstudianteRutaController::class);
     
