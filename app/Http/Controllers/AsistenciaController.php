@@ -9,6 +9,7 @@ use App\Models\ConfiguracionAsistencia;
 use App\Models\Atraso;
 use App\Models\Permiso;
 use App\Models\FechaFestiva;
+use App\Models\ListaCurso;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
 use App\Exports\AsistenciasTrimestralExport;
@@ -408,11 +409,29 @@ class AsistenciaController extends Controller
 
     public function estudiantesPorCurso($curCodigo)
     {
+        $gestion = date('Y');
+        $lista = ListaCurso::where('cur_codigo', $curCodigo)
+            ->where('lista_gestion', $gestion)
+            ->pluck('lista_numero', 'est_codigo');
+
         $estudiantes = Estudiante::where('cur_codigo', $curCodigo)
             ->visible()
             ->select('est_codigo', 'est_nombres', 'est_apellidos')
+            ->orderBy('est_apellidos')
             ->orderBy('est_nombres')
-            ->get();
+            ->get()
+            ->map(function($est) use ($lista) {
+                $est->lista_numero = $lista[$est->est_codigo] ?? null;
+                return $est;
+            });
+
+        // Ordenar: primero los que tienen número de lista, luego alfabético
+        if ($lista->isNotEmpty()) {
+            $estudiantes = $estudiantes->sortBy(function($est) {
+                return $est->lista_numero ?? 9999;
+            })->values();
+        }
+
         return response()->json($estudiantes);
     }
 
@@ -437,14 +456,22 @@ class AsistenciaController extends Controller
         ];
 
         $rango = $trimestres[$trimestre];
-        $estudiantes = $curso->estudiantes()->visible()->orderBy('est_nombres')->get();
+        $estudiantes = $curso->estudiantes()->visible()->orderBy('est_apellidos')->orderBy('est_nombres')->get();
         
         if ($estudiantes->isEmpty()) {
             return back()->with('error', 'No hay estudiantes registrados en el curso ' . $curso->cur_nombre);
         }
+
+        $lista = ListaCurso::where('cur_codigo', $request->cur_codigo)
+            ->where('lista_gestion', $year)
+            ->pluck('lista_numero', 'est_codigo');
+
+        if ($lista->isNotEmpty()) {
+            $estudiantes = $estudiantes->sortBy(fn($e) => $lista[$e->est_codigo] ?? 9999)->values();
+        }
         
         $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('asistencias.reporte-trimestral-pdf', 
-            compact('curso', 'estudiantes', 'trimestre', 'rango'))
+            compact('curso', 'estudiantes', 'trimestre', 'rango', 'lista'))
             ->setPaper('legal', 'landscape');
         return $pdf->stream('asistencia-trimestre-' . $trimestre . '-' . date('Y-m-d') . '.pdf');
     }
@@ -461,14 +488,22 @@ class AsistenciaController extends Controller
         }
 
         $year = date('Y');
-        $estudiantes = $curso->estudiantes()->visible()->orderBy('est_nombres')->get();
+        $estudiantes = $curso->estudiantes()->visible()->orderBy('est_apellidos')->orderBy('est_nombres')->get();
         
         if ($estudiantes->isEmpty()) {
             return back()->with('error', 'No hay estudiantes registrados en el curso ' . $curso->cur_nombre);
         }
+
+        $lista = ListaCurso::where('cur_codigo', $request->cur_codigo)
+            ->where('lista_gestion', $year)
+            ->pluck('lista_numero', 'est_codigo');
+
+        if ($lista->isNotEmpty()) {
+            $estudiantes = $estudiantes->sortBy(fn($e) => $lista[$e->est_codigo] ?? 9999)->values();
+        }
         
         $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('asistencias.reporte-anual-pdf', 
-            compact('curso', 'estudiantes', 'year'))
+            compact('curso', 'estudiantes', 'year', 'lista'))
             ->setPaper('legal', 'landscape');
         return $pdf->stream('asistencia-anual-' . date('Y-m-d') . '.pdf');
     }
@@ -485,12 +520,18 @@ class AsistenciaController extends Controller
             return back()->with('error', 'Curso no encontrado');
         }
 
-        $estudiantes = $curso->estudiantes()->visible()->orderBy('est_nombres')->get();
+        $year = date('Y');
+        $estudiantes = $curso->estudiantes()->visible()->orderBy('est_apellidos')->orderBy('est_nombres')->get();
         if ($estudiantes->isEmpty()) {
             return back()->with('error', 'No hay estudiantes registrados en el curso ' . $curso->cur_nombre);
         }
 
-        $year = date('Y');
+        $listaExcel = ListaCurso::where('cur_codigo', $request->cur_codigo)
+            ->where('lista_gestion', $year)->pluck('lista_numero', 'est_codigo');
+        if ($listaExcel->isNotEmpty()) {
+            $estudiantes = $estudiantes->sortBy(fn($e) => $listaExcel[$e->est_codigo] ?? 9999)->values();
+        }
+
         $trimestres = [
             1 => ['meses' => [2, 3, 4, 5], 'nombres' => ['Febrero', 'Marzo', 'Abril', 'Mayo']],
             2 => ['meses' => [6, 7, 8, 9], 'nombres' => ['Junio', 'Julio', 'Agosto', 'Septiembre']],
@@ -500,8 +541,8 @@ class AsistenciaController extends Controller
         $rango = $trimestres[$request->trimestre];
         $data = collect();
         
-        foreach ($estudiantes as $est) {
-            $fila = [$est->est_nombres . ' ' . $est->est_apellidos];
+        foreach ($estudiantes as $index => $est) {
+            $fila = [$listaExcel[$est->est_codigo] ?? ($index + 1), $est->est_apellidos . ' ' . $est->est_nombres];
             $totalTrimestre = ['dt' => 0, 'tl' => 0, 'tf' => 0, 'ta' => 0, 'total' => 0];
             
             foreach ($rango['meses'] as $mes) {
@@ -569,12 +610,18 @@ class AsistenciaController extends Controller
             return back()->with('error', 'Curso no encontrado');
         }
 
-        $estudiantes = $curso->estudiantes()->visible()->orderBy('est_nombres')->get();
+        $year = date('Y');
+        $estudiantes = $curso->estudiantes()->visible()->orderBy('est_apellidos')->orderBy('est_nombres')->get();
         if ($estudiantes->isEmpty()) {
             return back()->with('error', 'No hay estudiantes registrados en el curso ' . $curso->cur_nombre);
         }
 
-        $year = date('Y');
+        $listaExcelAnual = ListaCurso::where('cur_codigo', $request->cur_codigo)
+            ->where('lista_gestion', $year)->pluck('lista_numero', 'est_codigo');
+        if ($listaExcelAnual->isNotEmpty()) {
+            $estudiantes = $estudiantes->sortBy(fn($e) => $listaExcelAnual[$e->est_codigo] ?? 9999)->values();
+        }
+
         $trimestres = [
             1 => ['meses' => [2, 3, 4, 5]],
             2 => ['meses' => [6, 7, 8, 9]],
@@ -583,8 +630,8 @@ class AsistenciaController extends Controller
         
         $data = collect();
         
-        foreach ($estudiantes as $est) {
-            $fila = [$est->est_nombres . ' ' . $est->est_apellidos];
+        foreach ($estudiantes as $index => $est) {
+            $fila = [$listaExcelAnual[$est->est_codigo] ?? ($index + 1), $est->est_apellidos . ' ' . $est->est_nombres];
             $totalAnual = ['dt' => 0, 'tl' => 0, 'tf' => 0, 'ta' => 0, 'total' => 0];
             
             foreach ($trimestres as $trim) {
@@ -674,9 +721,13 @@ class AsistenciaController extends Controller
         
         $atrasos = $query->orderBy('atraso_fecha', 'desc')->get();
         $fecha = $request->fecha;
+
+        $lista = ListaCurso::where('cur_codigo', $request->cur_codigo)
+            ->where('lista_gestion', date('Y'))
+            ->pluck('lista_numero', 'est_codigo');
         
         $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('asistencias.reporte-atrasos-pdf', 
-            compact('curso', 'atrasos', 'fecha'))
+            compact('curso', 'atrasos', 'fecha', 'lista'))
             ->setPaper('letter', 'landscape');
         
         return $pdf->stream('reporte-atrasos-' . date('Y-m-d') . '.pdf');
@@ -702,6 +753,8 @@ class AsistenciaController extends Controller
             
             $datosPorCurso = [];
             $cursosYaProcesados = [];
+            $listaPorCurso = [];
+            $gestionActual = date('Y');
             
             foreach ($configuraciones as $config) {
                 $cursosPivote = \DB::table('asistencia_configuracion_cursos')
@@ -727,6 +780,16 @@ class AsistenciaController extends Controller
                     $cursosYaProcesados[] = $curso->cur_codigo;
                     
                     $estudiantes = $curso->estudiantes()->visible()->orderBy('est_apellidos')->orderBy('est_nombres')->get();
+
+                    // Cargar lista si existe
+                    if (!isset($listaPorCurso[$curso->cur_codigo])) {
+                        $listaPorCurso[$curso->cur_codigo] = ListaCurso::where('cur_codigo', $curso->cur_codigo)
+                            ->where('lista_gestion', $gestionActual)->pluck('lista_numero', 'est_codigo');
+                    }
+                    $listaC = $listaPorCurso[$curso->cur_codigo];
+                    if ($listaC->isNotEmpty()) {
+                        $estudiantes = $estudiantes->sortBy(fn($e) => $listaC[$e->est_codigo] ?? 9999)->values();
+                    }
                     
                     $asistencias = Asistencia::whereDate('asis_fecha', $fecha)
                         ->whereIn('estud_codigo', $estudiantes->pluck('est_codigo'))
@@ -752,7 +815,8 @@ class AsistenciaController extends Controller
                         $datosPorCurso[] = [
                             'curso' => $curso,
                             'estudiantes' => $estudiantesSinAsistencia,
-                            'horario' => $config->config_turno . ' (' . substr($config->hora_entrada, 0, 5) . '-' . substr($config->hora_salida, 0, 5) . ')'
+                            'horario' => $config->config_turno . ' (' . substr($config->hora_entrada, 0, 5) . '-' . substr($config->hora_salida, 0, 5) . ')',
+                            'lista' => $listaC,
                         ];
                     }
                 }
@@ -811,9 +875,16 @@ class AsistenciaController extends Controller
             }
             
             $datosPorCurso = [];
+            $gestionFaltas = date('Y');
             
             foreach ($cursos as $curso) {
                 $estudiantes = $curso->estudiantes()->visible()->orderBy('est_apellidos')->orderBy('est_nombres')->get();
+
+                $listaC = ListaCurso::where('cur_codigo', $curso->cur_codigo)
+                    ->where('lista_gestion', $gestionFaltas)->pluck('lista_numero', 'est_codigo');
+                if ($listaC->isNotEmpty()) {
+                    $estudiantes = $estudiantes->sortBy(fn($e) => $listaC[$e->est_codigo] ?? 9999)->values();
+                }
                 
                 $asistencias = Asistencia::whereDate('asis_fecha', $fecha)
                     ->whereIn('estud_codigo', $estudiantes->pluck('est_codigo'))
@@ -838,7 +909,8 @@ class AsistenciaController extends Controller
                 if ($estudiantesSinAsistencia->count() > 0) {
                     $datosPorCurso[] = [
                         'curso' => $curso,
-                        'estudiantes' => $estudiantesSinAsistencia
+                        'estudiantes' => $estudiantesSinAsistencia,
+                        'lista' => $listaC,
                     ];
                 }
             }

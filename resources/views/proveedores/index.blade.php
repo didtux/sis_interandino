@@ -7,9 +7,11 @@
             <div class="card">
                 <div class="card-header d-flex justify-content-between">
                     <h4><i class="fas fa-truck mr-2"></i>Proveedores</h4>
+                    @puede('proveedores', 'crear')
                     <a href="{{ route('proveedores.create') }}" class="btn btn-primary">
                         <i class="fas fa-plus"></i> Nuevo Proveedor
                     </a>
+                    @endpuede
                 </div>
                 <div class="card-body">
                     @if(session('success'))
@@ -38,15 +40,19 @@
                                     <td>{{ $p->prov_email ?? 'N/A' }}</td>
                                     <td>{{ $p->prov_contacto ?? 'N/A' }}</td>
                                     <td>
+                                        @puede('proveedores', 'editar')
                                         <a href="{{ route('proveedores.edit', $p->prov_id) }}" class="btn btn-sm btn-warning">
                                             <i class="fas fa-edit"></i>
                                         </a>
+                                        @endpuede
+                                        @puede('proveedores', 'eliminar')
                                         <form action="{{ route('proveedores.destroy', $p->prov_id) }}" method="POST" style="display:inline">
                                             @csrf @method('DELETE')
                                             <button class="btn btn-sm btn-danger" onclick="return confirm('¿Eliminar?')">
                                                 <i class="fas fa-trash"></i>
                                             </button>
                                         </form>
+                                        @endpuede
                                     </td>
                                 </tr>
                             @empty

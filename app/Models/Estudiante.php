@@ -23,6 +23,8 @@ class Estudiante extends Model
         'est_lugarnac',
         'est_fechanac',
         'est_ueprocedencia',
+        'est_rude',
+        'est_celular',
         'preinscripcion',
         'est_foto',
         'est_fecha'

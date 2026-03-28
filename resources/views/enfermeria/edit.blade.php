@@ -55,6 +55,15 @@
                             </div>
                         </div>
 
+                        <div class="row" id="tipo_atencion_row" style="display:{{ $registro->enf_dx_detalle == 'ATENCIÓN MÉDICA' ? 'block' : 'none' }};">
+                            <div class="col-md-12">
+                                <div class="form-group">
+                                    <label>Tipo de Atención</label>
+                                    <input type="text" name="enf_tipo_atencion" id="enf_tipo_atencion" class="form-control" value="{{ $registro->enf_tipo_atencion }}" placeholder="Especifique el tipo de atención...">
+                                </div>
+                            </div>
+                        </div>
+
                         <div class="row" id="medicamentos_row" style="display:{{ $registro->enf_dx_detalle == 'ATENCIÓN MÉDICA' ? 'block' : 'none' }};">
                             <div class="col-md-12">
                                 <div class="form-group">
@@ -94,16 +103,21 @@ $(document).ready(function() {
     $('#enf_dx_detalle').change(function() {
         var valor = $(this).val();
         if (valor == 'ATENCIÓN MÉDICA') {
+            $('#tipo_atencion_row').show();
             $('#medicamentos_row').show();
             $('#enf_medicamentos').prop('required', true);
             $('#enf_observaciones').prop('required', false);
             $('#obs_required').hide();
         } else if (valor == 'HIGIENE PERSONAL') {
+            $('#tipo_atencion_row').hide();
+            $('#enf_tipo_atencion').val('');
             $('#medicamentos_row').hide();
             $('#enf_medicamentos').prop('required', false);
             $('#enf_observaciones').prop('required', true);
             $('#obs_required').show();
         } else {
+            $('#tipo_atencion_row').hide();
+            $('#enf_tipo_atencion').val('');
             $('#medicamentos_row').hide();
             $('#enf_medicamentos').prop('required', false);
             $('#enf_observaciones').prop('required', false);

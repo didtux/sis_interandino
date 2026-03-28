@@ -75,6 +75,21 @@
                             <input type="text" name="est_ueprocedencia" class="form-control" value="{{ old('est_ueprocedencia') }}">
                         </div>
 
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group mb-3">
+                                    <label>Código RUDE</label>
+                                    <input type="text" name="est_rude" class="form-control" value="{{ old('est_rude') }}">
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group mb-3">
+                                    <label>Nro. Celular</label>
+                                    <input type="text" name="est_celular" class="form-control" value="{{ old('est_celular') }}">
+                                </div>
+                            </div>
+                        </div>
+
                         <div class="form-group mb-3">
                             <label>Preinscripción</label>
                             <input type="number" step="0.01" name="preinscripcion" class="form-control" value="{{ old('preinscripcion', 0) }}">

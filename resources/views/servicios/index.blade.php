@@ -7,9 +7,11 @@
             <div class="card modern-card">
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <h4><i class="fas fa-concierge-bell mr-2"></i>Servicios</h4>
+                    @puede('servicios', 'crear')
                     <a href="{{ route('servicios.create') }}" class="btn btn-primary-modern">
                         <i class="fas fa-plus mr-1"></i>Nuevo Servicio
                     </a>
+                    @endpuede
                 </div>
                 <div class="card-body">
                     @if(session('success'))
@@ -44,15 +46,19 @@
                                         </td>
                                         <td data-label="Acciones">
                                             <div class="action-buttons">
+                                                @puede('servicios', 'editar')
                                                 <a href="{{ route('servicios.edit', $servicio->serv_id) }}" class="btn btn-action btn-action-edit" title="Editar">
                                                     <i class="fas fa-edit"></i>
                                                 </a>
+                                                @endpuede
+                                                @puede('servicios', 'eliminar')
                                                 <form action="{{ route('servicios.destroy', $servicio->serv_id) }}" method="POST" style="display:inline;">
                                                     @csrf @method('DELETE')
                                                     <button type="submit" class="btn btn-action btn-action-delete" onclick="return confirm('¿Eliminar servicio?')" title="Eliminar">
                                                         <i class="fas fa-trash"></i>
                                                     </button>
                                                 </form>
+                                                @endpuede
                                             </div>
                                         </td>
                                     </tr>

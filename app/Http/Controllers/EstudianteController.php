@@ -147,12 +147,17 @@ class EstudianteController extends Controller
 
     public function kardex($id)
     {
-        $estudiante = Estudiante::with('curso')->findOrFail($id);
-        $padres = $estudiante->padres ?? collect();
-        
-        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('estudiantes.kardex-pdf', compact('estudiante', 'padres'))
+        $estudiante = Estudiante::with('curso', 'padres')->findOrFail($id);
+
+        $listaCurso = \DB::table('colegio_lista_curso')
+            ->where('est_codigo', $estudiante->est_codigo)
+            ->where('lista_gestion', date('Y'))
+            ->first();
+        $numero = $listaCurso->lista_numero ?? '';
+
+        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('estudiantes.kardex-pdf', compact('estudiante', 'numero'))
             ->setPaper('letter');
-        
+
         return $pdf->stream('kardex-' . $estudiante->est_codigo . '.pdf');
     }
 

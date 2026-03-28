@@ -88,6 +88,7 @@ class EnfermeriaController extends Controller
             'enf_fecha' => $request->enf_fecha,
             'enf_hora' => $request->enf_hora,
             'enf_dx_detalle' => $request->enf_dx_detalle,
+            'enf_tipo_atencion' => $request->enf_dx_detalle == 'ATENCIÓN MÉDICA' ? $request->enf_tipo_atencion : null,
             'enf_medicamentos' => $request->enf_medicamentos,
             'enf_observaciones' => $request->enf_observaciones,
             'enf_registrado_por' => auth()->user()->us_codigo
@@ -120,6 +121,7 @@ class EnfermeriaController extends Controller
             'enf_fecha' => $request->enf_fecha,
             'enf_hora' => $request->enf_hora,
             'enf_dx_detalle' => $request->enf_dx_detalle,
+            'enf_tipo_atencion' => $request->enf_dx_detalle == 'ATENCIÓN MÉDICA' ? $request->enf_tipo_atencion : null,
             'enf_medicamentos' => $request->enf_medicamentos,
             'enf_observaciones' => $request->enf_observaciones
         ]);

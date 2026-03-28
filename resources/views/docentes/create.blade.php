@@ -9,7 +9,7 @@
                     <h4><i class="fas fa-chalkboard-teacher mr-2"></i>Nuevo Docente</h4>
                 </div>
                 <div class="card-body">
-                    <form action="{{ route('docentes.store') }}" method="POST">
+                    <form action="{{ route('docentes.store') }}" method="POST" enctype="multipart/form-data">
                         @csrf
                         <div class="row">
                             <div class="col-md-6">
@@ -44,10 +44,11 @@
                             </div>
                         </div>
                         <div class="row">
-                            <div class="col-md-12">
+                            <div class="col-md-6">
                                 <div class="form-group">
-                                    <label>Materia</label>
-                                    <input type="text" name="doc_materia" class="form-control" value="{{ old('doc_materia') }}">
+                                    <label>Foto de Perfil</label>
+                                    <input type="file" name="doc_foto" class="form-control" accept="image/*">
+                                    <small class="text-muted">Formatos: JPG, PNG. Máximo 2MB</small>
                                 </div>
                             </div>
                         </div>

@@ -4,8 +4,11 @@ namespace App\Http\Controllers;
 
 use App\Models\PadreFamilia;
 use App\Models\Estudiante;
+use App\Models\User;
+use App\Models\Rol;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 
 class PadreFamiliaController extends Controller
 {
@@ -32,8 +35,12 @@ class PadreFamiliaController extends Controller
             $q->with('curso');
         }])->paginate(20);
         $estudiantes = Estudiante::visible()->orderBy('est_nombres')->get();
+        $usuariosPadres = User::where('us_entidad_tipo', 'padre')
+            ->where('us_visible', 1)
+            ->pluck('us_entidad_id')
+            ->toArray();
         
-        return view('padres.index', compact('padres', 'estudiantes'));
+        return view('padres.index', compact('padres', 'estudiantes', 'usuariosPadres'));
     }
 
     public function create()
@@ -215,5 +222,38 @@ class PadreFamiliaController extends Controller
         ]);
             
         return back()->with('success', 'Estudiante desvinculado exitosamente');
+    }
+
+    public function crearUsuario(Request $request, $id)
+    {
+        $padre = PadreFamilia::findOrFail($id);
+
+        $existe = User::where('us_entidad_tipo', 'padre')
+            ->where('us_entidad_id', $padre->pfam_codigo)
+            ->where('us_visible', 1)
+            ->first();
+
+        if ($existe) {
+            return back()->with('error', 'Este padre ya tiene un usuario asignado: ' . $existe->us_user);
+        }
+
+        $request->validate(['password' => 'required|min:6']);
+
+        $rolPadre = Rol::where('rol_nombre', 'Padre de Familia')->first();
+
+        User::create([
+            'us_codigo' => $padre->pfam_codigo,
+            'rol_id' => $rolPadre ? $rolPadre->rol_id : 3,
+            'us_ci' => $padre->pfam_ci,
+            'us_nombres' => $padre->pfam_nombres,
+            'us_apellidos' => '',
+            'us_user' => strtolower(str_replace(' ', '', $padre->pfam_nombres)) . $padre->pfam_id,
+            'us_pass' => Hash::make($request->password),
+            'us_visible' => 1,
+            'us_entidad_tipo' => 'padre',
+            'us_entidad_id' => $padre->pfam_codigo,
+        ]);
+
+        return back()->with('success', 'Usuario creado exitosamente para ' . $padre->pfam_nombres);
     }
 }

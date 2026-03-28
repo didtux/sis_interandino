@@ -18,7 +18,8 @@ class User extends Authenticatable
 
     protected $fillable = [
         'us_codigo', 'rol_id', 'us_ci', 'us_nombres',
-        'us_apellidos', 'us_user', 'us_pass', 'us_foto', 'us_visible'
+        'us_apellidos', 'us_user', 'us_pass', 'us_foto', 'us_visible',
+        'us_entidad_tipo', 'us_entidad_id'
     ];
 
     protected $hidden = ['us_pass', 'remember_token'];
@@ -37,6 +38,26 @@ class User extends Authenticatable
     public function getAuthIdentifierName()
     {
         return 'us_user';
+    }
+
+    public function rol()
+    {
+        return $this->belongsTo(Rol::class, 'rol_id', 'rol_id');
+    }
+
+    public function tienePermiso($modSlug, $accion = 'perm_ver')
+    {
+        if ($this->rol_id == 1) return true; // Admin total
+
+        return Permiso::where('rol_id', $this->rol_id)
+            ->whereHas('modulo', fn($q) => $q->where('mod_slug', $modSlug))
+            ->where($accion, 1)
+            ->exists();
+    }
+
+    public function tieneAccesoModulo($modSlug)
+    {
+        return $this->tienePermiso($modSlug, 'perm_ver');
     }
 
     public function scopeActivo($query)

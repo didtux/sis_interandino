@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Models\Rol;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 
@@ -10,13 +11,14 @@ class UserController extends Controller
 {
     public function index()
     {
-        $usuarios = User::orderBy('us_id', 'desc')->paginate(15);
+        $usuarios = User::with('rol')->orderBy('us_id', 'desc')->paginate(15);
         return view('usuarios.index', compact('usuarios'));
     }
 
     public function create()
     {
-        return view('usuarios.create');
+        $roles = Rol::activo()->get();
+        return view('usuarios.create', compact('roles'));
     }
 
     public function store(Request $request)
@@ -52,7 +54,8 @@ class UserController extends Controller
 
     public function edit(User $usuario)
     {
-        return view('usuarios.edit', compact('usuario'));
+        $roles = Rol::activo()->get();
+        return view('usuarios.edit', compact('usuario', 'roles'));
     }
 
     public function update(Request $request, User $usuario)

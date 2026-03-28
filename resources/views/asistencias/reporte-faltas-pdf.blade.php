@@ -81,10 +81,9 @@
                             <div class="curso-horario">{{ $datos['horario'] }}</div>
                         @endif
                         <div class="estudiantes-list">
-                            @php $contador = 1; @endphp
                             @foreach($datos['estudiantes'] as $estudiante)
                                 <div class="estudiante-item">
-                                    <span class="estudiante-numero">{{ $contador++ }}</span>
+                                    <span class="estudiante-numero">{{ isset($datos['lista']) && isset($datos['lista'][$estudiante->est_codigo]) ? $datos['lista'][$estudiante->est_codigo] : $loop->iteration }}</span>
                                     <span>{{ mb_strtoupper($estudiante->est_apellidos, 'UTF-8') }} {{ mb_strtoupper($estudiante->est_nombres, 'UTF-8') }}</span>
                                 </div>
                             @endforeach

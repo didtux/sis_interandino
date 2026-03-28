@@ -85,8 +85,9 @@
                                     <label>Rol <span class="text-danger">*</span></label>
                                     <select name="rol_id" class="form-control @error('rol_id') is-invalid @enderror" required>
                                         <option value="">Seleccione un rol</option>
-                                        <option value="1" {{ old('rol_id', $usuario->rol_id) == 1 ? 'selected' : '' }}>Administrador</option>
-                                        <option value="2" {{ old('rol_id', $usuario->rol_id) == 2 ? 'selected' : '' }}>Usuario</option>
+                                        @foreach($roles as $rol)
+                                            <option value="{{ $rol->rol_id }}" {{ old('rol_id', $usuario->rol_id) == $rol->rol_id ? 'selected' : '' }}>{{ $rol->rol_nombre }}</option>
+                                        @endforeach
                                     </select>
                                     @error('rol_id')
                                         <div class="invalid-feedback">{{ $message }}</div>

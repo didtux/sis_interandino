@@ -7,9 +7,11 @@
             <div class="card modern-card">
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <h4><i class="fas fa-book mr-2"></i>Materias</h4>
+                    @puede('materias', 'crear')
                     <a href="{{ route('materias.create') }}" class="btn btn-primary-modern">
                         <i class="fas fa-plus mr-1"></i>Nueva Materia
                     </a>
+                    @endpuede
                 </div>
                 <div class="card-body">
                     @if(session('success'))
@@ -36,15 +38,19 @@
                                         <td data-label="Nombre">{{ $materia->mat_nombre }}</td>
                                         <td data-label="Acciones">
                                             <div class="action-buttons">
+                                                @puede('materias', 'editar')
                                                 <a href="{{ route('materias.edit', $materia->mat_id) }}" class="btn btn-action btn-action-edit" title="Editar">
                                                     <i class="fas fa-edit"></i>
                                                 </a>
+                                                @endpuede
+                                                @puede('materias', 'eliminar')
                                                 <form action="{{ route('materias.destroy', $materia->mat_id) }}" method="POST" style="display:inline;">
                                                     @csrf @method('DELETE')
                                                     <button type="submit" class="btn btn-action btn-action-delete" onclick="return confirm('¿Está seguro de eliminar esta materia?')" title="Eliminar">
                                                         <i class="fas fa-trash"></i>
                                                     </button>
                                                 </form>
+                                                @endpuede
                                             </div>
                                         </td>
                                     </tr>

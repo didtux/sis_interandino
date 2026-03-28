@@ -63,6 +63,14 @@
                                     <td>{{ $estudiante->est_ueprocedencia ?? '-' }}</td>
                                 </tr>
                                 <tr>
+                                    <th>Código RUDE</th>
+                                    <td>{{ $estudiante->est_rude ?? '-' }}</td>
+                                </tr>
+                                <tr>
+                                    <th>Nro. Celular</th>
+                                    <td>{{ $estudiante->est_celular ?? '-' }}</td>
+                                </tr>
+                                <tr>
                                     <th>Preinscripción</th>
                                     <td>{{ $estudiante->preinscripcion }}</td>
                                 </tr>

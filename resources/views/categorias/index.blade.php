@@ -7,9 +7,11 @@
             <div class="card">
                 <div class="card-header d-flex justify-content-between">
                     <h4><i class="fas fa-tags mr-2"></i>Categorías</h4>
+                    @puede('categorias', 'crear')
                     <button class="btn btn-primary" data-toggle="modal" data-target="#modalCategoria">
                         <i class="fas fa-plus"></i> Nueva Categoría
                     </button>
+                    @endpuede
                 </div>
                 <div class="card-body">
                     @if(session('success'))
@@ -32,15 +34,19 @@
                                     <td><strong>{{ $c->categ_nombre }}</strong></td>
                                     <td><span class="badge badge-primary">{{ $c->productos_count }}</span></td>
                                     <td>
+                                        @puede('categorias', 'editar')
                                         <button class="btn btn-sm btn-info" onclick="editarCategoria({{ $c->categ_id }}, '{{ $c->categ_codigo }}', '{{ addslashes($c->categ_nombre) }}')">
                                             <i class="fas fa-edit"></i>
                                         </button>
+                                        @endpuede
+                                        @puede('categorias', 'eliminar')
                                         <form action="{{ route('categorias.destroy', $c->categ_id) }}" method="POST" style="display:inline">
                                             @csrf @method('DELETE')
                                             <button class="btn btn-sm btn-danger" onclick="return confirm('¿Eliminar?')">
                                                 <i class="fas fa-trash"></i>
                                             </button>
                                         </form>
+                                        @endpuede
                                     </td>
                                 </tr>
                             @empty

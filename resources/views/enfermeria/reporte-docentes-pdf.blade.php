@@ -73,10 +73,11 @@
                 <th style="width: 5%;">#</th>
                 <th style="width: 10%;">FECHA</th>
                 <th style="width: 8%;">HORA</th>
-                <th style="width: 25%;">DOCENTE</th>
-                <th style="width: 15%;">DX DETALLE</th>
-                <th style="width: 20%;">MEDICAMENTOS</th>
-                <th style="width: 17%;">OBSERVACIONES</th>
+                <th style="width: 22%;">DOCENTE</th>
+                <th style="width: 13%;">DX DETALLE</th>
+                <th style="width: 13%;">TIPO ATENCIÓN</th>
+                <th style="width: 15%;">MEDICAMENTOS</th>
+                <th style="width: 14%;">OBSERVACIONES</th>
             </tr>
         </thead>
         <tbody>
@@ -87,12 +88,13 @@
                     <td>{{ \Carbon\Carbon::parse($registro->enf_hora)->format('H:i') }}</td>
                     <td style="text-align: left;">{{ strtoupper($registro->docente->doc_nombres ?? 'N/A') }} {{ strtoupper($registro->docente->doc_apellidos ?? '') }}</td>
                     <td>{{ $registro->enf_dx_detalle }}</td>
+                    <td style="text-align: left;">{{ $registro->enf_tipo_atencion ?? '-' }}</td>
                     <td style="text-align: left;">{{ \Str::limit($registro->enf_medicamentos, 50) }}</td>
                     <td style="text-align: left;">{{ \Str::limit($registro->enf_observaciones, 40) }}</td>
                 </tr>
             @empty
                 <tr>
-                    <td colspan="7">No hay registros</td>
+                    <td colspan="8">No hay registros</td>
                 </tr>
             @endforelse
         </tbody>

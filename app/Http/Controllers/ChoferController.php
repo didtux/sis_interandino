@@ -3,14 +3,21 @@
 namespace App\Http\Controllers;
 
 use App\Models\Chofer;
+use App\Models\User;
+use App\Models\Rol;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
 
 class ChoferController extends Controller
 {
     public function index()
     {
         $choferes = Chofer::orderBy('chof_fecha_registro', 'desc')->get();
-        return view('transporte.choferes.index', compact('choferes'));
+        $usuariosChoferes = User::where('us_entidad_tipo', 'chofer')
+            ->where('us_visible', 1)
+            ->pluck('us_entidad_id')
+            ->toArray();
+        return view('transporte.choferes.index', compact('choferes', 'usuariosChoferes'));
     }
 
     public function create()
@@ -82,5 +89,38 @@ class ChoferController extends Controller
         $chofer = Chofer::findOrFail($id);
         $chofer->update(['chof_estado' => 0]);
         return redirect()->route('choferes.index')->with('success', 'Chofer eliminado');
+    }
+
+    public function crearUsuario(Request $request, $id)
+    {
+        $chofer = Chofer::findOrFail($id);
+
+        $existe = User::where('us_entidad_tipo', 'chofer')
+            ->where('us_entidad_id', $chofer->chof_codigo)
+            ->where('us_visible', 1)
+            ->first();
+
+        if ($existe) {
+            return back()->with('error', 'Este chofer ya tiene un usuario asignado: ' . $existe->us_user);
+        }
+
+        $request->validate(['password' => 'required|min:6']);
+
+        $rolChofer = Rol::where('rol_nombre', 'Chofer')->first();
+
+        User::create([
+            'us_codigo' => $chofer->chof_codigo,
+            'rol_id' => $rolChofer ? $rolChofer->rol_id : 4,
+            'us_ci' => $chofer->chof_ci,
+            'us_nombres' => $chofer->chof_nombres,
+            'us_apellidos' => $chofer->chof_apellidos,
+            'us_user' => strtolower(str_replace(' ', '', $chofer->chof_apellidos)) . $chofer->chof_id,
+            'us_pass' => Hash::make($request->password),
+            'us_visible' => 1,
+            'us_entidad_tipo' => 'chofer',
+            'us_entidad_id' => $chofer->chof_codigo,
+        ]);
+
+        return back()->with('success', 'Usuario creado exitosamente para ' . $chofer->chof_nombres . ' ' . $chofer->chof_apellidos);
     }
 }

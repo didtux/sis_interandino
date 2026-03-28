@@ -18,6 +18,7 @@ class RegistroEnfermeria extends Model
         'enf_fecha',
         'enf_hora',
         'enf_dx_detalle',
+        'enf_tipo_atencion',
         'enf_medicamentos',
         'enf_observaciones',
         'enf_estado',

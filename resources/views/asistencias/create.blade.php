@@ -79,10 +79,11 @@ $(document).ready(function() {
                 
                 if(estudiantes.length > 0) {
                     estudiantes.forEach(function(est) {
+                        var numLista = est.lista_numero ? est.lista_numero + '. ' : '';
                         html += '<div class="col-md-6 mb-2">';
                         html += '<div class="custom-control custom-checkbox">';
                         html += '<input type="checkbox" class="custom-control-input estudiante-check" id="est_' + est.est_codigo + '" name="estudiantes[]" value="' + est.est_codigo + '" checked>';
-                        html += '<label class="custom-control-label" for="est_' + est.est_codigo + '">' + est.est_nombres + ' ' + est.est_apellidos + '</label>';
+                        html += '<label class="custom-control-label" for="est_' + est.est_codigo + '"><strong>' + numLista + '</strong>' + est.est_apellidos + ' ' + est.est_nombres + '</label>';
                         html += '</div>';
                         html += '<div class="ml-4">';
                         html += '<input type="time" name="hora_' + est.est_codigo + '" class="form-control form-control-sm" value="{{ date("H:i") }}" placeholder="Hora">';

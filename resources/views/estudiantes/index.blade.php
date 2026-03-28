@@ -11,9 +11,11 @@
                         <button class="btn btn-danger" onclick="reporteGeneral()">
                             <i class="fas fa-file-pdf"></i> Reporte General
                         </button>
+                        @puede('estudiantes', 'crear')
                         <a href="{{ route('estudiantes.create') }}" class="btn btn-primary-modern">
                             <i class="fas fa-plus mr-1"></i>Nuevo Estudiante
                         </a>
+                        @endpuede
                     </div>
                 </div>
                 <div class="card-body">
@@ -105,9 +107,12 @@
                                                 <a href="{{ route('estudiantes.show', $estudiante->est_id) }}" class="btn btn-action btn-action-view" title="Ver">
                                                     <i class="fas fa-eye"></i>
                                                 </a>
+                                                @puede('estudiantes', 'editar')
                                                 <a href="{{ route('estudiantes.edit', $estudiante->est_id) }}" class="btn btn-action btn-action-edit" title="Editar">
                                                     <i class="fas fa-edit"></i>
                                                 </a>
+                                                @endpuede
+                                                @puede('estudiantes', 'eliminar')
                                                 <form action="{{ route('estudiantes.destroy', $estudiante->est_id) }}" method="POST" style="display:inline;">
                                                     @csrf
                                                     @method('DELETE')
@@ -115,6 +120,7 @@
                                                         <i class="fas fa-trash"></i>
                                                     </button>
                                                 </form>
+                                                @endpuede
                                             </div>
                                         </td>
                                     </tr>

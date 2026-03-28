@@ -7,9 +7,11 @@
             <div class="card modern-card">
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <h4><i class="fas fa-school mr-2"></i>Cursos</h4>
+                    @puede('cursos', 'crear')
                     <a href="{{ route('cursos.create') }}" class="btn btn-primary-modern">
                         <i class="fas fa-plus mr-1"></i>Nuevo Curso
                     </a>
+                    @endpuede
                 </div>
                 <div class="card-body">
                     @if(session('success'))
@@ -45,9 +47,12 @@
                                                 <a href="{{ route('cursos.show', $curso->cur_id) }}" class="btn btn-action btn-action-view" title="Ver">
                                                     <i class="fas fa-eye"></i>
                                                 </a>
+                                                @puede('cursos', 'editar')
                                                 <a href="{{ route('cursos.edit', $curso->cur_id) }}" class="btn btn-action btn-action-edit" title="Editar">
                                                     <i class="fas fa-edit"></i>
                                                 </a>
+                                                @endpuede
+                                                @puede('cursos', 'eliminar')
                                                 <form action="{{ route('cursos.destroy', $curso->cur_id) }}" method="POST" style="display:inline;">
                                                     @csrf
                                                     @method('DELETE')
@@ -55,6 +60,7 @@
                                                         <i class="fas fa-trash"></i>
                                                     </button>
                                                 </form>
+                                                @endpuede
                                             </div>
                                         </td>
                                     </tr>

@@ -9,7 +9,7 @@
                     <h4><i class="fas fa-chalkboard-teacher mr-2"></i>Editar Docente</h4>
                 </div>
                 <div class="card-body">
-                    <form action="{{ route('docentes.update', $docente->doc_id) }}" method="POST">
+                    <form action="{{ route('docentes.update', $docente->doc_id) }}" method="POST" enctype="multipart/form-data">
                         @csrf
                         @method('PUT')
                         <div class="row">
@@ -44,10 +44,17 @@
                             </div>
                         </div>
                         <div class="row">
-                            <div class="col-md-12">
+                            <div class="col-md-6">
                                 <div class="form-group">
-                                    <label>Materia</label>
-                                    <input type="text" name="doc_materia" class="form-control" value="{{ old('doc_materia', $docente->doc_materia) }}">
+                                    <label>Foto de Perfil</label>
+                                    @if($docente->doc_foto)
+                                        <div class="mb-2">
+                                            <img src="{{ asset('storage/' . $docente->doc_foto) }}" alt="Foto actual" style="width:80px;height:80px;object-fit:cover;border-radius:50%;border:3px solid #667eea;">
+                                            <label class="ml-3"><input type="checkbox" name="eliminar_foto" value="1"> Eliminar foto</label>
+                                        </div>
+                                    @endif
+                                    <input type="file" name="doc_foto" class="form-control" accept="image/*">
+                                    <small class="text-muted">Formatos: JPG, PNG. Máximo 2MB</small>
                                 </div>
                             </div>
                         </div>

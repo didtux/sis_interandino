@@ -7,11 +7,20 @@
             <div class="card">
                 <div class="card-header d-flex justify-content-between">
                     <h4><i class="fas fa-id-card mr-2"></i>Choferes</h4>
+                    @puede('choferes', 'crear')
                     <a href="{{ route('choferes.create') }}" class="btn btn-primary">
                         <i class="fas fa-plus"></i> Nuevo Chofer
                     </a>
+                    @endpuede
                 </div>
                 <div class="card-body">
+                    @if(session('success'))
+                        <div class="alert alert-success"><i class="fas fa-check-circle mr-2"></i>{{ session('success') }}</div>
+                    @endif
+                    @if(session('error'))
+                        <div class="alert alert-danger"><i class="fas fa-exclamation-circle mr-2"></i>{{ session('error') }}</div>
+                    @endif
+
                     <table class="table table-striped">
                         <thead>
                             <tr>
@@ -46,9 +55,23 @@
                                         </span>
                                     </td>
                                     <td>
+                                        @puede('choferes', 'crear')
+                                        @if(in_array($c->chof_codigo, $usuariosChoferes))
+                                            <span class="btn btn-sm" style="background-color: #28a745; color: white;" title="Ya tiene usuario">
+                                                <i class="fas fa-user-check"></i>
+                                            </span>
+                                        @else
+                                            <button class="btn btn-sm" style="background-color: #6f42c1; color: white;" onclick="crearUsuario('{{ $c->chof_id }}', '{{ $c->chof_nombres }} {{ $c->chof_apellidos }}', '{{ $c->chof_ci }}')" title="Crear Usuario">
+                                                <i class="fas fa-user-plus"></i>
+                                            </button>
+                                        @endif
+                                        @endpuede
+                                        @puede('choferes', 'editar')
                                         <a href="{{ route('choferes.edit', $c->chof_id) }}" class="btn btn-sm btn-warning">
                                             <i class="fas fa-edit"></i>
                                         </a>
+                                        @endpuede
+                                        @puede('choferes', 'eliminar')
                                         <form action="{{ route('choferes.destroy', $c->chof_id) }}" method="POST" style="display:inline;">
                                             @csrf
                                             @method('DELETE')
@@ -56,6 +79,7 @@
                                                 <i class="fas fa-trash"></i>
                                             </button>
                                         </form>
+                                        @endpuede
                                     </td>
                                 </tr>
                             @empty
@@ -68,9 +92,50 @@
         </div>
     </div>
 </div>
+
+<div class="modal fade" id="modalCrearUsuario" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header" style="background: linear-gradient(135deg, #6f42c1, #8b5cf6); color: white;">
+                <h5 class="modal-title"><i class="fas fa-user-plus mr-2"></i>Crear Usuario</h5>
+                <button type="button" class="close text-white" data-dismiss="modal">&times;</button>
+            </div>
+            <form id="formCrearUsuario" method="POST">
+                @csrf
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="font-weight-bold">Chofer:</label>
+                        <span id="modal_nombre"></span>
+                    </div>
+                    <div class="mb-3">
+                        <label class="font-weight-bold">CI:</label>
+                        <span id="modal_ci"></span>
+                    </div>
+                    <div class="form-group">
+                        <label class="font-weight-bold">Contraseña <span class="text-danger">*</span></label>
+                        <input type="password" name="password" id="modal_password" class="form-control" required minlength="6" placeholder="Mínimo 6 caracteres">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn" style="background-color: #6f42c1; color: white;"><i class="fas fa-save mr-1"></i>Crear Usuario</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 @endsection
 
+@section('scripts')
 <script>
+function crearUsuario(id, nombre, ci) {
+    document.getElementById('modal_nombre').textContent = nombre;
+    document.getElementById('modal_ci').textContent = ci;
+    document.getElementById('formCrearUsuario').action = '/choferes/' + id + '/crear-usuario';
+    document.getElementById('modal_password').value = '';
+    $('#modalCrearUsuario').modal('show');
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     document.querySelectorAll('.foto-thumbnail').forEach(img => {
         img.addEventListener('click', function() {
@@ -83,3 +148,4 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 </script>
+@endsection

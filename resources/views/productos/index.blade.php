@@ -8,9 +8,11 @@
                 <div class="card-header d-flex justify-content-between">
                     <h4><i class="fas fa-box mr-2"></i>Productos</h4>
                     <div>
+                        @puede('productos', 'crear')
                         <a href="{{ route('productos.create') }}" class="btn btn-primary">
                             <i class="fas fa-plus"></i> Nuevo Producto
                         </a>
+                        @endpuede
                         <button class="btn btn-success" onclick="exportarExcel()">
                             <i class="fas fa-file-excel"></i> Excel
                         </button>
@@ -67,15 +69,19 @@
                                         <a href="{{ route('productos.etiqueta', $p->prod_id) }}" class="btn btn-sm btn-info" target="_blank" title="Imprimir Etiqueta">
                                             <i class="fas fa-qrcode"></i>
                                         </a>
+                                        @puede('productos', 'editar')
                                         <a href="{{ route('productos.edit', $p->prod_id) }}" class="btn btn-sm btn-warning">
                                             <i class="fas fa-edit"></i>
                                         </a>
+                                        @endpuede
+                                        @puede('productos', 'eliminar')
                                         <form action="{{ route('productos.destroy', $p->prod_id) }}" method="POST" style="display:inline">
                                             @csrf @method('DELETE')
                                             <button class="btn btn-sm btn-danger" onclick="return confirm('¿Eliminar?')">
                                                 <i class="fas fa-trash"></i>
                                             </button>
                                         </form>
+                                        @endpuede
                                     </td>
                                 </tr>
                             @empty

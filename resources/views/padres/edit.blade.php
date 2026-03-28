@@ -24,6 +24,16 @@
                     @error('pfam_nombres')<div class="invalid-feedback">{{ $message }}</div>@enderror
                 </div>
                 <div class="mb-3">
+                    <label>Parentesco</label>
+                    <select name="pfam_parentesco" class="form-control">
+                        <option value="">Seleccione...</option>
+                        <option value="Padre" {{ $padre->pfam_parentesco == 'Padre' ? 'selected' : '' }}>Padre</option>
+                        <option value="Madre" {{ $padre->pfam_parentesco == 'Madre' ? 'selected' : '' }}>Madre</option>
+                        <option value="Hermano/a" {{ $padre->pfam_parentesco == 'Hermano/a' ? 'selected' : '' }}>Hermano/a</option>
+                        <option value="Tutor/a" {{ $padre->pfam_parentesco == 'Tutor/a' ? 'selected' : '' }}>Tutor/a</option>
+                    </select>
+                </div>
+                <div class="mb-3">
                     <label>Domicilio</label>
                     <input type="text" name="pfam_domicilio" class="form-control" value="{{ $padre->pfam_domicilio }}">
                 </div>

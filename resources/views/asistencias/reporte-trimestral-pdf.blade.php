@@ -73,8 +73,8 @@
                     $totalTrimestre = ['dt' => 0, 'tl' => 0, 'tf' => 0, 'ta' => 0, 'total' => 0];
                 @endphp
                 <tr>
-                    <td>{{ $index + 1 }}</td>
-                    <td class="estudiante">{{ $estudiante->est_nombres }} {{ $estudiante->est_apellidos }}</td>
+                    <td>{{ isset($lista) && isset($lista[$estudiante->est_codigo]) ? $lista[$estudiante->est_codigo] : $index + 1 }}</td>
+                    <td class="estudiante">{{ $estudiante->est_apellidos }} {{ $estudiante->est_nombres }}</td></td>
                     
                     @foreach($rango['meses'] as $mesIndex => $mes)
                         @php

@@ -7,9 +7,11 @@
             <div class="card modern-card">
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <h4><i class="fas fa-users mr-2"></i>Padres de Familia</h4>
+                    @puede('padres', 'crear')
                     <a href="{{ route('padres.create') }}" class="btn btn-primary-modern">
                         <i class="fas fa-plus mr-1"></i>Nuevo Padre
                     </a>
+                    @endpuede
                 </div>
                 <div class="card-body">
                     @if(session('success'))
@@ -17,9 +19,11 @@
                             <i class="fas fa-check-circle mr-2"></i>{{ session('success') }}
                         </div>
                     @endif
-
-
-
+                    @if(session('error'))
+                        <div class="alert alert-danger">
+                            <i class="fas fa-exclamation-circle mr-2"></i>{{ session('error') }}
+                        </div>
+                    @endif
                     <form method="GET" class="mb-3">
                         <div class="row">
                             <div class="col-md-4">
@@ -52,6 +56,7 @@
                                     <th>Código</th>
                                     <th>CI</th>
                                     <th>Nombres</th>
+                                    <th>Parentesco</th>
                                     <th>Celular</th>
                                     <th>Correo</th>
                                     <th>Estudiantes</th>
@@ -73,6 +78,13 @@
                                         </td>
                                         <td data-label="CI">{{ $padre->pfam_ci }}</td>
                                         <td data-label="Nombres">{{ $padre->pfam_nombres }}</td>
+                                        <td data-label="Parentesco">
+                                            @if($padre->pfam_parentesco)
+                                                <span class="modern-badge badge-warning-modern">{{ $padre->pfam_parentesco }}</span>
+                                            @else
+                                                <span class="text-muted">-</span>
+                                            @endif
+                                        </td>
                                         <td data-label="Celular">
                                             <i class="fas fa-phone mr-1"></i>{{ $padre->pfam_numeroscelular }}
                                         </td>
@@ -90,24 +102,39 @@
                                         </td>
                                         <td data-label="Acciones">
                                             <div class="action-buttons">
+                                                @puede('padres', 'crear')
+                                                @if(in_array($padre->pfam_codigo, $usuariosPadres))
+                                                    <span class="btn btn-action btn-sm" style="background-color: #28a745; color: white;" title="Ya tiene usuario">
+                                                        <i class="fas fa-user-check"></i>
+                                                    </span>
+                                                @else
+                                                    <button class="btn btn-action btn-sm" style="background-color: #6f42c1; color: white;" onclick="crearUsuarioPadre('{{ $padre->pfam_id }}', '{{ $padre->pfam_nombres }}', '{{ $padre->pfam_ci }}')" title="Crear Usuario">
+                                                        <i class="fas fa-user-plus"></i>
+                                                    </button>
+                                                @endif
+                                                @endpuede
                                                 <button class="btn btn-action btn-sm" style="background-color: #17a2b8; color: white;" onclick="gestionarEstudiantes('{{ $padre->pfam_id }}', '{{ $padre->pfam_nombres }}')" title="Gestionar Estudiantes">
                                                     <i class="fas fa-user-friends"></i>
                                                 </button>
+                                                @puede('padres', 'editar')
                                                 <a href="{{ route('padres.edit', $padre->pfam_id) }}" class="btn btn-action btn-action-edit" title="Editar">
                                                     <i class="fas fa-edit"></i>
                                                 </a>
+                                                @endpuede
+                                                @puede('padres', 'eliminar')
                                                 <form action="{{ route('padres.destroy', $padre->pfam_id) }}" method="POST" style="display:inline;">
                                                     @csrf @method('DELETE')
                                                     <button type="submit" class="btn btn-action btn-action-delete" onclick="return confirm('¿Está seguro de eliminar este padre de familia?')" title="Eliminar">
                                                         <i class="fas fa-trash"></i>
                                                     </button>
                                                 </form>
+                                                @endpuede
                                             </div>
                                         </td>
                                     </tr>
                                 @empty
                                     <tr>
-                                        <td colspan="8">
+                                        <td colspan="9">
                                             <div class="empty-state">
                                                 <i class="fas fa-users"></i>
                                                 <h5>No hay padres registrados</h5>
@@ -183,6 +210,37 @@
         </div>
     </div>
 </div>
+<div class="modal fade" id="modalCrearUsuarioPadre" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header" style="background: linear-gradient(135deg, #6f42c1, #8b5cf6); color: white;">
+                <h5 class="modal-title"><i class="fas fa-user-plus mr-2"></i>Crear Usuario</h5>
+                <button type="button" class="close text-white" data-dismiss="modal">&times;</button>
+            </div>
+            <form id="formCrearUsuarioPadre" method="POST">
+                @csrf
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="font-weight-bold">Padre:</label>
+                        <span id="modal_nombre_padre"></span>
+                    </div>
+                    <div class="mb-3">
+                        <label class="font-weight-bold">CI:</label>
+                        <span id="modal_ci_padre"></span>
+                    </div>
+                    <div class="form-group">
+                        <label class="font-weight-bold">Contraseña <span class="text-danger">*</span></label>
+                        <input type="password" name="password" id="modal_password_padre" class="form-control" required minlength="6" placeholder="Mínimo 6 caracteres">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn" style="background-color: #6f42c1; color: white;"><i class="fas fa-save mr-1"></i>Crear Usuario</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 @endsection
 
 @section('scripts')
@@ -228,6 +286,14 @@ function agregarEstudiante() {
     form.append($('<input>', {type: 'hidden', name: 'est_id', value: estudianteId}));
     $('body').append(form);
     form.submit();
+}
+
+function crearUsuarioPadre(id, nombre, ci) {
+    document.getElementById('modal_nombre_padre').textContent = nombre;
+    document.getElementById('modal_ci_padre').textContent = ci;
+    document.getElementById('formCrearUsuarioPadre').action = '/padres/' + id + '/crear-usuario';
+    document.getElementById('modal_password_padre').value = '';
+    $('#modalCrearUsuarioPadre').modal('show');
 }
 
 </script>

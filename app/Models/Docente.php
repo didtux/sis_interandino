@@ -16,6 +16,7 @@ class Docente extends Model
         'doc_apellidos',
         'doc_ci',
         'doc_materia',
+        'doc_foto',
         'doc_visible'
     ];
 
@@ -33,6 +34,11 @@ class Docente extends Model
     public function materias()
     {
         return $this->belongsToMany(Materia::class, 'colegiorela_docente_materia', 'doc_codigo', 'mat_codigo', 'doc_codigo', 'mat_codigo');
+    }
+
+    public function cursoMateriaDocentes()
+    {
+        return $this->hasMany(CursoMateriaDocente::class, 'doc_codigo', 'doc_codigo')->where('curmatdoc_estado', 1);
     }
 
     public function notas()

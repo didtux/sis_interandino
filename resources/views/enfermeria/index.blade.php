@@ -92,6 +92,7 @@
                                 <th>Persona</th>
                                 <th>Curso</th>
                                 <th>DX Detalle</th>
+                                <th>Tipo Atención</th>
                                 <th>Medicamentos</th>
                                 <th>Observaciones</th>
                                 <th>Acciones</th>
@@ -112,6 +113,7 @@
                                     </td>
                                     <td>{{ $registro->enf_tipo_persona == 'ESTUDIANTE' ? ($registro->estudiante->curso->cur_nombre ?? '-') : '-' }}</td>
                                     <td>{{ $registro->enf_dx_detalle }}</td>
+                                    <td>{{ $registro->enf_tipo_atencion ?? '-' }}</td>
                                     <td>{{ \Str::limit($registro->enf_medicamentos, 30) }}</td>
                                     <td>{{ \Str::limit($registro->enf_observaciones, 30) }}</td>
                                     <td>
@@ -128,7 +130,7 @@
                                     </td>
                                 </tr>
                             @empty
-                                <tr><td colspan="9" class="text-center">No hay registros</td></tr>
+                                <tr><td colspan="10" class="text-center">No hay registros</td></tr>
                             @endforelse
                         </tbody>
                     </table>

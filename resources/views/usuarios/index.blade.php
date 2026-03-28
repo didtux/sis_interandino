@@ -7,9 +7,11 @@
             <div class="card modern-card">
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <h4><i class="fas fa-users-cog mr-2"></i>Usuarios del Sistema</h4>
+                    @puede('usuarios', 'crear')
                     <a href="{{ route('usuarios.create') }}" class="btn btn-primary-modern">
                         <i class="fas fa-plus mr-1"></i>Nuevo Usuario
                     </a>
+                    @endpuede
                 </div>
                 <div class="card-body">
                     @if(session('success'))
@@ -46,8 +48,11 @@
                                         </td>
                                         <td data-label="Rol">
                                             <span class="modern-badge badge-warning-modern">
-                                                {{ $usuario->rol_id == 1 ? 'Administrador' : 'Usuario' }}
+                                                {{ $usuario->rol->rol_nombre ?? 'Sin rol' }}
                                             </span>
+                                            @if($usuario->us_entidad_tipo)
+                                                <small class="text-muted d-block">{{ $usuario->us_entidad_tipo }}</small>
+                                            @endif
                                         </td>
                                         <td data-label="Estado">
                                             @if($usuario->us_visible == 1)
@@ -65,9 +70,12 @@
                                                 <a href="{{ route('usuarios.show', $usuario->us_id) }}" class="btn btn-action btn-action-view" title="Ver">
                                                     <i class="fas fa-eye"></i>
                                                 </a>
+                                                @puede('usuarios', 'editar')
                                                 <a href="{{ route('usuarios.edit', $usuario->us_id) }}" class="btn btn-action btn-action-edit" title="Editar">
                                                     <i class="fas fa-edit"></i>
                                                 </a>
+                                                @endpuede
+                                                @puede('usuarios', 'eliminar')
                                                 @if($usuario->us_visible == 1)
                                                     <form action="{{ route('usuarios.destroy', $usuario->us_id) }}" method="POST" style="display:inline;">
                                                         @csrf @method('DELETE')
@@ -76,6 +84,7 @@
                                                         </button>
                                                     </form>
                                                 @endif
+                                                @endpuede
                                             </div>
                                         </td>
                                     </tr>

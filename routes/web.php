@@ -28,9 +28,12 @@ Route::post('/logout', [App\Http\Controllers\Auth\LoginController::class, 'logou
 Route::get('/home', [App\Http\Controllers\HomeController::class, 'index'])->name('home');
 
 // Rutas del Sistema de Colegio
-Route::middleware(['auth'])->group(function () {
+Route::middleware(['auth', 'permiso'])->group(function () {
     // Usuarios
     Route::resource('usuarios', App\Http\Controllers\UserController::class);
+    
+    // Roles y Permisos
+    Route::resource('roles', App\Http\Controllers\RolController::class);
     
     // Estudiantes
     Route::resource('estudiantes', App\Http\Controllers\EstudianteController::class);
@@ -38,9 +41,15 @@ Route::middleware(['auth'])->group(function () {
     Route::get('estudiantes-reporte-general', [App\Http\Controllers\EstudianteController::class, 'reporteGeneral'])->name('estudiantes.reporte-general');
     
     // Cursos
+    Route::post('cursos/{id}/guardar-lista', [App\Http\Controllers\CursoController::class, 'guardarLista'])->name('cursos.guardar-lista');
+    Route::post('cursos/{id}/auto-lista', [App\Http\Controllers\CursoController::class, 'autoLista'])->name('cursos.auto-lista');
+    Route::post('cursos/{id}/asignar-materias', [App\Http\Controllers\CursoController::class, 'asignarMaterias'])->name('cursos.asignar-materias');
+    Route::post('cursos/{id}/asignar-docente', [App\Http\Controllers\CursoController::class, 'asignarDocente'])->name('cursos.asignar-docente');
+    Route::delete('cursos/{id}/quitar-docente/{matCodigo}', [App\Http\Controllers\CursoController::class, 'quitarDocente'])->name('cursos.quitar-docente');
     Route::resource('cursos', App\Http\Controllers\CursoController::class);
     
     // Docentes
+    Route::post('docentes/{id}/crear-usuario', [App\Http\Controllers\DocenteController::class, 'crearUsuario'])->name('docentes.crear-usuario');
     Route::resource('docentes', App\Http\Controllers\DocenteController::class);
     
     // Asistencias
@@ -70,6 +79,7 @@ Route::middleware(['auth'])->group(function () {
     Route::resource('pagos', App\Http\Controllers\PagoController::class);
     
     // Padres de Familia
+    Route::post('padres/{id}/crear-usuario', [App\Http\Controllers\PadreFamiliaController::class, 'crearUsuario'])->name('padres.crear-usuario');
     Route::post('padres/{id}/vincular', [App\Http\Controllers\PadreFamiliaController::class, 'vincularEstudiante'])->name('padres.vincular');
     Route::post('padres/{id}/desvincular/{estudianteId}', [App\Http\Controllers\PadreFamiliaController::class, 'desvincularEstudiante'])->name('padres.desvincular');
     Route::resource('padres', App\Http\Controllers\PadreFamiliaController::class);
@@ -138,6 +148,7 @@ Route::middleware(['auth'])->group(function () {
     
     // Módulo de Transporte
     Route::resource('vehiculos', App\Http\Controllers\VehiculoController::class);
+    Route::post('choferes/{id}/crear-usuario', [App\Http\Controllers\ChoferController::class, 'crearUsuario'])->name('choferes.crear-usuario');
     Route::resource('choferes', App\Http\Controllers\ChoferController::class);
     
     // Rutas específicas ANTES del resource

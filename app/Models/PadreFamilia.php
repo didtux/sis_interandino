@@ -11,7 +11,7 @@ class PadreFamilia extends Model
     public $timestamps = false;
 
     protected $fillable = [
-        'pfam_codigo', 'pfam_ci', 'pfam_nombres', 'pfam_domicilio',
+        'pfam_codigo', 'pfam_ci', 'pfam_nombres', 'pfam_parentesco', 'pfam_domicilio',
         'pfam_correo', 'pfam_numeroscelular', 'pfam_foto', 'pfam_estado'
     ];
 

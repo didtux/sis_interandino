@@ -68,7 +68,7 @@
         <tbody>
             @forelse($atrasos as $index => $atraso)
                 <tr>
-                    <td class="numero">{{ $index + 1 }}</td>
+                    <td class="numero">{{ isset($lista) && $atraso->estudiante && isset($lista[$atraso->estudiante->est_codigo]) ? $lista[$atraso->estudiante->est_codigo] : $index + 1 }}</td>
                     <td class="fecha-col">{{ \Carbon\Carbon::parse($atraso->atraso_fecha)->format('d/m/Y') }}</td>
                     <td class="hora-col">{{ $atraso->atraso_hora }}</td>
                     <td style="text-align: left;">{{ $atraso->estudiante->est_nombres ?? '' }} {{ $atraso->estudiante->est_apellidos ?? '' }}</td>
