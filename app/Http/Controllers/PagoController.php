@@ -107,8 +107,11 @@ class PagoController extends Controller
 
             $insc = $est->inscripcion;
             $montoFinal = $insc->insc_monto_final ?? 0;
+            $montoInscripcion = $insc->insc_monto_pagado ?? 0;
+            $esSoloRegistro = $montoInscripcion == 0;
             $montoMensualidad = $montoFinal > 0 ? $montoFinal / 10 : 0;
-            $primeraCuota = max(0, $montoMensualidad - 300);
+            // Descuento de inscripción solo aplica a febrero si hubo pago real de inscripción
+            $cuotaFebrero = $esSoloRegistro ? $montoMensualidad : max(0, $montoMensualidad - $montoInscripcion);
 
             // Pagos activos del año
             $pagos = Pago::where('est_codigo', $est->est_codigo)
@@ -118,23 +121,18 @@ class PagoController extends Controller
                 ->get();
 
             $saldoAcumulado = $pagos->sum('pagos_precio');
-            $mesesPagados = [];
 
-            if ($saldoAcumulado >= $primeraCuota && $primeraCuota > 0) {
-                $mesesPagados[] = 2;
-                $saldoRestante = $saldoAcumulado - $primeraCuota;
-                $mesesAdicionales = $montoMensualidad > 0 ? floor($saldoRestante / $montoMensualidad) : 0;
-                for ($i = 1; $i <= $mesesAdicionales && ($i + 2) <= 11; $i++) {
-                    $mesesPagados[] = $i + 2;
-                }
-            } elseif ($saldoAcumulado > 0 && $primeraCuota == 0) {
-                $mesesAdicionales = $montoMensualidad > 0 ? floor($saldoAcumulado / $montoMensualidad) : 0;
-                for ($i = 0; $i < $mesesAdicionales && ($i + 2) <= 11; $i++) {
-                    $mesesPagados[] = $i + 2;
+            // Determinar meses pagados por concepto (fuente de verdad)
+            $mesesMap = [2 => 'Febrero', 3 => 'Marzo', 4 => 'Abril', 5 => 'Mayo', 6 => 'Junio', 7 => 'Julio', 8 => 'Agosto', 9 => 'Septiembre', 10 => 'Octubre', 11 => 'Noviembre'];
+            $mesesPagados = [];
+            foreach ($pagos as $p) {
+                foreach ($mesesMap as $num => $nombre) {
+                    if (stripos($p->concepto, $nombre) !== false && !in_array($num, $mesesPagados)) {
+                        $mesesPagados[] = $num;
+                    }
                 }
             }
-
-            $proximaCuota = count($mesesPagados) == 0 ? $primeraCuota : $montoMensualidad;
+            sort($mesesPagados);
 
             // Historial de pagos para mostrar en la vista
             $historial = $pagos->map(function($p) {
@@ -151,21 +149,42 @@ class PagoController extends Controller
                 return $d->desc_nombre . ' (-Bs. ' . number_format($d->pivot->inscdesc_monto_descuento, 2) . ')';
             })->toArray();
 
+            // Saldo pendiente: solo meses disponibles (no vencidos) × mensualidad - pagado
+            $mesActualNum = intval(date('n'));
+            // Determinar primer mes del estudiante: el menor entre mes actual y primer mes pagado
+            $primerMesPagado = !empty($mesesPagados) ? min($mesesPagados) : $mesActualNum;
+            $mesInicioEst = max($primerMesPagado, 2); // mínimo febrero
+            $mesesVencidos = 0;
+            for ($mv = 2; $mv < $mesInicioEst; $mv++) {
+                if (!in_array($mv, $mesesPagados)) $mesesVencidos++;
+            }
+            // También contar vencidos entre mesInicioEst y mesActual que no estén pagados
+            for ($mv = $mesInicioEst; $mv < $mesActualNum; $mv++) {
+                if (!in_array($mv, $mesesPagados)) $mesesVencidos++;
+            }
+            $mesesCobrables = 10 - $mesesVencidos;
+            $montoACobrar = $montoMensualidad * $mesesCobrables;
+            $saldoPendiente = max(0, $montoACobrar - $saldoAcumulado - ($esSoloRegistro ? 0 : $montoInscripcion));
+
             $estudiantesData[$est->est_codigo] = [
                 'est_codigo' => $est->est_codigo,
                 'nombre' => $est->est_nombres . ' ' . $est->est_apellidos,
                 'curso' => $est->curso->cur_nombre ?? 'N/A',
                 'mensualidad' => $montoMensualidad,
-                'proxima_cuota' => $proximaCuota,
+                'cuota_febrero' => $cuotaFebrero,
+                'solo_registro' => $esSoloRegistro,
                 'meses_pagados' => $mesesPagados,
+                'primer_mes' => $mesInicioEst,
                 'sin_factura' => $insc->insc_sin_factura ?? 0,
                 'padres' => $est->padres->pluck('pfam_codigo')->toArray(),
                 'monto_total' => $insc->insc_monto_total ?? 0,
                 'monto_descuento' => $insc->insc_monto_descuento ?? 0,
                 'monto_final' => $montoFinal,
-                'primera_cuota' => $primeraCuota,
+                'monto_inscripcion' => $montoInscripcion,
                 'total_pagado' => $saldoAcumulado,
-                'saldo_pendiente' => max(0, $montoFinal - $saldoAcumulado),
+                'saldo_pendiente' => $saldoPendiente,
+                'meses_cobrables' => $mesesCobrables,
+                'monto_a_cobrar' => $montoACobrar,
                 'descuentos' => $descuentos,
                 'historial' => $historial,
             ];
@@ -212,30 +231,52 @@ class PagoController extends Controller
             $estCodigo = $estData['est_codigo'];
             $mesInicio = intval($estData['mes']);
             $cantidadCuotas = intval($estData['cantidad_cuotas']);
-            $montoCuota = floatval($estData['pagos_precio']);
             $sinFactura = intval($estData['sin_factura'] ?? 0);
 
-            // Validar duplicados
-            for ($i = 0; $i < $cantidadCuotas; $i++) {
-                $mesActual = $mesInicio + $i;
-                if ($mesActual > 11) break;
+            // Obtener inscripción para calcular montos correctos
+            $insc = Inscripcion::where('est_codigo', $estCodigo)
+                ->where('insc_gestion', $year)->where('insc_estado', 1)->first();
+            $montoFinal = $insc ? ($insc->insc_monto_final ?? 0) : 0;
+            $montoInscripcion = $insc ? ($insc->insc_monto_pagado ?? 0) : 0;
+            $esSoloRegistro = $montoInscripcion == 0;
+            $montoMensualidad = $montoFinal > 0 ? $montoFinal / 10 : 0;
+            $cuotaFebrero = $esSoloRegistro ? $montoMensualidad : max(0, $montoMensualidad - $montoInscripcion);
 
+            // Recopilar meses a pagar (saltando pagados y vencidos)
+            $mesActualNum = intval(date('n'));
+            // Determinar primer mes pagado para saber límite de vencidos
+            $mesesPagadosEst = [];
+            $pagosEst = Pago::where('est_codigo', $estCodigo)
+                ->whereYear('pagos_fecha', $year)->where('pagos_estado', 1)->get();
+            $mesesMapStore = [2=>'Febrero',3=>'Marzo',4=>'Abril',5=>'Mayo',6=>'Junio',7=>'Julio',8=>'Agosto',9=>'Septiembre',10=>'Octubre',11=>'Noviembre'];
+            foreach ($pagosEst as $p) {
+                foreach ($mesesMapStore as $num => $nombre) {
+                    if (stripos($p->concepto, $nombre) !== false) $mesesPagadosEst[] = $num;
+                }
+            }
+            $primerMesPagadoEst = !empty($mesesPagadosEst) ? min($mesesPagadosEst) : $mesActualNum;
+            $mesLimiteEst = max($mesActualNum, $primerMesPagadoEst);
+
+            $mesesAPagar = [];
+            for ($m = $mesInicio; $m <= 11 && count($mesesAPagar) < $cantidadCuotas; $m++) {
                 $existe = Pago::where('est_codigo', $estCodigo)
                     ->whereYear('pagos_fecha', $year)
                     ->where('pagos_estado', 1)
-                    ->where('concepto', 'like', '%' . $mesesNombres[$mesActual] . '%')
+                    ->where('concepto', 'like', '%' . $mesesNombres[$m] . '%')
                     ->exists();
-
-                if ($existe) {
-                    $est = Estudiante::where('est_codigo', $estCodigo)->first();
-                    return back()->withErrors(['error' => ($est->est_nombres ?? '') . ' ya tiene pagado ' . $mesesNombres[$mesActual] . '.'])->withInput();
-                }
+                if ($existe) continue;
+                if ($m < $mesLimiteEst) continue;
+                $mesesAPagar[] = $m;
             }
 
-            // Registrar pagos — todos con el mismo código de recibo
-            for ($i = 0; $i < $cantidadCuotas; $i++) {
-                $mesActual = $mesInicio + $i;
-                if ($mesActual > 11) break;
+            if (empty($mesesAPagar)) {
+                $est = Estudiante::where('est_codigo', $estCodigo)->first();
+                return back()->withErrors(['error' => ($est->est_nombres ?? '') . ' no tiene meses disponibles para pagar.'])->withInput();
+            }
+
+            // Registrar pagos con monto correcto por mes
+            foreach ($mesesAPagar as $mes) {
+                $montoCuota = ($mes === 2) ? $cuotaFebrero : $montoMensualidad;
 
                 Pago::create([
                     'pagos_codigo' => $codigoRecibo,
@@ -244,10 +285,10 @@ class PagoController extends Controller
                     'pfam_codigo' => $pfamCodigo,
                     'prod_codigo' => 'MENSUALIDAD',
                     'pagos_precio' => $montoCuota,
-                    'pagos_nombres' => 'Mensualidad ' . $mesesNombres[$mesActual],
+                    'pagos_nombres' => 'Mensualidad ' . $mesesNombres[$mes],
                     'pagos_usuario' => auth()->user()->us_codigo ?? 'ADMIN',
                     'pagos_descuento' => 0,
-                    'concepto' => 'Mensualidad ' . $mesesNombres[$mesActual],
+                    'concepto' => 'Mensualidad ' . $mesesNombres[$mes],
                     'tipo' => 1,
                     'pagos_fecha' => now(),
                     'pagos_sin_factura' => $sinFactura ? 1 : 0

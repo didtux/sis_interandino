@@ -81,6 +81,7 @@
                                 <th>Productos</th>
                                 <th>Total</th>
                                 <th>Tipo</th>
+                                <th>Usuario</th>
                                 <th>Fecha</th>
                                 <th>Estado</th>
                                 <th>Acciones</th>
@@ -97,6 +98,7 @@
                                     <td><span class="badge badge-info">{{ $venta['cantidad_productos'] }} producto(s)</span></td>
                                     <td><strong>Bs. {{ number_format($venta['total'], 2) }}</strong></td>
                                     <td><span class="badge badge-{{ $venta['venta_tipo'] == 'venta' ? 'success' : 'warning' }}">{{ ucfirst($venta['venta_tipo']) }}</span></td>
+                                    <td><small>{{ $venta['venta_usuario'] ?? '-' }}</small></td>
                                     <td>{{ \Carbon\Carbon::parse($venta['venta_fecha'])->format('d/m/Y H:i') }}</td>
                                     <td>
                                         <span class="badge badge-{{ $venta['venta_estado'] == 'completado' ? 'success' : 'danger' }}">
@@ -117,7 +119,7 @@
                                     </td>
                                 </tr>
                                 <tr>
-                                    <td colspan="9" class="p-0">
+                                    <td colspan="10" class="p-0">
                                         <div id="detalle-{{ $venta['ven_codigo'] }}" class="collapse">
                                             <table class="table table-sm table-bordered m-0">
                                                 <thead class="bg-light">
@@ -143,12 +145,12 @@
                                     </td>
                                 </tr>
                             @empty
-                                <tr><td colspan="9" class="text-center">No hay ventas</td></tr>
+                                <tr><td colspan="10" class="text-center">No hay ventas</td></tr>
                             @endforelse
                         </tbody>
                         <tfoot>
                             <tr class="table-info">
-                                <td colspan="4" class="text-right"><strong>TOTAL GENERAL:</strong></td>
+                                <td colspan="5" class="text-right"><strong>TOTAL GENERAL:</strong></td>
                                 <td colspan="5"><strong>Bs. {{ number_format($totalGeneral, 2) }}</strong></td>
                             </tr>
                         </tfoot>
@@ -158,6 +160,8 @@
         </div>
     </div>
 </div>
+
+@endsection
 
 @section('scripts')
 <script>
@@ -206,5 +210,4 @@ function anularVenta(venCodigo) {
     }
 }
 </script>
-@endsection
 @endsection

@@ -195,7 +195,7 @@ $(document).ready(function() {
 function crearUsuario(id, nombre, ci) {
     document.getElementById('modal_nombre').textContent = nombre;
     document.getElementById('modal_ci').textContent = ci;
-    document.getElementById('formCrearUsuario').action = '/docentes/' + id + '/crear-usuario';
+    document.getElementById('formCrearUsuario').action = '{{ url('/docentes') }}/' + id + '/crear-usuario';
     document.getElementById('modal_password').value = '';
     $('#modalCrearUsuario').modal('show');
 }

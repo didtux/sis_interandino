@@ -10,6 +10,7 @@
     .mes-badge { display: inline-block; padding: 3px 8px; border-radius: 4px; font-size: 11px; margin: 2px; font-weight: 600; }
     .mes-pagado { background: #d4edda; color: #155724; }
     .mes-pendiente { background: #fff3cd; color: #856404; }
+    .mes-vencido { background: #f8d7da; color: #721c24; text-decoration: line-through; }
     .historial-table { font-size: 12px; }
     .historial-table th { background: #e9ecef; font-size: 11px; text-transform: uppercase; }
     .student-detail-panel { display: none; border-left: 3px solid #007bff; background: #fff; padding: 15px; margin: 10px 0; border-radius: 0 8px 8px 0; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
@@ -155,19 +156,35 @@
 <script>
 var estudiantesData = @json($estudiantesData);
 var mesesNombres = ['', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre'];
+var mesActual = {{ (int)date('n') }};
 var idxGlobal = 0;
-var estudiantesAgregados = []; // est_codigos ya en la tabla
+var estudiantesAgregados = [];
+
+// Meses pagables: no pagados Y no vencidos
+function getMesesPagables(est) {
+    var pagables = [];
+    var mesLimite = Math.max(mesActual, est.primer_mes || mesActual);
+    for (var m = 2; m <= 11; m++) {
+        if (!est.meses_pagados.includes(m) && m >= mesLimite) pagables.push(m);
+    }
+    return pagables;
+}
+
+function getMontoCuota(est, mes) {
+    // Si es solo registro, todas las cuotas son iguales (no hay descuento de inscripción)
+    if (est.solo_registro) return est.mensualidad;
+    // Descuento de inscripción solo aplica a febrero
+    return mes === 2 ? est.cuota_febrero : est.mensualidad;
+}
 
 $(document).ready(function() {
     $('#padre-select').select2({ placeholder: 'Buscar padre de familia...', allowClear: true, width: '100%', theme: 'bootstrap4' });
 
-    // Toggle "Otro padre"
     $('#checkOtroPadre').on('change', function() {
         var esOtro = $(this).is(':checked');
         $('#divPadreSelect').toggle(!esOtro);
         $('#divOtroPadre').toggle(esOtro);
         $('#divAgregarEstudiante').toggle(esOtro);
-
         if (esOtro) {
             $('#padre-select').val('').trigger('change');
             $('#pfam_codigo_hidden').val('');
@@ -183,7 +200,6 @@ $(document).ready(function() {
         }
     });
 
-    // Seleccionar padre existente
     $('#padre-select').on('change', function() {
         var pfamCodigo = $(this).val();
         $('#pfam_codigo_hidden').val(pfamCodigo);
@@ -195,14 +211,10 @@ $(document).ready(function() {
         }
     });
 
-    // Agregar estudiante manual
     $('#btnAgregarEst').on('click', function() {
         var estCodigo = $('#est-select-otro').val();
         if (!estCodigo) return;
-        if (estudiantesAgregados.includes(estCodigo)) {
-            alert('Este estudiante ya fue agregado');
-            return;
-        }
+        if (estudiantesAgregados.includes(estCodigo)) { alert('Este estudiante ya fue agregado'); return; }
         var est = estudiantesData[estCodigo];
         if (!est) return;
         agregarFilaEstudiante(est);
@@ -239,13 +251,11 @@ function cargarHijosDePadre(pfamCodigo) {
         var est = estudiantesData[key];
         if (est.padres && est.padres.includes(pfamCodigo)) hijos.push(est);
     }
-
     if (hijos.length === 0) {
         $('#hijos-tbody').append('<tr><td colspan="8" class="text-center text-muted">Este padre no tiene estudiantes inscritos</td></tr>');
         $('#hijos-container').show();
         return;
     }
-
     hijos.forEach(function(est) { agregarFilaEstudiante(est); });
     $('#hijos-container').show();
 }
@@ -254,19 +264,36 @@ function agregarFilaEstudiante(est) {
     var idx = idxGlobal++;
     estudiantesAgregados.push(est.est_codigo);
 
-    var mesesOpts = '';
-    var primerMesDisponible = 11;
-    var maxCuotas = 0;
-    for (var m = 2; m <= 11; m++) {
-        var disabled = est.meses_pagados.includes(m) ? 'disabled' : '';
-        var pagado = est.meses_pagados.includes(m) ? ' (Pagado)' : '';
-        mesesOpts += '<option value="' + m + '" ' + disabled + '>' + mesesNombres[m] + pagado + '</option>';
-        if (!est.meses_pagados.includes(m) && m < primerMesDisponible) primerMesDisponible = m;
-    }
-    for (var m = primerMesDisponible; m <= 11; m++) {
-        if (!est.meses_pagados.includes(m)) maxCuotas++;
+    var mesesPagables = getMesesPagables(est);
+    var maxCuotas = mesesPagables.length;
+    var primerMesDisponible = mesesPagables.length > 0 ? mesesPagables[0] : 11;
+
+    // Contar meses vencidos
+    var mesLimiteEst = Math.max(mesActual, est.primer_mes || mesActual);
+    var mesesVencidos = 0;
+    for (var mv = 2; mv < mesLimiteEst; mv++) {
+        if (!est.meses_pagados.includes(mv)) mesesVencidos++;
     }
 
+    var mesesOpts = '';
+    for (var m = 2; m <= 11; m++) {
+        var disabled = '';
+        var label = mesesNombres[m];
+        if (est.meses_pagados.includes(m)) {
+            disabled = 'disabled';
+            label += ' (Pagado)';
+        } else if (m < mesLimiteEst) {
+            disabled = 'disabled';
+            label += ' (Vencido)';
+        }
+        var selected = (m === primerMesDisponible) ? 'selected' : '';
+        mesesOpts += '<option value="' + m + '" ' + disabled + ' ' + selected + '>' + label + '</option>';
+    }
+
+    var infoDisp = maxCuotas + ' disponible' + (maxCuotas !== 1 ? 's' : '');
+    if (mesesVencidos > 0) infoDisp += ' <span class="text-danger">(' + mesesVencidos + ' vencido' + (mesesVencidos !== 1 ? 's' : '') + ')</span>';
+
+    var montoPrimerCuota = getMontoCuota(est, primerMesDisponible);
     var esOtro = $('#checkOtroPadre').is(':checked');
 
     var row = '<tr data-est="' + est.est_codigo + '" data-idx="' + idx + '">' +
@@ -277,34 +304,39 @@ function agregarFilaEstudiante(est) {
         '</td>' +
         '<td>' + est.curso + '</td>' +
         '<td>Bs. ' + est.mensualidad.toFixed(2) + '</td>' +
-        '<td><select name="estudiantes[' + idx + '][mes]" class="form-control form-control-sm mes-select" data-idx="' + idx + '" disabled>' + mesesOpts + '</select></td>' +
+        '<td><select name="estudiantes[' + idx + '][mes]" class="form-control form-control-sm mes-select" data-idx="' + idx + '" disabled>' + mesesOpts + '</select>' +
+            '<small class="text-muted">' + infoDisp + '</small></td>' +
         '<td><input type="number" name="estudiantes[' + idx + '][cantidad_cuotas]" class="form-control form-control-sm cant-cuotas" data-idx="' + idx + '" min="1" max="' + maxCuotas + '" value="1" disabled></td>' +
-        '<td><input type="number" name="estudiantes[' + idx + '][pagos_precio]" class="form-control form-control-sm monto-cuota" data-idx="' + idx + '" step="0.01" value="' + est.proxima_cuota.toFixed(2) + '" readonly disabled></td>' +
+        '<td><input type="number" name="estudiantes[' + idx + '][pagos_precio]" class="form-control form-control-sm monto-cuota" data-idx="' + idx + '" step="0.01" value="' + montoPrimerCuota.toFixed(2) + '" readonly disabled></td>' +
         '<td class="subtotal-cell"><strong>Bs. 0.00</strong></td>' +
         '</tr>';
 
     $('#hijos-tbody').append(row);
-    $('#hijos-tbody tr:last .mes-select').val(primerMesDisponible);
-
-    // Panel detalle
     $('#paneles-detalle').append(crearPanelDetalle(est, idx));
 
-    // Bind eventos en la nueva fila
     var $row = $('#hijos-tbody tr:last');
     $row.find('.check-estudiante').on('change', function() {
-        var estCodigo = $(this).data('est');
         var tr = $(this).closest('tr');
         var checked = $(this).is(':checked');
+        var estCode = $(this).data('est');
         tr.find('select, input[type="number"], input[type="hidden"]').prop('disabled', !checked);
         if (!checked) tr.find('.subtotal-cell strong').text('Bs. 0.00');
-        $('#panel-' + estCodigo).slideToggle(200, function() {
+        $('#panel-' + estCode).slideToggle(200, function() {
             $(this).css('display', checked ? 'block' : 'none');
         });
         recalcular();
     });
-    $row.find('.mes-select, .cant-cuotas').on('change input', function() { recalcular(); });
+    $row.find('.mes-select').on('change', function() {
+        // Actualizar monto cuota según mes seleccionado
+        var estCode = $(this).closest('tr').data('est');
+        var est2 = estudiantesData[estCode];
+        var mesSeleccionado = parseInt($(this).val());
+        var monto = getMontoCuota(est2, mesSeleccionado);
+        $(this).closest('tr').find('.monto-cuota').val(monto.toFixed(2));
+        recalcular();
+    });
+    $row.find('.cant-cuotas').on('change input', function() { recalcular(); });
 
-    // Si es modo "Otro", auto-seleccionar
     if (esOtro) {
         $row.find('.check-estudiante').prop('checked', true).trigger('change');
     }
@@ -312,11 +344,19 @@ function agregarFilaEstudiante(est) {
 
 function crearPanelDetalle(est, idx) {
     var mesesHtml = '';
+    var mesLimite = Math.max(mesActual, est.primer_mes || mesActual);
     for (var m = 2; m <= 11; m++) {
-        var clase = est.meses_pagados.includes(m) ? 'mes-pagado' : 'mes-pendiente';
-        var icono = est.meses_pagados.includes(m) ? '✓' : '○';
+        var clase, icono;
+        if (est.meses_pagados.includes(m)) {
+            clase = 'mes-pagado'; icono = '✓';
+        } else if (m < mesLimite) {
+            clase = 'mes-vencido'; icono = '✗';
+        } else {
+            clase = 'mes-pendiente'; icono = '○';
+        }
         mesesHtml += '<span class="mes-badge ' + clase + '">' + icono + ' ' + mesesNombres[m] + '</span>';
     }
+    mesesHtml += '<div class="mt-1" style="font-size:11px;"><span class="mes-badge mes-pagado">✓ Pagado</span> <span class="mes-badge mes-pendiente">○ Pendiente</span> <span class="mes-badge mes-vencido">✗ Vencido</span></div>';
 
     var historialHtml = '';
     if (est.historial && est.historial.length > 0) {
@@ -342,18 +382,30 @@ function crearPanelDetalle(est, idx) {
         '<div class="row">' +
             '<div class="col-md-4">' +
                 '<div class="info-panel">' +
-                    '<div class="panel-title"><i class="fas fa-file-invoice mr-1"></i> Inscripción ' + new Date().getFullYear() + '</div>' +
+                    '<div class="panel-title"><i class="fas fa-file-invoice mr-1"></i> Inscripción ' + new Date().getFullYear() + (est.solo_registro ? ' <span class="badge badge-warning" style="font-size:10px;">Solo registro</span>' : '') + '</div>' +
                     '<div class="info-row"><span class="label">Estudiante:</span><span class="value">' + est.nombre + '</span></div>' +
                     '<div class="info-row"><span class="label">Curso:</span><span class="value">' + est.curso + '</span></div>' +
-                    '<div class="info-row"><span class="label">Monto Total:</span><span class="value">Bs. ' + est.monto_total.toFixed(2) + '</span></div>' +
+                    '<div class="info-row"><span class="label">Monto Anual:</span><span class="value">Bs. ' + est.monto_final.toFixed(2) + '</span></div>' +
                     descHtml +
-                    '<div class="info-row"><span class="label">Monto Final:</span><span class="value text-primary">Bs. ' + est.monto_final.toFixed(2) + '</span></div>' +
-                    '<div class="info-row"><span class="label">Mensualidad:</span><span class="value">Bs. ' + est.mensualidad.toFixed(2) + '</span></div>' +
-                    '<div class="info-row"><span class="label">1ra Cuota (Feb):</span><span class="value">Bs. ' + est.primera_cuota.toFixed(2) + '</span></div>' +
+                    (est.solo_registro
+                        ? '<div class="info-row"><span class="label">Tipo:</span><span class="value"><span class="badge badge-info">Fuera de periodo</span></span></div>' +
+                          '<div class="info-row"><span class="label">Mensualidad:</span><span class="value">Bs. ' + est.mensualidad.toFixed(2) + '</span></div>'
+                        : '<div class="info-row"><span class="label">Inscripción:</span><span class="value">Bs. ' + est.monto_inscripcion.toFixed(2) + '</span></div>' +
+                          '<div class="info-row"><span class="label">Mensualidad:</span><span class="value">Bs. ' + est.mensualidad.toFixed(2) + '</span></div>' +
+                          '<div class="info-row"><span class="label">Cuota Feb (con desc. insc.):</span><span class="value text-info">Bs. ' + est.cuota_febrero.toFixed(2) + '</span></div>'
+                    ) +
                     '<hr style="margin:5px 0">' +
-                    '<div class="info-row"><span class="label">Total Pagado:</span><span class="value text-success">Bs. ' + est.total_pagado.toFixed(2) + '</span></div>' +
+                    '<div class="info-row"><span class="label">Monto a cobrar (' + est.meses_cobrables + ' meses):</span><span class="value text-primary">Bs. ' + est.monto_a_cobrar.toFixed(2) + '</span></div>' +
+                    '<div class="info-row"><span class="label">Total Pagado (mens.):</span><span class="value text-success">Bs. ' + est.total_pagado.toFixed(2) + '</span></div>' +
                     '<div class="info-row"><span class="label">Saldo Pendiente:</span><span class="value text-danger">Bs. ' + est.saldo_pendiente.toFixed(2) + '</span></div>' +
-                    '<div class="info-row"><span class="label">Meses Pagados:</span><span class="value">' + est.meses_pagados.length + ' / 10</span></div>' +
+                    (function(){
+                        var mesLimite = Math.max(mesActual, est.primer_mes || mesActual);
+                        var vencidos = 0;
+                        for (var mv = 2; mv < mesLimite; mv++) { if (!est.meses_pagados.includes(mv)) vencidos++; }
+                        var totalMeses = 10 - vencidos;
+                        return '<div class="info-row"><span class="label">Meses Pagados:</span><span class="value">' + est.meses_pagados.length + ' / ' + totalMeses + '</span></div>' +
+                               (vencidos > 0 ? '<div class="info-row"><span class="label">Meses Vencidos:</span><span class="value text-danger">' + vencidos + '</span></div>' : '');
+                    })() +
                 '</div>' +
             '</div>' +
             '<div class="col-md-8">' +
@@ -387,19 +439,25 @@ function recalcular() {
 
         var mesInicio = parseInt(row.find('.mes-select').val()) || 2;
         var cantidad = parseInt(row.find('.cant-cuotas').val()) || 1;
+        var mesesPagables = getMesesPagables(est);
         var subtotal = 0;
         var mesesList = [];
+        var cuotasContadas = 0;
 
-        for (var i = 0; i < cantidad; i++) {
-            var mesActual = mesInicio + i;
-            if (mesActual > 11) break;
-            if (est.meses_pagados.includes(mesActual)) continue;
-            var montoCuota = (i === 0) ? est.proxima_cuota : est.mensualidad;
-            subtotal += montoCuota;
-            mesesList.push(mesesNombres[mesActual]);
+        // Recorrer meses pagables desde el mes seleccionado
+        for (var pi = 0; pi < mesesPagables.length && cuotasContadas < cantidad; pi++) {
+            var m = mesesPagables[pi];
+            if (m < mesInicio) continue;
+            var monto = getMontoCuota(est, m);
+            subtotal += monto;
+            mesesList.push(mesesNombres[m] + ' (Bs.' + monto.toFixed(0) + ')');
+            cuotasContadas++;
         }
 
-        row.find('.monto-cuota').val(est.proxima_cuota.toFixed(2));
+        // Actualizar monto cuota visible (del primer mes)
+        var montoPrimer = getMontoCuota(est, mesInicio);
+        row.find('.monto-cuota').val(montoPrimer.toFixed(2));
+
         row.find('.subtotal-cell strong').text('Bs. ' + subtotal.toFixed(2));
         total += subtotal;
         detalle += '<div><strong>' + est.nombre + ' (' + est.curso + '):</strong> ' + mesesList.join(', ') + ' = Bs. ' + subtotal.toFixed(2) + '</div>';

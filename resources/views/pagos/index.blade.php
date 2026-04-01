@@ -384,10 +384,12 @@ function dibujarRecibo(doc, codigo, padre, fecha, monto, items) {
     var yPos = 150;
 
     if (items.length === 1) {
-        // Individual
         var item = items[0];
         doc.setFont(undefined, 'normal');
-        doc.text(item.concepto, 115, yPos);
+        // Si el concepto es muy largo, truncar
+        var textoConcepto = item.concepto;
+        if (textoConcepto.length > 70) textoConcepto = textoConcepto.substring(0, 70) + '...';
+        doc.text(textoConcepto, 115, yPos);
         yPos += 20;
         doc.setLineDash([0.5, 1]);
         doc.line(15, yPos + 2, 585, yPos + 2);
@@ -427,10 +429,23 @@ function dibujarRecibo(doc, codigo, padre, fecha, monto, items) {
             doc.setLineDash([]);
             yPos += 14;
 
-            // Conceptos debajo
+            // Conceptos en 2 columnas si son muchos
             doc.setFontSize(9);
-            doc.text('   ' + est.conceptos.join(', '), 30, yPos);
-            yPos += 15;
+            var conceptos = est.conceptos;
+            if (conceptos.length <= 3) {
+                doc.text('   ' + conceptos.join(', '), 30, yPos);
+                yPos += 15;
+            } else {
+                var mitad = Math.ceil(conceptos.length / 2);
+                for (var ci = 0; ci < mitad; ci++) {
+                    doc.text('  ' + conceptos[ci], 30, yPos);
+                    var ci2 = ci + mitad;
+                    if (ci2 < conceptos.length) {
+                        doc.text('  ' + conceptos[ci2], 310, yPos);
+                    }
+                    yPos += 12;
+                }
+            }
             doc.setFontSize(10);
         }
     }
@@ -477,7 +492,7 @@ function dibujarRecibo(doc, codigo, padre, fecha, monto, items) {
 function anularPago(id) {
     if (confirm('¿Está seguro de anular este pago?')) {
         $.ajax({
-            url: '/pagos/' + id + '/anular',
+            url: '{{ url("/pagos") }}/' + id + '/anular',
             type: 'PUT',
             data: { _token: '{{ csrf_token() }}' },
             success: function(response) { alert('Pago anulado'); location.reload(); },

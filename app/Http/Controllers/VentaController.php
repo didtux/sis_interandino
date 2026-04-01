@@ -44,6 +44,7 @@ class VentaController extends Controller
                 'venta_fecha' => $items->first()->venta_fecha,
                 'venta_estado' => $items->first()->venta_estado,
                 'venta_tipo' => $items->first()->venta_tipo,
+                'venta_usuario' => $items->first()->venta_usuario,
                 'productos' => $items,
                 'total' => $items->sum('venta_preciototal'),
                 'cantidad_productos' => $items->count()

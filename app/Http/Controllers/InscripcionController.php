@@ -7,6 +7,7 @@ use App\Models\InscripcionPago;
 use App\Models\Estudiante;
 use App\Models\PadreFamilia;
 use App\Models\Curso;
+use App\Models\Pago;
 use Illuminate\Http\Request;
 
 class InscripcionController extends Controller
@@ -59,8 +60,39 @@ class InscripcionController extends Controller
 
         $inscripciones = $query->orderBy('insc_fecha', 'desc')->paginate(50);
         $descuentos = \App\Models\Descuento::where('desc_estado', 1)->get();
-        
-        return view('inscripciones.index', compact('inscripciones', 'descuentos'));
+
+        // Precargar total de mensualidades pagadas por estudiante
+        $year = date('Y');
+        $mesActualNum = intval(date('n'));
+        $estCodigos = $inscripciones->pluck('est_codigo')->unique()->toArray();
+        $mensualidadesPagadas = Pago::whereIn('est_codigo', $estCodigos)
+            ->whereYear('pagos_fecha', $year)
+            ->where('pagos_estado', 1)
+            ->selectRaw('est_codigo, SUM(pagos_precio) as total_mensualidades')
+            ->groupBy('est_codigo')
+            ->pluck('total_mensualidades', 'est_codigo');
+
+        // Precargar meses pagados por concepto para determinar primer_mes y vencidos
+        $mesesMap = [2=>'Febrero',3=>'Marzo',4=>'Abril',5=>'Mayo',6=>'Junio',7=>'Julio',8=>'Agosto',9=>'Septiembre',10=>'Octubre',11=>'Noviembre'];
+        $primerMesPorEst = [];
+        if (!empty($estCodigos)) {
+            $pagosConcepto = Pago::whereIn('est_codigo', $estCodigos)
+                ->whereYear('pagos_fecha', $year)
+                ->where('pagos_estado', 1)
+                ->select('est_codigo', 'concepto')
+                ->get();
+            foreach ($pagosConcepto as $p) {
+                foreach ($mesesMap as $num => $nombre) {
+                    if (stripos($p->concepto, $nombre) !== false) {
+                        if (!isset($primerMesPorEst[$p->est_codigo]) || $num < $primerMesPorEst[$p->est_codigo]) {
+                            $primerMesPorEst[$p->est_codigo] = $num;
+                        }
+                    }
+                }
+            }
+        }
+
+        return view('inscripciones.index', compact('inscripciones', 'descuentos', 'mensualidadesPagadas', 'primerMesPorEst', 'mesActualNum'));
     }
 
     public function reportes(Request $request)
@@ -82,13 +114,31 @@ class InscripcionController extends Controller
         }
 
         $inscripciones = $query->orderBy('insc_fecha', 'desc')->get();
-        
-        return view('inscripciones.reportes', compact('estudiantes', 'inscripciones'));
+
+        // Mensualidades pagadas
+        $year = date('Y');
+        $estCodigos = $inscripciones->pluck('est_codigo')->unique()->toArray();
+        $mensualidadesPagadas = Pago::whereIn('est_codigo', $estCodigos)
+            ->whereYear('pagos_fecha', $year)
+            ->where('pagos_estado', 1)
+            ->selectRaw('est_codigo, SUM(pagos_precio) as total_mensualidades')
+            ->groupBy('est_codigo')
+            ->pluck('total_mensualidades', 'est_codigo');
+
+        return view('inscripciones.reportes', compact('estudiantes', 'inscripciones', 'mensualidadesPagadas'));
     }
 
     public function reportePdf(Request $request)
     {
-        $query = Inscripcion::with(['estudiante', 'curso', 'padreFamilia']);
+        $query = Inscripcion::with(['estudiante', 'curso', 'padreFamilia', 'descuentos']);
+
+        if ($request->buscar) {
+            $query->whereHas('estudiante', function($q) use ($request) {
+                $q->where('est_nombres', 'like', '%' . $request->buscar . '%')
+                  ->orWhere('est_apellidos', 'like', '%' . $request->buscar . '%')
+                  ->orWhere('est_ci', 'like', '%' . $request->buscar . '%');
+            });
+        }
 
         if ($request->fecha_inicio && $request->fecha_fin) {
             $query->whereBetween('insc_fecha', [$request->fecha_inicio, $request->fecha_fin]);
@@ -96,6 +146,10 @@ class InscripcionController extends Controller
 
         if ($request->est_codigo) {
             $query->where('est_codigo', $request->est_codigo);
+        }
+
+        if ($request->pfam_codigo) {
+            $query->where('pfam_codigo', $request->pfam_codigo);
         }
 
         if ($request->estado === '0') {
@@ -110,13 +164,41 @@ class InscripcionController extends Controller
             $query->where('insc_sin_factura', 0);
         }
 
-        $inscripciones = $query->orderBy('insc_fecha', 'desc')->get();
-        
-        $total = $inscripciones->where('insc_estado', '!=', 0)->sum('insc_monto_total');
-        $pagado = $inscripciones->where('insc_estado', '!=', 0)->sum('insc_monto_pagado');
-        $saldo = $inscripciones->where('insc_estado', '!=', 0)->sum('insc_saldo');
+        if ($request->descuento === 'con_descuento') {
+            $query->whereHas('descuentos');
+        } elseif ($request->descuento === 'sin_descuento') {
+            $query->whereDoesntHave('descuentos');
+        } elseif ($request->descuento && is_numeric($request->descuento)) {
+            $query->whereHas('descuentos', function($q) use ($request) {
+                $q->where('desc_id', $request->descuento);
+            });
+        }
 
-        $pdf = \PDF::loadView('inscripciones.reporte-pdf', compact('inscripciones', 'total', 'pagado', 'saldo', 'request'));
+        $inscripciones = $query->orderBy('insc_fecha', 'desc')->get();
+
+        // Mensualidades pagadas por estudiante
+        $year = date('Y');
+        $estCodigos = $inscripciones->pluck('est_codigo')->unique()->toArray();
+        $mensualidadesPagadas = Pago::whereIn('est_codigo', $estCodigos)
+            ->whereYear('pagos_fecha', $year)
+            ->where('pagos_estado', 1)
+            ->selectRaw('est_codigo, SUM(pagos_precio) as total_mensualidades')
+            ->groupBy('est_codigo')
+            ->pluck('total_mensualidades', 'est_codigo');
+
+        // Totales excluyendo anuladas y solo registro
+        $activas = $inscripciones->where('insc_estado', '!=', 0);
+        $total = $activas->sum('insc_monto_final');
+        $pagado = 0;
+        $saldo = 0;
+        foreach ($activas as $i) {
+            $mens = $mensualidadesPagadas[$i->est_codigo] ?? 0;
+            $pagadoEst = $i->insc_monto_pagado + $mens;
+            $pagado += $pagadoEst;
+            $saldo += max(0, $i->insc_monto_final - $pagadoEst);
+        }
+
+        $pdf = \PDF::loadView('inscripciones.reporte-pdf', compact('inscripciones', 'total', 'pagado', 'saldo', 'request', 'mensualidadesPagadas'));
         return $pdf->stream('inscripciones_' . time() . '.pdf');
     }
 
@@ -135,9 +217,18 @@ class InscripcionController extends Controller
             'est_codigo' => 'required|exists:colegio_estudiantes,est_codigo',
             'cur_codigo' => 'required|exists:colegio_cursos,cur_codigo',
             'insc_monto_total' => 'required|numeric|min:0',
-            'insc_monto_pagado' => 'nullable|numeric|min:0|max:300',
+            'insc_monto_pagado' => 'nullable|numeric|min:0|max:500',
             'insc_gestion' => 'required'
         ]);
+
+        // Verificar duplicados
+        $existe = Inscripcion::where('est_codigo', $request->est_codigo)
+            ->where('insc_gestion', $request->insc_gestion)
+            ->where('insc_estado', '!=', 0)
+            ->exists();
+        if ($existe) {
+            return back()->withErrors(['error' => 'Ya existe una inscripción activa para este estudiante en la gestión ' . $request->insc_gestion . '.'])->withInput();
+        }
 
         // Si se ingresó un nuevo padre, crearlo
         if ($request->filled('pfam_nombre_nuevo')) {
@@ -164,11 +255,22 @@ class InscripcionController extends Controller
         $montoTotal = $request->insc_monto_total;
         $montoDescuento = $request->insc_monto_descuento ?? 0;
         $montoFinal = $request->insc_monto_final ?? $montoTotal;
-        $montoPagado = min($request->insc_monto_pagado ?? 0, 300);
+        $montoPagado = min($request->insc_monto_pagado ?? 0, 500);
         $sinFactura = $request->insc_sin_factura ?? 0;
+        $soloRegistro = $request->has('insc_solo_registro');
+
+        // Código secuencial INSC000XXX
+        $ultimoInsc = Inscripcion::where('insc_codigo', 'REGEXP', '^INSC[0-9]{6}$')
+            ->orderByRaw('CAST(SUBSTRING(insc_codigo, 5) AS UNSIGNED) DESC')
+            ->first();
+        $numInsc = $ultimoInsc ? intval(substr($ultimoInsc->insc_codigo, 4)) + 1 : 1;
+        $codigoInsc = 'INSC' . str_pad($numInsc, 6, '0', STR_PAD_LEFT);
+
+        // Si es solo registro, el pago va a mensualidad, no a inscripción
+        $montoPagadoInsc = $soloRegistro ? 0 : $montoPagado;
 
         $inscripcion = Inscripcion::create([
-            'insc_codigo' => 'INSC' . time(),
+            'insc_codigo' => $codigoInsc,
             'est_codigo' => $request->est_codigo,
             'pfam_codigo' => $pfamCodigo,
             'cur_codigo' => $request->cur_codigo,
@@ -176,9 +278,9 @@ class InscripcionController extends Controller
             'insc_monto_total' => $montoTotal,
             'insc_monto_descuento' => $montoDescuento,
             'insc_monto_final' => $montoFinal,
-            'insc_monto_pagado' => $montoPagado,
-            'insc_saldo' => $montoFinal - $montoPagado,
-            'insc_concepto' => $request->insc_concepto,
+            'insc_monto_pagado' => $montoPagadoInsc,
+            'insc_saldo' => $montoFinal - $montoPagadoInsc,
+            'insc_concepto' => $request->insc_concepto . ($soloRegistro ? ' (Fuera de periodo - solo registro)' : ''),
             'insc_estado' => 1,
             'insc_usuario' => auth()->user()->us_codigo,
             'insc_sin_factura' => $sinFactura
@@ -191,24 +293,53 @@ class InscripcionController extends Controller
             ]);
         }
 
-        // Si hay pago inicial, registrarlo
-        if ($montoPagado > 0) {
-            // Generar código de recibo según si es con o sin factura
-            $prefijoRecibo = $sinFactura ? 'TAL' : 'REC';
-            $ultimoRecibo = InscripcionPago::where('inscpago_recibo', 'like', $prefijoRecibo . '%')
-                ->orderBy('inscpago_id', 'desc')
+        $prefijoRecibo = $sinFactura ? 'TAL' : 'REC';
+
+        if ($soloRegistro && $montoPagado > 0) {
+            // FUERA DE TIEMPO: los 500 van como primera mensualidad del mes seleccionado
+            $mesDestino = intval($request->insc_mes_destino ?? date('n'));
+            $mesesNombresArr = ['','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+            $mesNombre = $mesesNombresArr[$mesDestino] ?? 'Mes';
+
+            // Código recibo mensualidad
+            $ultimoRec = Pago::where('pagos_codigo', 'REGEXP', '^' . $prefijoRecibo . '[0-9]{5}$')
+                ->orderByRaw('CAST(SUBSTRING(pagos_codigo, 4) AS UNSIGNED) DESC')
                 ->first();
-            
-            if ($ultimoRecibo) {
-                $numero = intval(substr($ultimoRecibo->inscpago_recibo, 3)) + 1;
-            } else {
-                $numero = 1;
-            }
-            
-            $codigoRecibo = $prefijoRecibo . str_pad($numero, 6, '0', STR_PAD_LEFT);
-            
+            $numRec = $ultimoRec ? intval(substr($ultimoRec->pagos_codigo, 3)) + 1 : 1;
+            $codigoRecibo = $prefijoRecibo . str_pad($numRec, 5, '0', STR_PAD_LEFT);
+
+            Pago::create([
+                'pagos_codigo' => $codigoRecibo,
+                'men_codigo' => 'MEN' . str_pad(Pago::max('pagos_id') + 1, 5, '0', STR_PAD_LEFT),
+                'est_codigo' => $request->est_codigo,
+                'pfam_codigo' => $pfamCodigo,
+                'prod_codigo' => 'MENSUALIDAD',
+                'pagos_precio' => $montoPagado,
+                'pagos_nombres' => 'Mensualidad ' . $mesNombre,
+                'pagos_usuario' => auth()->user()->us_codigo ?? 'ADMIN',
+                'pagos_descuento' => 0,
+                'concepto' => 'Mensualidad ' . $mesNombre,
+                'tipo' => 1,
+                'pagos_fecha' => now(),
+                'pagos_sin_factura' => $sinFactura ? 1 : 0
+            ]);
+
+        } elseif ($montoPagado > 0) {
+            // NORMAL: pago de inscripción
+            $ultimoRecibo = InscripcionPago::where('inscpago_recibo', 'REGEXP', '^' . $prefijoRecibo . '[0-9]{6}$')
+                ->orderByRaw('CAST(SUBSTRING(inscpago_recibo, 4) AS UNSIGNED) DESC')
+                ->first();
+            $numRecibo = $ultimoRecibo ? intval(substr($ultimoRecibo->inscpago_recibo, 3)) + 1 : 1;
+            $codigoRecibo = $prefijoRecibo . str_pad($numRecibo, 6, '0', STR_PAD_LEFT);
+
+            $ultimoPago = InscripcionPago::where('inscpago_codigo', 'REGEXP', '^PAGO[0-9]{6}$')
+                ->orderByRaw('CAST(SUBSTRING(inscpago_codigo, 5) AS UNSIGNED) DESC')
+                ->first();
+            $numPago = $ultimoPago ? intval(substr($ultimoPago->inscpago_codigo, 4)) + 1 : 1;
+            $codigoPago = 'PAGO' . str_pad($numPago, 6, '0', STR_PAD_LEFT);
+
             InscripcionPago::create([
-                'inscpago_codigo' => 'PAGO' . time(),
+                'inscpago_codigo' => $codigoPago,
                 'insc_codigo' => $inscripcion->insc_codigo,
                 'inscpago_monto' => $montoPagado,
                 'inscpago_concepto' => 'Pago inicial de inscripción',
@@ -217,7 +348,7 @@ class InscripcionController extends Controller
             ]);
         }
 
-        return redirect()->route('inscripciones.index')->with('success', 'Inscripción registrada');
+        return redirect()->route('inscripciones.index')->with('success', 'Inscripción registrada' . ($soloRegistro ? ' (fuera de periodo - pago registrado como mensualidad)' : ''));
     }
 
     public function registrarPago(Request $request, $id)
@@ -228,20 +359,35 @@ class InscripcionController extends Controller
             'monto' => 'required|numeric|min:0|max:' . $inscripcion->insc_saldo
         ]);
 
-        $pago = InscripcionPago::create([
-            'inscpago_codigo' => 'PAGO' . time(),
+        // Código secuencial recibo
+        $prefijoRecibo = ($inscripcion->insc_sin_factura ?? 0) ? 'TAL' : 'REC';
+        $ultimoRecibo = InscripcionPago::where('inscpago_recibo', 'REGEXP', '^' . $prefijoRecibo . '[0-9]{6}$')
+            ->orderByRaw('CAST(SUBSTRING(inscpago_recibo, 4) AS UNSIGNED) DESC')
+            ->first();
+        $numRecibo = $ultimoRecibo ? intval(substr($ultimoRecibo->inscpago_recibo, 3)) + 1 : 1;
+        $codigoRecibo = $prefijoRecibo . str_pad($numRecibo, 6, '0', STR_PAD_LEFT);
+
+        // Código secuencial pago
+        $ultimoPago = InscripcionPago::where('inscpago_codigo', 'REGEXP', '^PAGO[0-9]{6}$')
+            ->orderByRaw('CAST(SUBSTRING(inscpago_codigo, 5) AS UNSIGNED) DESC')
+            ->first();
+        $numPago = $ultimoPago ? intval(substr($ultimoPago->inscpago_codigo, 4)) + 1 : 1;
+        $codigoPago = 'PAGO' . str_pad($numPago, 6, '0', STR_PAD_LEFT);
+
+        InscripcionPago::create([
+            'inscpago_codigo' => $codigoPago,
             'insc_codigo' => $inscripcion->insc_codigo,
             'inscpago_monto' => $request->monto,
             'inscpago_concepto' => $request->concepto ?? 'Pago de inscripción',
             'inscpago_usuario' => auth()->user()->us_codigo,
-            'inscpago_recibo' => 'REC' . time()
+            'inscpago_recibo' => $codigoRecibo
         ]);
 
         $inscripcion->insc_monto_pagado += $request->monto;
         $inscripcion->insc_saldo -= $request->monto;
         
         if ($inscripcion->insc_saldo <= 0) {
-            $inscripcion->insc_estado = 2; // Pagada
+            $inscripcion->insc_estado = 2;
         }
         
         $inscripcion->save();

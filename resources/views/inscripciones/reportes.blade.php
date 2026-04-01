@@ -58,30 +58,44 @@
                                 <th>Curso</th>
                                 <th>Gestión</th>
                                 <th>Fecha</th>
-                                <th>Monto Total</th>
+                                <th>Monto Final</th>
                                 <th>Pagado</th>
                                 <th>Saldo</th>
                                 <th>Estado</th>
                             </tr>
                         </thead>
                         <tbody>
+                            @php $tMonto = 0; $tPagado = 0; $tSaldo = 0; @endphp
                             @forelse($inscripciones ?? [] as $i)
+                                @php
+                                    $esSoloRegistro = $i->insc_monto_pagado == 0;
+                                    $mens = $mensualidadesPagadas[$i->est_codigo] ?? 0;
+                                    $pagadoEst = $i->insc_monto_pagado + $mens;
+                                    $saldoEst = max(0, $i->insc_monto_final - $pagadoEst);
+                                    if ($i->insc_estado != 0) {
+                                        $tMonto += $i->insc_monto_final;
+                                        $tPagado += $pagadoEst;
+                                        $tSaldo += $saldoEst;
+                                    }
+                                @endphp
                                 <tr>
                                     <td>{{ $i->insc_codigo }}</td>
                                     <td>{{ $i->estudiante->est_nombres ?? 'N/A' }} {{ $i->estudiante->est_apellidos ?? '' }}</td>
                                     <td>{{ $i->curso->cur_nombre ?? 'N/A' }}</td>
                                     <td>{{ $i->insc_gestion }}</td>
                                     <td>{{ $i->insc_fecha->format('d/m/Y') }}</td>
-                                    <td>{{ number_format($i->insc_monto_total, 2) }}</td>
-                                    <td>{{ number_format($i->insc_monto_pagado, 2) }}</td>
-                                    <td>{{ number_format($i->insc_saldo, 2) }}</td>
+                                    <td>{{ number_format($i->insc_monto_final, 2) }}</td>
+                                    <td>{{ number_format($pagadoEst, 2) }}</td>
+                                    <td class="{{ $saldoEst > 0 ? 'text-danger font-weight-bold' : 'text-success' }}">{{ number_format($saldoEst, 2) }}</td>
                                     <td>
-                                        @if($i->insc_estado == 2)
+                                        @if($i->insc_estado == 0)
+                                            <span class="badge badge-danger">Anulada</span>
+                                        @elseif($esSoloRegistro)
+                                            <span class="badge badge-info">Solo Registro</span>
+                                        @elseif($i->insc_monto_pagado >= 300)
                                             <span class="badge badge-success">Pagada</span>
-                                        @elseif($i->insc_saldo > 0)
-                                            <span class="badge badge-warning">Pendiente</span>
                                         @else
-                                            <span class="badge badge-danger">Cancelada</span>
+                                            <span class="badge badge-warning">Pendiente</span>
                                         @endif
                                     </td>
                                 </tr>
@@ -89,6 +103,15 @@
                                 <tr><td colspan="9" class="text-center">No hay inscripciones</td></tr>
                             @endforelse
                         </tbody>
+                        <tfoot>
+                            <tr class="table-info">
+                                <td colspan="5" class="text-right"><strong>TOTALES:</strong></td>
+                                <td><strong>{{ number_format($tMonto, 2) }}</strong></td>
+                                <td><strong>{{ number_format($tPagado, 2) }}</strong></td>
+                                <td><strong>{{ number_format($tSaldo, 2) }}</strong></td>
+                                <td></td>
+                            </tr>
+                        </tfoot>
                     </table>
                 </div>
             </div>

@@ -49,7 +49,7 @@ class User extends Authenticatable
     {
         if ($this->rol_id == 1) return true; // Admin total
 
-        return Permiso::where('rol_id', $this->rol_id)
+        return RolPermiso::where('rol_id', $this->rol_id)
             ->whereHas('modulo', fn($q) => $q->where('mod_slug', $modSlug))
             ->where($accion, 1)
             ->exists();

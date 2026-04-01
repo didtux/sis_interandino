@@ -100,7 +100,7 @@
                                 <th>Curso</th>
                                 <th>Gestión</th>
                                 <th>Fecha</th>
-                                <th>Monto Total</th>
+                                <th>Monto a Cobrar</th>
                                 <th>Descuento</th>
                                 <th>Pagado</th>
                                 <th>Saldo</th>
@@ -116,10 +116,24 @@
                             @endphp
                             @forelse($inscripciones as $i)
                                 @php
+                                    $mensPagadas = $mensualidadesPagadas[$i->est_codigo] ?? 0;
+                                    $esSoloRegistro = $i->insc_monto_pagado == 0;
+                                    $totalPagadoEst = $i->insc_monto_pagado + $mensPagadas;
+
+                                    // Meses vencidos: usar primer_mes del estudiante
+                                    $primerMesEst = $primerMesPorEst[$i->est_codigo] ?? $mesActualNum;
+                                    $mesLimite = max($mesActualNum, $primerMesEst);
+                                    $mesesVencidosEst = 0;
+                                    for ($mv = 2; $mv < $mesLimite; $mv++) $mesesVencidosEst++;
+                                    $mesesCobrables = 10 - $mesesVencidosEst;
+                                    $mensualidad = $i->insc_monto_final > 0 ? $i->insc_monto_final / 10 : 0;
+                                    $montoACobrar = $mensualidad * $mesesCobrables;
+                                    $saldoReal = max(0, $montoACobrar - $totalPagadoEst);
+
                                     if($i->insc_estado != 0) {
-                                        $totalMonto += $i->insc_monto_total;
-                                        $totalPagado += $i->insc_monto_pagado;
-                                        $totalSaldo += $i->insc_saldo;
+                                        $totalMonto += $montoACobrar;
+                                        $totalPagado += $totalPagadoEst;
+                                        $totalSaldo += $saldoReal;
                                     }
                                 @endphp
                                 <tr>
@@ -130,7 +144,12 @@
                                     <td>{{ $i->curso->cur_nombre ?? 'N/A' }}</td>
                                     <td>{{ $i->insc_gestion }}</td>
                                     <td>{{ $i->insc_fecha ? $i->insc_fecha->format('d/m/Y') : 'N/A' }}</td>
-                                    <td>{{ number_format($i->insc_monto_final, 2) }}</td>
+                                    <td>
+                                        {{ number_format($montoACobrar, 2) }}
+                                        @if($mesesVencidosEst > 0)
+                                            <br><small class="text-muted">{{ $mesesCobrables }} meses × {{ number_format($mensualidad, 0) }}</small>
+                                        @endif
+                                    </td>
                                     <td>
                                         @if($i->descuentos->count() > 0)
                                             @php $desc = $i->descuentos->first(); @endphp
@@ -146,22 +165,33 @@
                                             -
                                         @endif
                                     </td>
-                                    <td>{{ number_format($i->insc_monto_pagado, 2) }}</td>
-                                    <td>{{ number_format($i->insc_saldo, 2) }}</td>
+                                    <td>
+                                        {{ number_format($totalPagadoEst, 2) }}
+                                        @if($esSoloRegistro)
+                                            <br><small class="text-muted">Mens: {{ number_format($mensPagadas, 0) }}</small>
+                                        @else
+                                            <br><small class="text-muted">Insc: {{ number_format($i->insc_monto_pagado, 0) }} + Mens: {{ number_format($mensPagadas, 0) }}</small>
+                                        @endif
+                                    </td>
+                                    <td>
+                                        <span class="{{ $saldoReal > 0 ? 'text-danger font-weight-bold' : 'text-success' }}">
+                                            {{ number_format($saldoReal, 2) }}
+                                        </span>
+                                    </td>
                                     <td>
                                         @if($i->insc_estado == 0)
                                             <span class="badge badge-danger">Anulada</span>
+                                        @elseif($esSoloRegistro)
+                                            <span class="badge badge-info" title="Pago fue a mensualidad, no a inscripción">Solo Registro</span>
                                         @elseif($i->insc_monto_pagado >= 300)
                                             <span class="badge badge-success">Inscripción Pagada</span>
-                                        @elseif($i->insc_monto_pagado < 300)
-                                            <span class="badge badge-warning">Pendiente</span>
                                         @else
-                                            <span class="badge badge-info">Cancelada</span>
+                                            <span class="badge badge-warning">Pendiente</span>
                                         @endif
                                     </td>
                                     <td>
                                         @if($i->insc_estado != 0)
-                                            @if($i->insc_monto_pagado < 300)
+                                            @if(!$esSoloRegistro && $i->insc_monto_pagado < 300)
                                                 <button class="btn btn-sm btn-success" data-toggle="modal" data-target="#modalPago{{ $i->insc_id }}">
                                                     <i class="fas fa-money-bill"></i>
                                                 </button>
@@ -358,6 +388,8 @@
         </div>
     </div>
 </div>
+
+@endsection
 
 @section('scripts')
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -656,5 +688,4 @@ function eliminarCargaMasiva() {
     }
 }
 </script>
-@endsection
 @endsection

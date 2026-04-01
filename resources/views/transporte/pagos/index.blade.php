@@ -320,6 +320,30 @@ function generarReciboGrupo(codigo) {
         return meses;
     }
 
+    function dibujarMesesEnColumnas(doc, meses, montoPorMes, xInicio, yInicio, anchoCol) {
+        var y = yInicio;
+        if (meses.length <= 3) {
+            for (var i = 0; i < meses.length; i++) {
+                doc.text('  ' + (i + 1) + '. ' + meses[i], xInicio, y);
+                if (montoPorMes > 0) doc.text(montoPorMes.toFixed(2), xInicio + anchoCol - 10, y, { align: 'right' });
+                y += 12;
+            }
+        } else {
+            var mitad = Math.ceil(meses.length / 2);
+            for (var i = 0; i < mitad; i++) {
+                doc.text((i + 1) + '. ' + meses[i], xInicio, y);
+                if (montoPorMes > 0) doc.text(montoPorMes.toFixed(2), xInicio + anchoCol / 2 - 20, y, { align: 'right' });
+                var j = i + mitad;
+                if (j < meses.length) {
+                    doc.text((j + 1) + '. ' + meses[j], xInicio + anchoCol / 2, y);
+                    if (montoPorMes > 0) doc.text(montoPorMes.toFixed(2), xInicio + anchoCol - 10, y, { align: 'right' });
+                }
+                y += 12;
+            }
+        }
+        return y;
+    }
+
     function dibujarRecibo(tipoRecibo) {
         doc.setLineWidth(1.5);
         doc.setDrawColor(0, 0, 0);
@@ -374,26 +398,7 @@ function generarReciboGrupo(codigo) {
             doc.text('TRANSPORTE ' + item.tipo.toUpperCase() + ' - ' + cantMeses + ' CUOTAS', 280, yPos);
             doc.setFont(undefined, 'normal');
             yPos += 14;
-
-            if (cantMeses > 5) {
-                var mitad = Math.ceil(cantMeses / 2);
-                for (var i = 0; i < mitad; i++) {
-                    doc.text((i + 1) + '. ' + (meses[i] || ''), 20, yPos);
-                    doc.text(montoPorMes.toFixed(2), 230, yPos, { align: 'right' });
-                    var j = i + mitad;
-                    if (j < cantMeses) {
-                        doc.text((j + 1) + '. ' + (meses[j] || ''), 310, yPos);
-                        doc.text(montoPorMes.toFixed(2), 570, yPos, { align: 'right' });
-                    }
-                    yPos += 12;
-                }
-            } else {
-                for (var i = 0; i < cantMeses; i++) {
-                    doc.text('  ' + (i + 1) + '. ' + (meses[i] || ''), 280, yPos);
-                    doc.text(montoPorMes.toFixed(2), 570, yPos, { align: 'right' });
-                    yPos += 13;
-                }
-            }
+            yPos = dibujarMesesEnColumnas(doc, meses, montoPorMes, 20, yPos, 570);
         } else {
             // Agrupar por estudiante
             var porEstudiante = {};
@@ -418,8 +423,10 @@ function generarReciboGrupo(codigo) {
                 doc.setFontSize(9);
                 est.pagos.forEach(function(pago) {
                     var meses = getMeses(pago.fecha_inicio, pago.fecha_fin);
-                    doc.text('   Transporte ' + pago.tipo + ': ' + meses.join(', '), 30, yPos);
+                    var cantMeses = meses.length;
+                    doc.text('   Transporte ' + pago.tipo + ' - ' + cantMeses + ' cuota(s):', 30, yPos);
                     yPos += 12;
+                    yPos = dibujarMesesEnColumnas(doc, meses, 0, 40, yPos, 540);
                 });
                 doc.setFontSize(10);
                 yPos += 3;

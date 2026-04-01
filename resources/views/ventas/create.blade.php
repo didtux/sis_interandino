@@ -121,7 +121,7 @@
                         </div>
 
                         <div class="form-group mt-3">
-                            <button type="button" class="btn btn-primary" onclick="confirmarVenta()">
+                            <button type="button" class="btn btn-primary" onclick="mostrarConfirmacion()">
                                 <i class="fas fa-save"></i> Registrar Venta
                             </button>
                             <a href="{{ route('ventas.index') }}" class="btn btn-secondary">
@@ -130,6 +130,52 @@
                         </div>
                     </form>
                 </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{{-- Modal de confirmación --}}
+<div class="modal fade" id="modalConfirmar" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title"><i class="fas fa-check-circle mr-2"></i>Confirmar Venta</h5>
+                <button type="button" class="close text-white" data-dismiss="modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="row mb-3">
+                    <div class="col-md-4"><strong>Cliente:</strong> <span id="conf_cliente"></span></div>
+                    <div class="col-md-4"><strong>Celular:</strong> <span id="conf_celular"></span></div>
+                    <div class="col-md-4"><strong>Dirección:</strong> <span id="conf_direccion"></span></div>
+                </div>
+                <table class="table table-bordered table-sm">
+                    <thead class="thead-light">
+                        <tr>
+                            <th>Producto</th>
+                            <th>Cant.</th>
+                            <th>Precio Unit.</th>
+                            <th>Tipo</th>
+                            <th>Subtotal</th>
+                        </tr>
+                    </thead>
+                    <tbody id="conf_productos"></tbody>
+                    <tfoot>
+                        <tr class="table-success">
+                            <td colspan="4" class="text-right"><strong>TOTAL:</strong></td>
+                            <td><strong>Bs. <span id="conf_total"></span></strong></td>
+                        </tr>
+                    </tfoot>
+                </table>
+                <div class="alert alert-warning py-2 mb-0">
+                    <i class="fas fa-exclamation-triangle mr-1"></i> ¿Está seguro de registrar esta venta? Esta acción descontará el stock de los productos.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" onclick="guardarVenta()">
+                    <i class="fas fa-check mr-1"></i>Confirmar y Registrar
+                </button>
             </div>
         </div>
     </div>
@@ -247,27 +293,42 @@ function actualizarTabla() {
     document.getElementById('total-venta').textContent = total.toFixed(2);
 }
 
-function confirmarVenta() {
-    const cliente = document.getElementById('ven_cliente').value;
-    
+function mostrarConfirmacion() {
+    const cliente = document.getElementById('ven_cliente').value.trim();
     if (!cliente) {
-        alert('Ingrese el nombre del cliente');
+        alert('Debe ingresar el nombre del cliente');
+        document.getElementById('ven_cliente').focus();
         return;
     }
-    
     if (productosVenta.length === 0) {
         alert('Agregue al menos un producto');
         return;
     }
-    
-    const total = productosVenta.reduce((sum, p) => sum + p.subtotal, 0);
-    
-    if (confirm(`¿Confirmar venta por Bs. ${total.toFixed(2)}?`)) {
-        guardarVenta();
-    }
+
+    // Llenar modal
+    document.getElementById('conf_cliente').textContent = cliente;
+    document.getElementById('conf_celular').textContent = document.getElementById('ven_celular').value || '-';
+    document.getElementById('conf_direccion').textContent = document.getElementById('ven_direccion').value || '-';
+
+    let html = '';
+    let total = 0;
+    productosVenta.forEach(function(p) {
+        total += p.subtotal;
+        html += '<tr>' +
+            '<td>' + p.prod_nombre + '</td>' +
+            '<td>' + p.cantidad + '</td>' +
+            '<td>Bs. ' + p.precio.toFixed(2) + '</td>' +
+            '<td><span class="badge badge-' + (p.tipo === 'venta' ? 'success' : 'warning') + '">' + p.tipo + '</span></td>' +
+            '<td>Bs. ' + p.subtotal.toFixed(2) + '</td>' +
+            '</tr>';
+    });
+    document.getElementById('conf_productos').innerHTML = html;
+    document.getElementById('conf_total').textContent = total.toFixed(2);
+    $('#modalConfirmar').modal('show');
 }
 
 function guardarVenta() {
+    $('#modalConfirmar').modal('hide');
     const data = {
         ven_cliente: document.getElementById('ven_cliente').value,
         ven_celular: document.getElementById('ven_celular').value,
@@ -355,7 +416,7 @@ function buscarYAgregarProducto(barcode) {
         if (prodCodigo) {
             // Hacer petición AJAX para verificar el prod_item
             $.ajax({
-                url: '/api/producto-por-barcode/' + barcode,
+                url: '{{ url("/api/producto-por-barcode") }}/' + barcode,
                 method: 'GET',
                 async: false,
                 success: function(data) {

@@ -154,6 +154,12 @@
         </thead>
         <tbody>
             @forelse($inscripciones as $i)
+                @php
+                    $esSoloRegistro = $i->insc_monto_pagado == 0;
+                    $mens = $mensualidadesPagadas[$i->est_codigo] ?? 0;
+                    $pagadoEst = $i->insc_monto_pagado + $mens;
+                    $saldoEst = max(0, $i->insc_monto_final - $pagadoEst);
+                @endphp
                 <tr>
                     <td>{{ $i->insc_codigo }}</td>
                     <td style="text-align: left;">{{ strtoupper($i->estudiante->est_nombres ?? 'N/A') }} {{ strtoupper($i->estudiante->est_apellidos ?? '') }}</td>
@@ -162,18 +168,18 @@
                     <td>{{ $i->insc_fecha->format('d/m/Y') }}</td>
                     <td style="text-align: right;">{{ number_format($i->insc_monto_descuento, 2) }}</td>
                     <td style="text-align: right;">{{ number_format($i->insc_monto_final ?: $i->insc_monto_total, 2) }}</td>
-                    <td style="text-align: right;">{{ number_format($i->insc_monto_pagado, 2) }}</td>
-                    <td style="text-align: right;">{{ number_format($i->insc_saldo, 2) }}</td>
+                    <td style="text-align: right;">{{ number_format($pagadoEst, 2) }}</td>
+                    <td style="text-align: right;">{{ number_format($saldoEst, 2) }}</td>
                     <td>{{ $i->insc_sin_factura ? 'SIN FACT' : 'CON FACT' }}</td>
                     <td>
                         @if($i->insc_estado == 0)
                             ANULADA
+                        @elseif($esSoloRegistro)
+                            SOLO REG.
                         @elseif($i->insc_monto_pagado >= 300)
                             PAGADA
-                        @elseif($i->insc_monto_pagado < 300)
-                            PENDIENTE
                         @else
-                            CANCELADA
+                            PENDIENTE
                         @endif
                     </td>
                 </tr>
@@ -188,8 +194,16 @@
     <div class="totales">
         <table>
             <tr>
-                <td>TOTAL PAGADO:</td>
+                <td>TOTAL MONTO FINAL:</td>
+                <td style="text-align: right;">Bs. {{ number_format($total, 2) }}</td>
+            </tr>
+            <tr>
+                <td>TOTAL PAGADO (Insc. + Mens.):</td>
                 <td style="text-align: right;">Bs. {{ number_format($pagado, 2) }}</td>
+            </tr>
+            <tr>
+                <td>TOTAL SALDO:</td>
+                <td style="text-align: right;">Bs. {{ number_format($saldo, 2) }}</td>
             </tr>
         </table>
     </div>

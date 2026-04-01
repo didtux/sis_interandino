@@ -291,7 +291,7 @@ function agregarEstudiante() {
 function crearUsuarioPadre(id, nombre, ci) {
     document.getElementById('modal_nombre_padre').textContent = nombre;
     document.getElementById('modal_ci_padre').textContent = ci;
-    document.getElementById('formCrearUsuarioPadre').action = '/padres/' + id + '/crear-usuario';
+    document.getElementById('formCrearUsuarioPadre').action = '{{ url('/padres') }}/' + id + '/crear-usuario';
     document.getElementById('modal_password_padre').value = '';
     $('#modalCrearUsuarioPadre').modal('show');
 }
