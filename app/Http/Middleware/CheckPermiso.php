@@ -41,6 +41,7 @@ class CheckPermiso
         'asignaciones-transporte'=> 'asignaciones-transporte',
         'pagos-transporte'       => 'pagos-transporte',
         'estudiantes-rutas'      => 'estudiantes-rutas',
+        'asistencia-clases'      => 'notas',
     ];
 
     public function handle(Request $request, Closure $next)

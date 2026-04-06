@@ -28,12 +28,15 @@ Route::post('/logout', [App\Http\Controllers\Auth\LoginController::class, 'logou
 Route::get('/home', [App\Http\Controllers\HomeController::class, 'index'])->name('home');
 
 // Rutas del Sistema de Colegio
-Route::middleware(['auth', 'permiso'])->group(function () {
+Route::middleware(['auth', 'permiso', 'auditoria'])->group(function () {
     // Usuarios
     Route::resource('usuarios', App\Http\Controllers\UserController::class);
     
     // Roles y Permisos
     Route::resource('roles', App\Http\Controllers\RolController::class);
+
+    // Auditoría
+    Route::get('auditoria', [App\Http\Controllers\AuditoriaController::class, 'index'])->name('auditoria.index');
     
     // Estudiantes
     Route::resource('estudiantes', App\Http\Controllers\EstudianteController::class);
@@ -70,7 +73,21 @@ Route::middleware(['auth', 'permiso'])->group(function () {
     Route::resource('materias', App\Http\Controllers\MateriaController::class);
     
     // Notas
-    Route::resource('notas', App\Http\Controllers\NotaController::class);
+    Route::get('notas', [App\Http\Controllers\NotaController::class, 'index'])->name('notas.index');
+    Route::get('notas/configuracion', [App\Http\Controllers\NotaController::class, 'configuracion'])->name('notas.configuracion');
+    Route::post('notas/configuracion/periodo', [App\Http\Controllers\NotaController::class, 'guardarPeriodo'])->name('notas.guardar-periodo');
+    Route::delete('notas/configuracion/periodo/{id}', [App\Http\Controllers\NotaController::class, 'eliminarPeriodo'])->name('notas.eliminar-periodo');
+    Route::post('notas/configuracion/dimension', [App\Http\Controllers\NotaController::class, 'guardarDimension'])->name('notas.guardar-dimension');
+    Route::delete('notas/configuracion/dimension/{id}', [App\Http\Controllers\NotaController::class, 'eliminarDimension'])->name('notas.eliminar-dimension');
+    Route::get('notas/calificar/{curmatdoc}/{periodo}', [App\Http\Controllers\NotaController::class, 'calificar'])->name('notas.calificar');
+    Route::post('notas/guardar', [App\Http\Controllers\NotaController::class, 'guardar'])->name('notas.guardar');
+    Route::post('notas/aprobar/{curmatdoc}/{periodo}', [App\Http\Controllers\NotaController::class, 'aprobar'])->name('notas.aprobar');
+
+    // Asistencia de Clases (Docentes)
+    Route::get('asistencia-clases', [App\Http\Controllers\AsistenciaClaseController::class, 'index'])->name('asistencia-clases.index');
+    Route::get('asistencia-clases/{curmatdoc}/{periodo}/general', [App\Http\Controllers\AsistenciaClaseController::class, 'vistaGeneral'])->name('asistencia-clases.vista-general');
+    Route::get('asistencia-clases/{curmatdoc}/{periodo}', [App\Http\Controllers\AsistenciaClaseController::class, 'registrar'])->name('asistencia-clases.registrar');
+    Route::post('asistencia-clases/guardar', [App\Http\Controllers\AsistenciaClaseController::class, 'guardar'])->name('asistencia-clases.guardar');
     
     // Agenda
     Route::resource('agenda', App\Http\Controllers\AgendaController::class);

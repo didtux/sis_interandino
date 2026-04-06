@@ -26,4 +26,9 @@ class CursoMateriaDocente extends Model
     {
         return $this->belongsTo(Docente::class, 'doc_codigo', 'doc_codigo');
     }
+
+    public function notas()
+    {
+        return $this->hasMany(Nota::class, 'curmatdoc_id', 'curmatdoc_id');
+    }
 }

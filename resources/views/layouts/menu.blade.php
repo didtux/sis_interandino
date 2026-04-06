@@ -25,6 +25,14 @@
 </li>
 @endif
 
+@if($esAdmin)
+<li class="side-menus {{ Request::is('auditoria*') ? 'active' : '' }}">
+    <a class="nav-link" href="{{ route('auditoria.index') }}">
+        <i class="fas fa-history"></i><span>Auditoría</span>
+    </a>
+</li>
+@endif
+
 @if($esAdmin || $user->tieneAccesoModulo('estudiantes'))
 <li class="side-menus {{ Request::is('estudiantes*') ? 'active' : '' }}">
     <a class="nav-link" href="{{ route('estudiantes.index') }}">
@@ -86,10 +94,17 @@
 @endif
 
 @if($esAdmin || $user->tieneAccesoModulo('notas'))
-<li class="side-menus {{ Request::is('notas*') ? 'active' : '' }}">
-    <a class="nav-link" href="{{ route('notas.index') }}">
+<li class="side-menus {{ Request::is('notas*') || Request::is('asistencia-clases*') ? 'active' : '' }}">
+    <a class="nav-link menu-toggle" href="#" data-toggle="collapse" data-target="#notasMenu">
         <i class="fas fa-star"></i><span>Notas</span>
     </a>
+    <ul class="collapse {{ Request::is('notas*') || Request::is('asistencia-clases*') ? 'show' : '' }}" id="notasMenu">
+        <li><a href="{{ route('notas.index') }}"><i class="fas fa-clipboard-list"></i> Calificaciones</a></li>
+        <li><a href="{{ route('asistencia-clases.index') }}"><i class="fas fa-clipboard-check"></i> Asistencia Clases</a></li>
+        @if($esAdmin)
+        <li><a href="{{ route('notas.configuracion') }}"><i class="fas fa-cog"></i> Configuración</a></li>
+        @endif
+    </ul>
 </li>
 @endif
 

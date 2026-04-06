@@ -435,6 +435,25 @@ class AsistenciaController extends Controller
         return response()->json($estudiantes);
     }
 
+    // Contar días hábiles (lun-vie) excluyendo feriados
+    private function diasHabilesMes($mes, $year)
+    {
+        $inicio = Carbon::create($year, $mes, 1);
+        $fin = $inicio->copy()->endOfMonth();
+        $feriados = FechaFestiva::activo()->where('festivo_tipo', 1)
+            ->whereYear('festivo_fecha', $year)->whereMonth('festivo_fecha', $mes)
+            ->pluck('festivo_fecha')->map(fn($f) => $f->format('Y-m-d'))->toArray();
+        $dias = 0;
+        $current = $inicio->copy();
+        while ($current <= $fin) {
+            if ($current->isWeekday() && !in_array($current->format('Y-m-d'), $feriados)) {
+                $dias++;
+            }
+            $current->addDay();
+        }
+        return $dias;
+    }
+
     public function reporteTrimestral(Request $request)
     {
         $request->validate([
@@ -546,12 +565,13 @@ class AsistenciaController extends Controller
             $totalTrimestre = ['dt' => 0, 'tl' => 0, 'tf' => 0, 'ta' => 0, 'total' => 0];
             
             foreach ($rango['meses'] as $mes) {
-                $diasMes = cal_days_in_month(CAL_GREGORIAN, $mes, $year);
+                $diasMes = $this->diasHabilesMes($mes, $year);
                 
                 $asistencias = Asistencia::where('estud_codigo', $est->est_codigo)
                     ->whereYear('asis_fecha', $year)
                     ->whereMonth('asis_fecha', $mes)
-                    ->count();
+                    ->whereRaw('DAYOFWEEK(asis_fecha) BETWEEN 2 AND 6')
+                    ->distinct('asis_fecha')->count('asis_fecha');
                 
                 $permisos = Permiso::where('estud_codigo', $est->est_codigo)
                     ->where('permiso_estado', 1)
@@ -562,16 +582,10 @@ class AsistenciaController extends Controller
                 $atrasos = Atraso::where('estud_codigo', $est->est_codigo)
                     ->whereYear('atraso_fecha', $year)
                     ->whereMonth('atraso_fecha', $mes)
+                    ->whereRaw('DAYOFWEEK(atraso_fecha) BETWEEN 2 AND 6')
                     ->count();
                 
-                // Contar días festivos (feriados tipo 1) en el mes
-                $festivos = FechaFestiva::activo()
-                    ->where('festivo_tipo', 1)
-                    ->whereYear('festivo_fecha', $year)
-                    ->whereMonth('festivo_fecha', $mes)
-                    ->count();
-                
-                $faltas = $diasMes - $asistencias - $permisos - $festivos;
+                $faltas = max(0, $diasMes - $asistencias - $permisos);
                 
                 $fila[] = $asistencias;
                 $fila[] = $permisos;
@@ -638,12 +652,13 @@ class AsistenciaController extends Controller
                 $totalTrim = ['dt' => 0, 'tl' => 0, 'tf' => 0, 'ta' => 0, 'total' => 0];
                 
                 foreach ($trim['meses'] as $mes) {
-                    $diasMes = cal_days_in_month(CAL_GREGORIAN, $mes, $year);
+                    $diasMes = $this->diasHabilesMes($mes, $year);
                     
                     $asistencias = Asistencia::where('estud_codigo', $est->est_codigo)
                         ->whereYear('asis_fecha', $year)
                         ->whereMonth('asis_fecha', $mes)
-                        ->count();
+                        ->whereRaw('DAYOFWEEK(asis_fecha) BETWEEN 2 AND 6')
+                        ->distinct('asis_fecha')->count('asis_fecha');
                     
                     $permisos = Permiso::where('estud_codigo', $est->est_codigo)
                         ->where('permiso_estado', 1)
@@ -654,16 +669,10 @@ class AsistenciaController extends Controller
                     $atrasos = Atraso::where('estud_codigo', $est->est_codigo)
                         ->whereYear('atraso_fecha', $year)
                         ->whereMonth('atraso_fecha', $mes)
+                        ->whereRaw('DAYOFWEEK(atraso_fecha) BETWEEN 2 AND 6')
                         ->count();
                     
-                    // Contar días festivos (feriados tipo 1) en el mes
-                    $festivos = FechaFestiva::activo()
-                        ->where('festivo_tipo', 1)
-                        ->whereYear('festivo_fecha', $year)
-                        ->whereMonth('festivo_fecha', $mes)
-                        ->count();
-                    
-                    $faltas = $diasMes - $asistencias - $permisos - $festivos;
+                    $faltas = max(0, $diasMes - $asistencias - $permisos);
                     
                     $totalTrim['dt'] += $asistencias;
                     $totalTrim['tl'] += $permisos;
