@@ -92,7 +92,13 @@
     </ul>
 </li>
 @endif
-
+@if($esAdmin || $user->tieneAccesoModulo('actividades-asistencia'))
+<li class="side-menus {{ Request::is('actividades-asistencia*') ? 'active' : '' }}">
+    <a class="nav-link" href="{{ route('actividades-asistencia.index') }}">
+        <i class="fas fa-calendar-check"></i><span>Asist. Actividades</span>
+    </a>
+</li>
+@endif
 @if($esAdmin || $user->tieneAccesoModulo('notas'))
 <li class="side-menus {{ Request::is('notas*') || Request::is('asistencia-clases*') ? 'active' : '' }}">
     <a class="nav-link menu-toggle" href="#" data-toggle="collapse" data-target="#notasMenu">
@@ -195,6 +201,8 @@
     </a>
 </li>
 @endif
+
+
 
 @if($esAdmin || $user->tieneAccesoModulo('transporte'))
 <li class="side-menus {{ Request::is('vehiculos*') || Request::is('choferes*') || Request::is('rutas*') || Request::is('asignaciones-transporte*') || Request::is('pagos-transporte*') || Request::is('estudiantes-rutas*') ? 'active' : '' }}">

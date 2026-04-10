@@ -88,6 +88,17 @@ Route::middleware(['auth', 'permiso', 'auditoria'])->group(function () {
     Route::get('asistencia-clases/{curmatdoc}/{periodo}/general', [App\Http\Controllers\AsistenciaClaseController::class, 'vistaGeneral'])->name('asistencia-clases.vista-general');
     Route::get('asistencia-clases/{curmatdoc}/{periodo}', [App\Http\Controllers\AsistenciaClaseController::class, 'registrar'])->name('asistencia-clases.registrar');
     Route::post('asistencia-clases/guardar', [App\Http\Controllers\AsistenciaClaseController::class, 'guardar'])->name('asistencia-clases.guardar');
+
+    // Asistencia Actividades
+    Route::post('actividades-asistencia/{id}/categoria', [App\Http\Controllers\ActividadAsistenciaController::class, 'storeCategoria'])->name('actividades-asistencia.store-categoria');
+    Route::delete('actividades-asistencia/categoria/{id}', [App\Http\Controllers\ActividadAsistenciaController::class, 'destroyCategoria'])->name('actividades-asistencia.destroy-categoria');
+    Route::get('actividades-asistencia/registrar/{catId}', [App\Http\Controllers\ActividadAsistenciaController::class, 'registrar'])->name('actividades-asistencia.registrar');
+    Route::post('actividades-asistencia/guardar-registro', [App\Http\Controllers\ActividadAsistenciaController::class, 'guardarRegistro'])->name('actividades-asistencia.guardar-registro');
+    Route::delete('actividades-asistencia/registro/{id}', [App\Http\Controllers\ActividadAsistenciaController::class, 'eliminarRegistro'])->name('actividades-asistencia.eliminar-registro');
+    Route::put('actividades-asistencia/registro/{id}/observacion', [App\Http\Controllers\ActividadAsistenciaController::class, 'actualizarObservacion'])->name('actividades-asistencia.actualizar-observacion');
+    Route::get('actividades-asistencia-reporte-pdf/{id}', [App\Http\Controllers\ActividadAsistenciaController::class, 'reportePdf'])->name('actividades-asistencia.reporte-pdf');
+    Route::resource('actividades-asistencia', App\Http\Controllers\ActividadAsistenciaController::class);
+    Route::get('api/actividades/buscar-estudiante/{codigo}', [App\Http\Controllers\ActividadAsistenciaController::class, 'buscarEstudiante']);
     
     // Agenda
     Route::resource('agenda', App\Http\Controllers\AgendaController::class);
