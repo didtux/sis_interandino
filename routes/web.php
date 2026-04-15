@@ -71,6 +71,8 @@ Route::middleware(['auth', 'permiso', 'auditoria'])->group(function () {
     
     // Materias
     Route::resource('materias', App\Http\Controllers\MateriaController::class);
+    Route::post('materias-grupos/guardar', [App\Http\Controllers\MateriaController::class, 'guardarGrupo'])->name('materias.guardar-grupo');
+    Route::delete('materias-grupos/{id}', [App\Http\Controllers\MateriaController::class, 'eliminarGrupo'])->name('materias.eliminar-grupo');
     
     // Notas
     Route::get('notas', [App\Http\Controllers\NotaController::class, 'index'])->name('notas.index');
@@ -82,10 +84,16 @@ Route::middleware(['auth', 'permiso', 'auditoria'])->group(function () {
     Route::get('notas/calificar/{curmatdoc}/{periodo}', [App\Http\Controllers\NotaController::class, 'calificar'])->name('notas.calificar');
     Route::post('notas/guardar', [App\Http\Controllers\NotaController::class, 'guardar'])->name('notas.guardar');
     Route::post('notas/aprobar/{curmatdoc}/{periodo}', [App\Http\Controllers\NotaController::class, 'aprobar'])->name('notas.aprobar');
+    Route::get('notas-reporte-personal', [App\Http\Controllers\NotaController::class, 'reportePersonal'])->name('notas.reporte-personal');
+    Route::get('notas-reporte-centralizador', [App\Http\Controllers\NotaController::class, 'reporteCentralizador'])->name('notas.reporte-centralizador');
+    Route::get('notas-reporte-general', [App\Http\Controllers\NotaController::class, 'reporteGeneral'])->name('notas.reporte-general');
+    // Reportes de Notas
+
 
     // Asistencia de Clases (Docentes)
     Route::get('asistencia-clases', [App\Http\Controllers\AsistenciaClaseController::class, 'index'])->name('asistencia-clases.index');
     Route::get('asistencia-clases/{curmatdoc}/{periodo}/general', [App\Http\Controllers\AsistenciaClaseController::class, 'vistaGeneral'])->name('asistencia-clases.vista-general');
+    Route::get('asistencia-clases/{curmatdoc}/{periodo}/reporte-pdf', [App\Http\Controllers\AsistenciaClaseController::class, 'reportePdf'])->name('asistencia-clases.reporte-pdf');
     Route::get('asistencia-clases/{curmatdoc}/{periodo}', [App\Http\Controllers\AsistenciaClaseController::class, 'registrar'])->name('asistencia-clases.registrar');
     Route::post('asistencia-clases/guardar', [App\Http\Controllers\AsistenciaClaseController::class, 'guardar'])->name('asistencia-clases.guardar');
 

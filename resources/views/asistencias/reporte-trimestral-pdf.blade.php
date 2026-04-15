@@ -21,6 +21,8 @@
         th { background-color: #2c3e50; color: white; font-size: 6px; font-weight: bold; }
         .estudiante { text-align: left; font-size: 6px; }
         .total-col { background-color: #ffeb3b; font-weight: bold; }
+        .leyenda { margin-top: 10px; font-size: 8px; }
+        .periodo-info { font-size: 7px; margin-top: 2px; color: #555; }
         .footer { position: fixed; bottom: 10px; left: 10px; font-size: 7px; color: #666; }
     </style>
 </head>
@@ -43,22 +45,31 @@
     </div>
 
     <div class="title-section">
-        <h2>REPORTE DE ASISTENCIA - {{ $trimestre }}ER TRIMESTRE</h2>
-        <p><strong>CURSO:</strong> {{ $curso->cur_nombre }} | <strong>GESTIÓN {{ date('Y') }}</strong></p>
+        <h2>REPORTE DE ASISTENCIA - {{ $trimestre }}{{ $trimestre == 1 ? 'ER' : ($trimestre == 2 ? 'DO' : 'ER') }} TRIMESTRE</h2>
+        <p><strong>CURSO:</strong> {{ $curso->cur_nombre }} | <strong>GESTIÓN {{ $year ?? date('Y') }}</strong></p>
+        @if(isset($periodo) && $periodo)
+            <p class="periodo-info">{{ $periodo->periodo_fecha_inicio->format('d/m/Y') }} — {{ $periodo->periodo_fecha_fin->format('d/m/Y') }}</p>
+        @endif
     </div>
+
+    @php
+        $mesesNum = $rango['mesesNum'] ?? [];
+        $mesesNombres = $rango['meses'] ?? [];
+        $yearVal = $year ?? date('Y');
+    @endphp
 
     <table>
         <thead>
             <tr>
                 <th rowspan="2">#</th>
                 <th rowspan="2">ESTUDIANTE</th>
-                @foreach($rango['meses'] as $mes)
+                @foreach($mesesNombres as $mes)
                     <th colspan="5">{{ strtoupper($mes) }}</th>
                 @endforeach
                 <th colspan="5">TOTAL TRIMESTRE</th>
             </tr>
             <tr>
-                @for($i = 0; $i < count($rango['meses']) + 1; $i++)
+                @for($i = 0; $i < count($mesesNombres) + 1; $i++)
                     <th>D.T.</th>
                     <th>T.L.</th>
                     <th>T.F.</th>
@@ -74,100 +85,76 @@
                 @endphp
                 <tr>
                     <td>{{ isset($lista) && isset($lista[$estudiante->est_codigo]) ? $lista[$estudiante->est_codigo] : $index + 1 }}</td>
-                    <td class="estudiante">{{ $estudiante->est_apellidos }} {{ $estudiante->est_nombres }}</td></td>
-                    
-                    @foreach($rango['meses'] as $mesIndex => $mes)
+                    <td class="estudiante">{{ $estudiante->est_apellidos }} {{ $estudiante->est_nombres }}</td>
+
+                    @foreach($mesesNum as $mesNum)
                         @php
-                            $mesNum = array_search($mes, ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']) + 1;
-                            $year = date('Y');
-                            $diasMes = cal_days_in_month(CAL_GREGORIAN, $mesNum, $year);
-                            
+                            $diasMes = cal_days_in_month(CAL_GREGORIAN, $mesNum, $yearVal);
+
                             $asistencias = \App\Models\Asistencia::where('estud_codigo', $estudiante->est_codigo)
-                                ->whereYear('asis_fecha', $year)
-                                ->whereMonth('asis_fecha', $mesNum)
-                                ->count();
-                            
+                                ->whereYear('asis_fecha', $yearVal)->whereMonth('asis_fecha', $mesNum)->count();
+
                             $permisos = \App\Models\Permiso::where('estud_codigo', $estudiante->est_codigo)
                                 ->where('permiso_estado', 1)
-                                ->whereYear('permiso_fecha_inicio', $year)
-                                ->whereMonth('permiso_fecha_inicio', $mesNum)
-                                ->count();
-                            
-                            // Calcular atrasos dinámicamente
+                                ->whereYear('permiso_fecha_inicio', $yearVal)->whereMonth('permiso_fecha_inicio', $mesNum)->count();
+
                             $asistenciasMes = \App\Models\Asistencia::where('estud_codigo', $estudiante->est_codigo)
-                                ->whereYear('asis_fecha', $year)
-                                ->whereMonth('asis_fecha', $mesNum)
-                                ->get();
-                            
+                                ->whereYear('asis_fecha', $yearVal)->whereMonth('asis_fecha', $mesNum)->get();
+
                             $permisosEstudiante = \App\Models\Permiso::where('estud_codigo', $estudiante->est_codigo)
                                 ->where('permiso_estado', 1)
-                                ->whereYear('permiso_fecha_inicio', $year)
-                                ->whereMonth('permiso_fecha_inicio', $mesNum)
-                                ->get();
-                            
+                                ->whereYear('permiso_fecha_inicio', $yearVal)->whereMonth('permiso_fecha_inicio', $mesNum)->get();
+
                             $configs = \App\Models\ConfiguracionAsistencia::activo()
                                 ->where(function($q) use ($estudiante) {
                                     $q->whereHas('cursos', function($subQ) use ($estudiante) {
                                         $subQ->where('colegio_cursos.cur_codigo', $estudiante->cur_codigo);
                                     })->orWhereDoesntHave('cursos');
                                 })->get();
-                            
+
                             $atrasos = 0;
                             foreach($asistenciasMes as $asis) {
                                 $tienePermiso = $permisosEstudiante->where('permiso_fecha_inicio', '<=', $asis->asis_fecha->format('Y-m-d'))
                                     ->where('permiso_fecha_fin', '>=', $asis->asis_fecha->format('Y-m-d'))->first();
                                 if ($tienePermiso) continue;
-                                
                                 if ($configs->isEmpty()) continue;
-                                
+
                                 $horaPartes = explode(':', substr($asis->asis_hora, 0, 5));
                                 $minutosLlegada = ((int)$horaPartes[0] * 60) + (int)$horaPartes[1];
-                                
-                                $config = null;
-                                $menorDif = PHP_INT_MAX;
+
+                                $config = null; $menorDif = PHP_INT_MAX;
                                 foreach ($configs as $conf) {
                                     $horaEnt = strlen($conf->hora_entrada) > 8 ? substr($conf->hora_entrada, 11, 5) : substr($conf->hora_entrada, 0, 5);
                                     $horaSal = strlen($conf->hora_salida) > 8 ? substr($conf->hora_salida, 11, 5) : substr($conf->hora_salida, 0, 5);
-                                    $entPartes = explode(':', $horaEnt);
-                                    $salPartes = explode(':', $horaSal);
-                                    $minutosEnt = ((int)$entPartes[0] * 60) + (int)$entPartes[1];
-                                    $minutosSal = ((int)$salPartes[0] * 60) + (int)$salPartes[1];
+                                    $minutosEnt = ((int)explode(':', $horaEnt)[0] * 60) + (int)explode(':', $horaEnt)[1];
+                                    $minutosSal = ((int)explode(':', $horaSal)[0] * 60) + (int)explode(':', $horaSal)[1];
                                     if ($minutosLlegada >= ($minutosEnt - 120) && $minutosLlegada <= ($minutosSal + 120)) {
                                         $dif = abs($minutosLlegada - $minutosEnt);
                                         if ($dif < $menorDif) { $menorDif = $dif; $config = $conf; }
                                     }
                                 }
                                 if (!$config) $config = $configs->first();
-                                
+
                                 $tol = strlen($config->tolerancia_atraso) > 8 ? substr($config->tolerancia_atraso, 11, 5) : substr($config->tolerancia_atraso, 0, 5);
-                                $tolPartes = explode(':', $tol);
-                                $minutosLim = ((int)$tolPartes[0] * 60) + (int)$tolPartes[1];
-                                
+                                $minutosLim = ((int)explode(':', $tol)[0] * 60) + (int)explode(':', $tol)[1];
                                 if ($minutosLlegada > $minutosLim) $atrasos++;
                             }
-                            
-                            $festivos = \App\Models\FechaFestiva::activo()
-                                ->where('festivo_tipo', 1)
-                                ->whereYear('festivo_fecha', $year)
-                                ->whereMonth('festivo_fecha', $mesNum)
-                                ->count();
-                            
+
+                            $festivos = \App\Models\FechaFestiva::activo()->where('festivo_tipo', 1)
+                                ->whereYear('festivo_fecha', $yearVal)->whereMonth('festivo_fecha', $mesNum)->count();
+
                             $faltas = $diasMes - $asistencias - $permisos - $festivos;
-                            $totalMes = $diasMes;
-                            
-                            $totalTrimestre['dt'] += $asistencias;
-                            $totalTrimestre['tl'] += $permisos;
-                            $totalTrimestre['tf'] += $faltas;
-                            $totalTrimestre['ta'] += $atrasos;
-                            $totalTrimestre['total'] += $totalMes;
+                            $totalTrimestre['dt'] += $asistencias; $totalTrimestre['tl'] += $permisos;
+                            $totalTrimestre['tf'] += $faltas; $totalTrimestre['ta'] += $atrasos;
+                            $totalTrimestre['total'] += $diasMes;
                         @endphp
                         <td>{{ $asistencias }}</td>
                         <td>{{ $permisos }}</td>
                         <td>{{ $faltas }}</td>
                         <td>{{ $atrasos }}</td>
-                        <td>{{ $totalMes }}</td>
+                        <td>{{ $diasMes }}</td>
                     @endforeach
-                    
+
                     <td class="total-col">{{ $totalTrimestre['dt'] }}</td>
                     <td class="total-col">{{ $totalTrimestre['tl'] }}</td>
                     <td class="total-col">{{ $totalTrimestre['tf'] }}</td>
@@ -178,9 +165,12 @@
         </tbody>
     </table>
 
+    <div class="leyenda">
+        <strong>Leyenda:</strong> D.T. = Días Trabajados | T.L. = Total Licencias | T.F. = Total Faltas | T.A. = Total Atrasos
+    </div>
+
     <div class="footer">
-        Fecha y hora de impresión: {{ now()->format('d/m/Y H:i:s') }}<br>
-        Página 1
+        Fecha y hora de impresión: {{ now()->format('d/m/Y H:i:s') }}<br>Página 1
     </div>
 </body>
 </html>

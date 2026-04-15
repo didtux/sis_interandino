@@ -10,13 +10,18 @@ class Materia extends Model
     protected $primaryKey = 'mat_id';
     public $timestamps = false;
 
-    protected $fillable = ['mat_codigo', 'mat_nombre', 'mat_visible'];
+    protected $fillable = ['mat_codigo', 'mat_nombre', 'mat_campo', 'mat_orden', 'mat_visible'];
 
     protected $casts = ['mat_fecha' => 'datetime', 'mat_visible' => 'integer'];
 
     public function docentes()
     {
         return $this->belongsToMany(Docente::class, 'colegiorela_docente_materia', 'mat_codigo', 'doc_codigo', 'mat_codigo', 'doc_codigo');
+    }
+
+    public function grupos()
+    {
+        return $this->belongsToMany(MateriaGrupo::class, 'colegio_materia_grupo_detalle', 'mat_codigo', 'grupo_id', 'mat_codigo', 'grupo_id');
     }
 
     public function scopeVisible($query)

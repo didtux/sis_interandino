@@ -183,6 +183,9 @@ class ActividadAsistenciaController extends Controller
 
     public function reportePdf($id, Request $request)
     {
+        set_time_limit(300);
+        ini_set('memory_limit', '512M');
+
         $actividad = Actividad::with('categoriasActivas')->findOrFail($id);
         $tab = $request->input('tab', 'registros');
 
@@ -211,14 +214,26 @@ class ActividadAsistenciaController extends Controller
             $registros = collect();
         }
 
-        $cursos = Curso::visible()->orderBy('cur_nombre')->get();
         $filtros = [];
-        if ($request->filled('cur_codigo')) $filtros[] = 'Curso: ' . ($cursos->firstWhere('cur_codigo', $request->cur_codigo)->cur_nombre ?? $request->cur_codigo);
-        if ($request->filled('cur_codigo_faltas')) $filtros[] = 'Curso: ' . ($cursos->firstWhere('cur_codigo', $request->cur_codigo_faltas)->cur_nombre ?? $request->cur_codigo_faltas);
+        if ($request->filled('cur_codigo')) {
+            $curNombre = Curso::where('cur_codigo', $request->cur_codigo)->value('cur_nombre');
+            $filtros[] = 'Curso: ' . ($curNombre ?? $request->cur_codigo);
+        }
+        if ($request->filled('cur_codigo_faltas')) {
+            $curNombre = Curso::where('cur_codigo', $request->cur_codigo_faltas)->value('cur_nombre');
+            $filtros[] = 'Curso: ' . ($curNombre ?? $request->cur_codigo_faltas);
+        }
         if ($request->filled('actcat_id')) $filtros[] = 'Categoría: ' . ($actividad->categoriasActivas->firstWhere('actcat_id', $request->actcat_id)->actcat_nombre ?? '');
         if ($request->filled('buscar_est')) $filtros[] = 'Estudiante: ' . $request->buscar_est;
 
-        $pdf = Pdf::loadView('actividades-asistencia.reporte-pdf', compact('actividad', 'registros', 'faltas', 'tab', 'filtros'))
+        // Agrupar por curso
+        if ($tab == 'registros') {
+            $porCurso = $registros->groupBy(fn($r) => $r->estudiante->curso->cur_nombre ?? 'Sin Curso');
+        } else {
+            $porCurso = $faltas->groupBy(fn($e) => $e->curso->cur_nombre ?? 'Sin Curso');
+        }
+
+        $pdf = Pdf::loadView('actividades-asistencia.reporte-pdf', compact('actividad', 'registros', 'faltas', 'tab', 'filtros', 'porCurso'))
             ->setPaper('letter', 'portrait');
         return $pdf->stream('actividad-' . $actividad->act_id . '-' . $tab . '.pdf');
     }

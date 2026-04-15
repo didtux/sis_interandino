@@ -6,7 +6,9 @@ use App\Models\AsistenciaClase;
 use App\Models\CursoMateriaDocente;
 use App\Models\NotaPeriodo;
 use App\Models\Estudiante;
+use App\Models\ListaCurso;
 use Illuminate\Http\Request;
+use Barryvdh\DomPDF\Facade\Pdf;
 
 class AsistenciaClaseController extends Controller
 {
@@ -185,5 +187,44 @@ class AsistenciaClaseController extends Controller
 
         return redirect()->route('asistencia-clases.vista-general', [$curmatdocId, $periodoId])
             ->with('success', 'Asistencia del ' . \Carbon\Carbon::parse($fecha)->format('d/m/Y') . ' registrada correctamente');
+    }
+
+    public function reportePdf($curmatdocId, $periodoId, Request $request)
+    {
+        set_time_limit(300);
+        ini_set('memory_limit', '512M');
+
+        $asignacion = CursoMateriaDocente::with(['curso', 'materia', 'docente'])->findOrFail($curmatdocId);
+        $periodo = NotaPeriodo::findOrFail($periodoId);
+        $gestion = $periodo->periodo_gestion;
+
+        $lista = ListaCurso::where('cur_codigo', $asignacion->cur_codigo)
+            ->where('lista_gestion', $gestion)->pluck('lista_numero', 'est_codigo');
+
+        $estudiantes = Estudiante::visible()
+            ->where('colegio_estudiantes.cur_codigo', $asignacion->cur_codigo)
+            ->leftJoin('colegio_lista_curso', function ($j) use ($gestion, $asignacion) {
+                $j->whereRaw('colegio_estudiantes.est_codigo COLLATE utf8mb4_unicode_ci = colegio_lista_curso.est_codigo')
+                  ->where('colegio_lista_curso.lista_gestion', $gestion)
+                  ->where('colegio_lista_curso.cur_codigo', $asignacion->cur_codigo);
+            })
+            ->select('colegio_estudiantes.*', 'colegio_lista_curso.lista_numero')
+            ->orderBy('colegio_lista_curso.lista_numero')
+            ->orderBy('colegio_estudiantes.est_apellidos')->get();
+
+        $queryAsis = AsistenciaClase::where('curmatdoc_id', $curmatdocId)->where('periodo_id', $periodoId);
+        if ($request->filled('fecha_desde')) $queryAsis->where('asiscl_fecha', '>=', $request->fecha_desde);
+        if ($request->filled('fecha_hasta')) $queryAsis->where('asiscl_fecha', '<=', $request->fecha_hasta);
+
+        $todasAsis = $queryAsis->get();
+        $fechas = $todasAsis->pluck('asiscl_fecha')->map(fn($f) => $f->format('Y-m-d'))->unique()->sort()->values();
+        $asistencias = $todasAsis->groupBy('est_codigo')->map(fn($items) => $items->keyBy(fn($a) => $a->asiscl_fecha->format('Y-m-d')));
+        $totales = $todasAsis->groupBy('est_codigo')->map(fn($items) => $items->groupBy('asiscl_estado')->map(fn($g) => $g->count()));
+
+        $pdf = Pdf::loadView('notas.asistencia-clases.reporte-pdf', compact(
+            'asignacion', 'periodo', 'estudiantes', 'fechas', 'asistencias', 'totales', 'lista', 'gestion'
+        ))->setPaper('legal', 'landscape');
+
+        return $pdf->stream('asistencia-clases-' . $asignacion->cur_codigo . '-' . $periodo->periodo_numero . '.pdf');
     }
 }

@@ -35,6 +35,9 @@
                             <small class="text-muted">Fecha actual:</small> <strong class="text-danger">{{ now()->format('d/m/Y') }}</strong>
                         </div>
                         <div class="col-md-4 text-right">
+                            <a href="{{ route('asistencia-clases.reporte-pdf', [$asignacion->curmatdoc_id, $periodo->periodo_id, 'fecha_desde' => request('fecha_desde'), 'fecha_hasta' => request('fecha_hasta')]) }}" class="btn btn-danger btn-sm" target="_blank">
+                                <i class="fas fa-file-pdf mr-1"></i>PDF
+                            </a>
                             @if($enRangoPeriodo && $esDocente)
                                 <a href="{{ route('asistencia-clases.registrar', [$asignacion->curmatdoc_id, $periodo->periodo_id, 'fecha' => now()->toDateString()]) }}" class="btn btn-primary-modern">
                                     <i class="fas fa-plus-circle mr-1"></i>Registrar Asistencia Hoy
