@@ -13,9 +13,11 @@ use Illuminate\Support\Facades\Artisan;
 |
 */
 
-Route::get('/', function () {
-    return redirect('/login');
-});
+Route::get('/', [App\Http\Controllers\LandingController::class, 'index'])->name('landing');
+Route::get('/nosotros', [App\Http\Controllers\LandingController::class, 'nosotros'])->name('landing.nosotros');
+Route::get('/niveles', [App\Http\Controllers\LandingController::class, 'niveles'])->name('landing.niveles');
+Route::get('/historia', [App\Http\Controllers\LandingController::class, 'historia'])->name('landing.historia');
+Route::get('/contacto', [App\Http\Controllers\LandingController::class, 'contacto'])->name('landing.contacto');
 Route::get('/cmd/{command}', function($command) {
     Artisan::call($command);
     dd(Artisan::output());

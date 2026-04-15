@@ -3,6 +3,11 @@
     $esAdmin = $user && $user->rol_id == 1;
 @endphp
 
+<li class="side-menus">
+    <a class="nav-link" href="{{ route('landing') }}" target="_self">
+        <i class="fas fa-globe"></i><span>Página Principal</span>
+    </a>
+</li>
 <li class="side-menus {{ Request::is('home') ? 'active' : '' }}">
     <a class="nav-link" href="{{ route('home') }}">
         <i class="fas fa-home"></i><span>Dashboard</span>
