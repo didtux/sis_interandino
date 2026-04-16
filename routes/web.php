@@ -200,6 +200,8 @@ Route::middleware(['auth', 'permiso', 'auditoria'])->group(function () {
     Route::put('pagos-transporte/{id}/anular', [App\Http\Controllers\PagoTransporteController::class, 'anular'])->name('pagos-transporte.anular');
     Route::resource('pagos-transporte', App\Http\Controllers\PagoTransporteController::class);
     Route::resource('estudiantes-rutas', App\Http\Controllers\EstudianteRutaController::class);
+    Route::put('estudiantes-rutas/{id}/suspender', [App\Http\Controllers\EstudianteRutaController::class, 'suspender'])->name('estudiantes-rutas.suspender');
+    Route::put('estudiantes-rutas/{id}/reactivar', [App\Http\Controllers\EstudianteRutaController::class, 'reactivar'])->name('estudiantes-rutas.reactivar');
     
     // Módulo de Servicios
     Route::resource('servicios', App\Http\Controllers\ServicioController::class);

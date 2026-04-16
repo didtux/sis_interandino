@@ -13,6 +13,7 @@ class EstudianteRuta extends Model
     protected $fillable = [
         'ter_codigo', 'est_codigo', 'ruta_codigo', 'tpago_codigo',
         'ter_direccion_recogida', 'ter_coordenadas', 'ter_estado',
+        'ter_suspendido', 'ter_suspendido_desde',
         'ter_usuario_registro'
     ];
 

@@ -100,6 +100,10 @@ class PagoTransporteController extends Controller
             $vehiculo = $asignacion && $asignacion->vehiculo ? 'Bus ' . ($asignacion->vehiculo->veh_numero_bus ?? $asignacion->vehiculo->veh_placa) : '-';
             $chofer = $asignacion && $asignacion->chofer ? $asignacion->chofer->chof_nombres . ' ' . $asignacion->chofer->chof_apellidos : '-';
 
+            // Estado de suspensión
+            $suspendido = $ruta ? ($ruta->ter_suspendido ?? 0) : 0;
+            $suspendidoDesde = $ruta ? ($ruta->ter_suspendido_desde ?? null) : null;
+
             // Pagos activos del año
             $pagos = PagoTransporte::where('est_codigo', $est->est_codigo)
                 ->whereYear('tpago_fecha_pago', $gestion)
@@ -153,6 +157,8 @@ class PagoTransporteController extends Controller
                 'ultima_vigencia' => $ultimaVigencia ? $ultimaVigencia->format('Y-m-d') : null,
                 'historial' => $historial,
                 'padres' => $est->padres->pluck('pfam_codigo')->toArray(),
+                'suspendido' => $suspendido,
+                'suspendido_desde' => $suspendidoDesde,
             ];
         }
 

@@ -10,8 +10,10 @@
     .mes-badge { display: inline-block; padding: 3px 8px; border-radius: 4px; font-size: 11px; margin: 2px; font-weight: 600; }
     .mes-pagado { background: #d4edda; color: #155724; }
     .mes-pendiente { background: #fff3cd; color: #856404; }
-    .mes-vencido { background: #f8d7da; color: #721c24; text-decoration: line-through; }
-    .historial-table { font-size: 12px; }
+    .mes-mora { background: #f8d7da; color: #721c24; }
+    .mes-suspendido { background: #e2e3e5; color: #6c757d; text-decoration: line-through; }
+    .mes-mora-badge { background: #e74c3c; color: #fff; font-size: 9px; padding: 1px 5px; border-radius: 3px; margin-left: 3px; }
+    .mes-susp-badge { background: #6c757d; color: #fff; font-size: 9px; padding: 1px 5px; border-radius: 3px; margin-left: 3px; }
     .historial-table th { background: #e9ecef; font-size: 11px; text-transform: uppercase; }
     .student-detail-panel { display: none; border-left: 3px solid #17a2b8; background: #fff; padding: 15px; margin: 10px 0; border-radius: 0 8px 8px 0; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
 </style>
@@ -155,13 +157,27 @@ var mesActual = {{ (int)date('n') }}; // 1-12
 var idxGlobal = 0;
 var estudiantesAgregados = [];
 
-// Obtener meses pagables (no pagados Y >= mes actual)
+// Obtener meses pagables (no pagados, no suspendidos)
 function getMesesPagables(est) {
     var pagables = [];
     for (var m = 2; m <= 11; m++) {
-        if (!est.meses_pagados.includes(m) && m >= mesActual) pagables.push(m);
+        if (est.meses_pagados.includes(m)) continue;
+        // Si está suspendido, no incluir meses desde la suspensión
+        if (est.suspendido && est.suspendido_desde && m >= est.suspendido_desde) continue;
+        pagables.push(m);
     }
     return pagables;
+}
+
+function esMora(est, m) {
+    if (est.meses_pagados.includes(m)) return false;
+    // Si está suspendido desde antes de este mes, no es mora
+    if (est.suspendido && est.suspendido_desde && m >= est.suspendido_desde) return false;
+    return m < mesActual;
+}
+
+function esSuspendido(est, m) {
+    return est.suspendido && est.suspendido_desde && m >= est.suspendido_desde && !est.meses_pagados.includes(m);
 }
 
 $(document).ready(function() {
@@ -273,7 +289,7 @@ function agregarFilaEstudiante(est) {
         if (!est.meses_pagados.includes(mv)) mesesVencidos++;
     }
     var infoDisp = maxCuotas + ' disponible' + (maxCuotas !== 1 ? 's' : '');
-    if (mesesVencidos > 0) infoDisp += ' <span class="text-danger">(' + mesesVencidos + ' vencido' + (mesesVencidos !== 1 ? 's' : '') + ')</span>';
+    if (mesesVencidos > 0) infoDisp += ' <span class="text-danger">(' + mesesVencidos + ' en mora)</span>';
     row += '</select><small class="text-muted">' + infoDisp + '</small></td>' +
         '<td><input type="number" name="estudiantes[' + idx + '][monto_mensual]" class="form-control form-control-sm monto-mensual" data-idx="' + idx + '" step="0.01" min="0" value="0" disabled></td>' +
         '<td class="subtotal-cell"><strong>Bs. 0.00</strong></td>' +
@@ -307,14 +323,19 @@ function crearPanelDetalle(est, idx) {
         var clase, icono;
         if (est.meses_pagados.includes(m)) {
             clase = 'mes-pagado'; icono = '✓';
-        } else if (m < mesActual) {
-            clase = 'mes-vencido'; icono = '✗';
+        } else if (esSuspendido(est, m)) {
+            clase = 'mes-suspendido'; icono = '‖';
+        } else if (esMora(est, m)) {
+            clase = 'mes-mora'; icono = '⚠';
         } else {
             clase = 'mes-pendiente'; icono = '○';
         }
-        mesesHtml += '<span class="mes-badge ' + clase + '">' + icono + ' ' + mesesNombres[m] + '</span>';
+        var extra = '';
+        if (esSuspendido(est, m)) extra = ' <span class="mes-susp-badge">SUSP.</span>';
+        else if (esMora(est, m)) extra = ' <span class="mes-mora-badge">MORA</span>';
+        mesesHtml += '<span class="mes-badge ' + clase + '">' + icono + ' ' + mesesNombres[m] + extra + '</span>';
     }
-    mesesHtml += '<div class="mt-1" style="font-size:11px;"><span class="mes-badge mes-pagado">✓ Pagado</span> <span class="mes-badge mes-pendiente">○ Pendiente</span> <span class="mes-badge mes-vencido">✗ Vencido</span></div>';
+    mesesHtml += '<div class="mt-1" style="font-size:11px;"><span class="mes-badge mes-pagado">✓ Pagado</span> <span class="mes-badge mes-pendiente">○ Pendiente</span> <span class="mes-badge mes-mora">⚠ Mora</span> <span class="mes-badge mes-suspendido">‖ Suspendido</span></div>';
 
     var historialHtml = '';
     if (est.historial && est.historial.length > 0) {

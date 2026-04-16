@@ -242,21 +242,7 @@ class PagoController extends Controller
             $montoMensualidad = $montoFinal > 0 ? $montoFinal / 10 : 0;
             $cuotaFebrero = $esSoloRegistro ? $montoMensualidad : max(0, $montoMensualidad - $montoInscripcion);
 
-            // Recopilar meses a pagar (saltando pagados y vencidos)
-            $mesActualNum = intval(date('n'));
-            // Determinar primer mes pagado para saber límite de vencidos
-            $mesesPagadosEst = [];
-            $pagosEst = Pago::where('est_codigo', $estCodigo)
-                ->whereYear('pagos_fecha', $year)->where('pagos_estado', 1)->get();
-            $mesesMapStore = [2=>'Febrero',3=>'Marzo',4=>'Abril',5=>'Mayo',6=>'Junio',7=>'Julio',8=>'Agosto',9=>'Septiembre',10=>'Octubre',11=>'Noviembre'];
-            foreach ($pagosEst as $p) {
-                foreach ($mesesMapStore as $num => $nombre) {
-                    if (stripos($p->concepto, $nombre) !== false) $mesesPagadosEst[] = $num;
-                }
-            }
-            $primerMesPagadoEst = !empty($mesesPagadosEst) ? min($mesesPagadosEst) : $mesActualNum;
-            $mesLimiteEst = max($mesActualNum, $primerMesPagadoEst);
-
+            // Recopilar meses a pagar (saltando solo los ya pagados)
             $mesesAPagar = [];
             for ($m = $mesInicio; $m <= 11 && count($mesesAPagar) < $cantidadCuotas; $m++) {
                 $existe = Pago::where('est_codigo', $estCodigo)
@@ -265,7 +251,6 @@ class PagoController extends Controller
                     ->where('concepto', 'like', '%' . $mesesNombres[$m] . '%')
                     ->exists();
                 if ($existe) continue;
-                if ($m < $mesLimiteEst) continue;
                 $mesesAPagar[] = $m;
             }
 

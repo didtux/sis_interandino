@@ -10,7 +10,8 @@
     .mes-badge { display: inline-block; padding: 3px 8px; border-radius: 4px; font-size: 11px; margin: 2px; font-weight: 600; }
     .mes-pagado { background: #d4edda; color: #155724; }
     .mes-pendiente { background: #fff3cd; color: #856404; }
-    .mes-vencido { background: #f8d7da; color: #721c24; text-decoration: line-through; }
+    .mes-mora { background: #f8d7da; color: #721c24; }
+    .mes-mora-badge { background: #e74c3c; color: #fff; font-size: 9px; padding: 1px 5px; border-radius: 3px; margin-left: 3px; }
     .historial-table { font-size: 12px; }
     .historial-table th { background: #e9ecef; font-size: 11px; text-transform: uppercase; }
     .student-detail-panel { display: none; border-left: 3px solid #007bff; background: #fff; padding: 15px; margin: 10px 0; border-radius: 0 8px 8px 0; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
@@ -160,14 +161,18 @@ var mesActual = {{ (int)date('n') }};
 var idxGlobal = 0;
 var estudiantesAgregados = [];
 
-// Meses pagables: no pagados Y no vencidos
+// Meses pagables: todos los no pagados (incluyendo en mora)
 function getMesesPagables(est) {
     var pagables = [];
-    var mesLimite = Math.max(mesActual, est.primer_mes || mesActual);
     for (var m = 2; m <= 11; m++) {
-        if (!est.meses_pagados.includes(m) && m >= mesLimite) pagables.push(m);
+        if (!est.meses_pagados.includes(m)) pagables.push(m);
     }
     return pagables;
+}
+
+function esMora(est, m) {
+    var mesLimite = Math.max(mesActual, est.primer_mes || mesActual);
+    return m < mesLimite && !est.meses_pagados.includes(m);
 }
 
 function getMontoCuota(est, mes) {
@@ -282,16 +287,15 @@ function agregarFilaEstudiante(est) {
         if (est.meses_pagados.includes(m)) {
             disabled = 'disabled';
             label += ' (Pagado)';
-        } else if (m < mesLimiteEst) {
-            disabled = 'disabled';
-            label += ' (Vencido)';
+        } else if (esMora(est, m)) {
+            label += ' ⚠ MORA';
         }
         var selected = (m === primerMesDisponible) ? 'selected' : '';
         mesesOpts += '<option value="' + m + '" ' + disabled + ' ' + selected + '>' + label + '</option>';
     }
 
     var infoDisp = maxCuotas + ' disponible' + (maxCuotas !== 1 ? 's' : '');
-    if (mesesVencidos > 0) infoDisp += ' <span class="text-danger">(' + mesesVencidos + ' vencido' + (mesesVencidos !== 1 ? 's' : '') + ')</span>';
+    if (mesesVencidos > 0) infoDisp += ' <span class="text-danger">(' + mesesVencidos + ' en mora)</span>';
 
     var montoPrimerCuota = getMontoCuota(est, primerMesDisponible);
     var esOtro = $('#checkOtroPadre').is(':checked');
@@ -344,19 +348,18 @@ function agregarFilaEstudiante(est) {
 
 function crearPanelDetalle(est, idx) {
     var mesesHtml = '';
-    var mesLimite = Math.max(mesActual, est.primer_mes || mesActual);
     for (var m = 2; m <= 11; m++) {
         var clase, icono;
         if (est.meses_pagados.includes(m)) {
             clase = 'mes-pagado'; icono = '✓';
-        } else if (m < mesLimite) {
-            clase = 'mes-vencido'; icono = '✗';
+        } else if (esMora(est, m)) {
+            clase = 'mes-mora'; icono = '⚠';
         } else {
             clase = 'mes-pendiente'; icono = '○';
         }
-        mesesHtml += '<span class="mes-badge ' + clase + '">' + icono + ' ' + mesesNombres[m] + '</span>';
+        mesesHtml += '<span class="mes-badge ' + clase + '">' + icono + ' ' + mesesNombres[m] + (esMora(est, m) ? ' <span class="mes-mora-badge">MORA</span>' : '') + '</span>';
     }
-    mesesHtml += '<div class="mt-1" style="font-size:11px;"><span class="mes-badge mes-pagado">✓ Pagado</span> <span class="mes-badge mes-pendiente">○ Pendiente</span> <span class="mes-badge mes-vencido">✗ Vencido</span></div>';
+    mesesHtml += '<div class="mt-1" style="font-size:11px;"><span class="mes-badge mes-pagado">✓ Pagado</span> <span class="mes-badge mes-pendiente">○ Pendiente</span> <span class="mes-badge mes-mora">⚠ En Mora</span></div>';
 
     var historialHtml = '';
     if (est.historial && est.historial.length > 0) {
@@ -400,11 +403,11 @@ function crearPanelDetalle(est, idx) {
                     '<div class="info-row"><span class="label">Saldo Pendiente:</span><span class="value text-danger">Bs. ' + est.saldo_pendiente.toFixed(2) + '</span></div>' +
                     (function(){
                         var mesLimite = Math.max(mesActual, est.primer_mes || mesActual);
-                        var vencidos = 0;
-                        for (var mv = 2; mv < mesLimite; mv++) { if (!est.meses_pagados.includes(mv)) vencidos++; }
-                        var totalMeses = 10 - vencidos;
-                        return '<div class="info-row"><span class="label">Meses Pagados:</span><span class="value">' + est.meses_pagados.length + ' / ' + totalMeses + '</span></div>' +
-                               (vencidos > 0 ? '<div class="info-row"><span class="label">Meses Vencidos:</span><span class="value text-danger">' + vencidos + '</span></div>' : '');
+                        var enMora = 0;
+                        var mesLimiteP = Math.max(mesActual, est.primer_mes || mesActual);
+                        for (var mv = 2; mv < mesLimiteP; mv++) { if (!est.meses_pagados.includes(mv)) enMora++; }
+                        return '<div class="info-row"><span class="label">Meses Pagados:</span><span class="value">' + est.meses_pagados.length + ' / 10</span></div>' +
+                               (enMora > 0 ? '<div class="info-row"><span class="label">Meses en Mora:</span><span class="value text-danger">' + enMora + '</span></div>' : '');
                     })() +
                 '</div>' +
             '</div>' +
