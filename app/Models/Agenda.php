@@ -12,7 +12,7 @@ class Agenda extends Model
 
     protected $fillable = [
         'age_codigo', 'age_tipo', 'curso_codigo', 'prof_codigo',
-        'est_codigo', 'age_titulo', 'age_detalles', 'age_estado'
+        'est_codigo', 'age_titulo', 'age_detalles', 'age_fechahora', 'age_estado'
     ];
 
     protected $casts = [
@@ -29,10 +29,5 @@ class Agenda extends Model
     public function scopeActivo($query)
     {
         return $query->where('age_estado', 1);
-    }
-
-    public function scopeTipo($query, $tipo)
-    {
-        return $query->where('age_tipo', $tipo);
     }
 }

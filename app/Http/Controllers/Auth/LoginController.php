@@ -37,6 +37,13 @@ class LoginController extends Controller
             
             if ($passwordMatch) {
                 Auth::login($user, $request->filled('remember'));
+
+                if ($user->us_entidad_tipo === 'chofer') {
+                    return redirect('/mi-transporte');
+                } elseif ($user->us_entidad_tipo === 'padre') {
+                    return redirect('/mi-portal');
+                }
+
                 return redirect()->intended('/home');
             }
         }

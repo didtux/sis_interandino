@@ -44,9 +44,6 @@
     </div>
 </div>
 
-@include('profile.change_password')
-@include('profile.edit_profile')
-
 </body>
 <script src="{{ asset('assets/js/jquery.min.js') }}"></script>
 <script src="{{ asset('assets/js/popper.min.js') }}"></script>
@@ -62,6 +59,10 @@
 <script src="{{ asset('web/js/custom-tables.js') }}"></script>
 <script src="{{ mix('assets/js/profile.js') }}"></script>
 <script src="{{ mix('assets/js/custom/custom.js') }}"></script>
+
+@include('profile.change_password')
+@include('profile.edit_profile')
+
 @yield('page_js')
 @yield('scripts')
 <script>

@@ -29,6 +29,12 @@ Route::post('/logout', [App\Http\Controllers\Auth\LoginController::class, 'logou
 
 Route::get('/home', [App\Http\Controllers\HomeController::class, 'index'])->name('home');
 
+// Perfil de usuario
+Route::middleware(['auth'])->group(function () {
+    Route::post('/perfil/cambiar-password', [App\Http\Controllers\PerfilController::class, 'cambiarPassword'])->name('perfil.cambiar-password');
+    Route::post('/perfil/actualizar', [App\Http\Controllers\PerfilController::class, 'cambiarPassword'])->name('perfil.actualizar');
+});
+
 // Rutas del Sistema de Colegio
 Route::middleware(['auth', 'permiso', 'auditoria'])->group(function () {
     // Usuarios
@@ -111,6 +117,7 @@ Route::middleware(['auth', 'permiso', 'auditoria'])->group(function () {
     Route::get('api/actividades/buscar-estudiante/{codigo}', [App\Http\Controllers\ActividadAsistenciaController::class, 'buscarEstudiante']);
     
     // Agenda
+    Route::get('agenda/padres-estudiante/{est_codigo}', [App\Http\Controllers\AgendaController::class, 'padresPorEstudiante'])->name('agenda.padres-estudiante');
     Route::resource('agenda', App\Http\Controllers\AgendaController::class);
     
     // Pagos
@@ -239,4 +246,26 @@ Route::middleware(['auth', 'permiso', 'auditoria'])->group(function () {
     Route::get('enfermeria/reporte-pdf', [App\Http\Controllers\EnfermeriaController::class, 'reportePdf'])->name('enfermeria.reporte-pdf');
     Route::get('enfermeria/reporte-docentes-pdf', [App\Http\Controllers\EnfermeriaController::class, 'reporteDocentesPdf'])->name('enfermeria.reporte-docentes-pdf');
     Route::resource('enfermeria', App\Http\Controllers\EnfermeriaController::class);
+
+    // ── Portal de Conductor ──
+    Route::prefix('mi-transporte')->name('chofer-portal.')->group(function () {
+        Route::get('/', [App\Http\Controllers\ChoferPortalController::class, 'dashboard'])->name('dashboard');
+        Route::get('/estudiantes', [App\Http\Controllers\ChoferPortalController::class, 'estudiantes'])->name('estudiantes');
+        Route::get('/asistencia', [App\Http\Controllers\ChoferPortalController::class, 'asistencia'])->name('asistencia');
+        Route::post('/asistencia/guardar', [App\Http\Controllers\ChoferPortalController::class, 'guardarAsistencia'])->name('asistencia.guardar');
+        Route::delete('/asistencia/{id}', [App\Http\Controllers\ChoferPortalController::class, 'eliminarAsistencia'])->name('asistencia.eliminar');
+        Route::get('/historial', [App\Http\Controllers\ChoferPortalController::class, 'historial'])->name('historial');
+    });
+
+    // ── Portal de Padres de Familia ──
+    Route::prefix('mi-portal')->name('padre-portal.')->group(function () {
+        Route::get('/', [App\Http\Controllers\PadrePortalController::class, 'dashboard'])->name('dashboard');
+        Route::get('/hijos', [App\Http\Controllers\PadrePortalController::class, 'hijos'])->name('hijos');
+        Route::get('/notas', [App\Http\Controllers\PadrePortalController::class, 'notas'])->name('notas');
+        Route::get('/asistencia', [App\Http\Controllers\PadrePortalController::class, 'asistencia'])->name('asistencia');
+        Route::get('/permisos', [App\Http\Controllers\PadrePortalController::class, 'permisos'])->name('permisos');
+        Route::get('/pagos', [App\Http\Controllers\PadrePortalController::class, 'pagos'])->name('pagos');
+        Route::get('/enfermeria', [App\Http\Controllers\PadrePortalController::class, 'enfermeria'])->name('enfermeria');
+        Route::get('/psicopedagogia', [App\Http\Controllers\PadrePortalController::class, 'psicopedagogia'])->name('psicopedagogia');
+    });
 });

@@ -40,6 +40,11 @@ class HomeController extends Controller
             return $this->dashboardDocente($user);
         }
 
+        // Padre: redirigir a su portal
+        if ($user->us_entidad_tipo === 'padre') {
+            return redirect()->route('padre-portal.dashboard');
+        }
+
         // Otros roles: dashboard basado en permisos
         return $this->dashboardPorPermisos($user);
     }

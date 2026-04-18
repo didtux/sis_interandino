@@ -1,7 +1,87 @@
 @php
     $user = auth()->user();
     $esAdmin = $user && $user->rol_id == 1;
+    $esPadre = $user && $user->us_entidad_tipo === 'padre';
+    $esChofer = $user && $user->us_entidad_tipo === 'chofer';
 @endphp
+
+{{-- ── MENÚ EXCLUSIVO PARA CHOFERES ── --}}
+@if($esChofer)
+<li class="side-menus">
+    <a class="nav-link" href="{{ route('landing') }}" target="_self">
+        <i class="fas fa-globe"></i><span>Página Principal</span>
+    </a>
+</li>
+<li class="side-menus {{ Request::is('mi-transporte') ? 'active' : '' }}">
+    <a class="nav-link" href="{{ route('chofer-portal.dashboard') }}">
+        <i class="fas fa-home"></i><span>Mi Panel</span>
+    </a>
+</li>
+<li class="side-menus {{ Request::is('mi-transporte/estudiantes*') ? 'active' : '' }}">
+    <a class="nav-link" href="{{ route('chofer-portal.estudiantes') }}">
+        <i class="fas fa-users"></i><span>Mis Estudiantes</span>
+    </a>
+</li>
+<li class="side-menus {{ Request::is('mi-transporte/asistencia*') ? 'active' : '' }}">
+    <a class="nav-link" href="{{ route('chofer-portal.asistencia') }}">
+        <i class="fas fa-qrcode"></i><span>Registrar Asistencia</span>
+    </a>
+</li>
+<li class="side-menus {{ Request::is('mi-transporte/historial*') ? 'active' : '' }}">
+    <a class="nav-link" href="{{ route('chofer-portal.historial') }}">
+        <i class="fas fa-history"></i><span>Historial</span>
+    </a>
+</li>
+
+{{-- ── MENÚ EXCLUSIVO PARA PADRES ── --}}
+@elseif($esPadre)
+<li class="side-menus">
+    <a class="nav-link" href="{{ route('landing') }}" target="_self">
+        <i class="fas fa-globe"></i><span>Página Principal</span>
+    </a>
+</li>
+<li class="side-menus {{ Request::is('mi-portal') ? 'active' : '' }}">
+    <a class="nav-link" href="{{ route('padre-portal.dashboard') }}">
+        <i class="fas fa-home"></i><span>Mi Portal</span>
+    </a>
+</li>
+<li class="side-menus {{ Request::is('mi-portal/hijos*') ? 'active' : '' }}">
+    <a class="nav-link" href="{{ route('padre-portal.hijos') }}">
+        <i class="fas fa-child"></i><span>Mis Hijos</span>
+    </a>
+</li>
+<li class="side-menus {{ Request::is('mi-portal/notas*') ? 'active' : '' }}">
+    <a class="nav-link" href="{{ route('padre-portal.notas') }}">
+        <i class="fas fa-star"></i><span>Notas</span>
+    </a>
+</li>
+<li class="side-menus {{ Request::is('mi-portal/asistencia*') ? 'active' : '' }}">
+    <a class="nav-link" href="{{ route('padre-portal.asistencia') }}">
+        <i class="fas fa-clipboard-check"></i><span>Asistencia</span>
+    </a>
+</li>
+<li class="side-menus {{ Request::is('mi-portal/permisos*') ? 'active' : '' }}">
+    <a class="nav-link" href="{{ route('padre-portal.permisos') }}">
+        <i class="fas fa-file-alt"></i><span>Permisos</span>
+    </a>
+</li>
+<li class="side-menus {{ Request::is('mi-portal/pagos*') ? 'active' : '' }}">
+    <a class="nav-link" href="{{ route('padre-portal.pagos') }}">
+        <i class="fas fa-money-bill-wave"></i><span>Pagos</span>
+    </a>
+</li>
+<li class="side-menus {{ Request::is('mi-portal/enfermeria*') ? 'active' : '' }}">
+    <a class="nav-link" href="{{ route('padre-portal.enfermeria') }}">
+        <i class="fas fa-heartbeat"></i><span>Enfermería</span>
+    </a>
+</li>
+<li class="side-menus {{ Request::is('mi-portal/psicopedagogia*') ? 'active' : '' }}">
+    <a class="nav-link" href="{{ route('padre-portal.psicopedagogia') }}">
+        <i class="fas fa-brain"></i><span>Psicopedagogía</span>
+    </a>
+</li>
+@else
+{{-- ── MENÚ NORMAL ── --}}
 
 <li class="side-menus">
     <a class="nav-link" href="{{ route('landing') }}" target="_self">
@@ -236,3 +316,4 @@
     </ul>
 </li>
 @endif
+@endif {{-- fin esPadre/else --}}

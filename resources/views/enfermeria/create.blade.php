@@ -26,14 +26,22 @@
                             <div class="col-md-6" id="estudiante_select">
                                 <div class="form-group">
                                     <label>Estudiante <span class="text-danger">*</span></label>
-                                    <select name="est_codigo" id="est_codigo" class="form-control select2" required>
-                                        <option value="">Seleccione...</option>
-                                        @foreach($estudiantes as $est)
-                                            <option value="{{ $est->est_codigo }}">
-                                                {{ $est->est_nombres }} {{ $est->est_apellidos }} - {{ $est->curso->cur_nombre ?? '' }}
-                                            </option>
-                                        @endforeach
-                                    </select>
+                                    <div class="input-group mb-2">
+                                        <select name="est_codigo" id="est_codigo" class="form-control select2" required>
+                                            <option value="">Seleccione...</option>
+                                            @foreach($estudiantes as $est)
+                                                <option value="{{ $est->est_codigo }}">
+                                                    {{ $est->est_nombres }} {{ $est->est_apellidos }} - {{ $est->curso->cur_nombre ?? '' }}
+                                                </option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                    <button type="button" class="btn btn-info btn-sm" id="btnToggleQR">
+                                        <i class="fas fa-qrcode mr-1"></i>Escanear QR
+                                    </button>
+                                    <div id="qr-reader-container" style="display:none;margin-top:10px;">
+                                        <div id="qr-reader" style="width:100%;max-width:350px;"></div>
+                                    </div>
                                 </div>
                             </div>
                             <div class="col-md-6" id="docente_select" style="display:none;">
@@ -119,10 +127,37 @@
 </div>
 
 @section('scripts')
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script>
+var qrScanner = null;
 $(document).ready(function() {
     $('.select2').select2({ theme: 'bootstrap4', width: '100%' });
-    
+
+    $('#btnToggleQR').on('click', function() {
+        var $container = $('#qr-reader-container');
+        if ($container.is(':visible')) {
+            $container.slideUp();
+            if (qrScanner) { qrScanner.clear(); qrScanner = null; }
+            $(this).html('<i class="fas fa-qrcode mr-1"></i>Escanear QR');
+        } else {
+            $container.slideDown();
+            $(this).html('<i class="fas fa-times mr-1"></i>Cerrar Escáner');
+            qrScanner = new Html5QrcodeScanner("qr-reader", { fps: 5, qrbox: 250 });
+            qrScanner.render(function(decodedText) {
+                var $option = $('#est_codigo option[value="' + decodedText + '"]');
+                if ($option.length) {
+                    $('#est_codigo').val(decodedText).trigger('change');
+                    swal('Estudiante encontrado', $option.text().trim(), 'success');
+                    qrScanner.clear(); qrScanner = null;
+                    $('#qr-reader-container').slideUp();
+                    $('#btnToggleQR').html('<i class="fas fa-qrcode mr-1"></i>Escanear QR');
+                } else {
+                    swal('No encontrado', 'El código escaneado no corresponde a ningún estudiante.', 'error');
+                }
+            });
+        }
+    });
+
     $('#es_docente').change(function() {
         if($(this).is(':checked')) {
             $('#enf_tipo_persona').val('DOCENTE');
@@ -130,6 +165,10 @@ $(document).ready(function() {
             $('#docente_select').show();
             $('#est_codigo').prop('required', false).prop('disabled', true);
             $('#doc_codigo').prop('required', true).prop('disabled', false);
+            // Ocultar QR si estaba abierto
+            $('#qr-reader-container').slideUp();
+            if (qrScanner) { qrScanner.clear(); qrScanner = null; }
+            $('#btnToggleQR').html('<i class="fas fa-qrcode mr-1"></i>Escanear QR');
         } else {
             $('#enf_tipo_persona').val('ESTUDIANTE');
             $('#estudiante_select').show();
@@ -138,7 +177,7 @@ $(document).ready(function() {
             $('#doc_codigo').prop('required', false).prop('disabled', true);
         }
     });
-    
+
     $('#enf_dx_detalle').change(function() {
         var valor = $(this).val();
         if (valor == 'ATENCIÓN MÉDICA') {
