@@ -5,6 +5,53 @@
     $esDocenteVinculado = auth()->user()->us_entidad_tipo === 'docente' && auth()->user()->us_entidad_id;
     $esAdmin = auth()->user()->rol_id == 1;
 @endphp
+
+{{-- Fix Select2 overflow --}}
+<style>
+    .select2-container { z-index: 1050; }
+    .select2-container .select2-selection--multiple {
+        min-height: 38px !important;
+        border: 1px solid #ced4da !important;
+        border-radius: .25rem !important;
+        padding: 2px 6px !important;
+    }
+    .select2-container--default .select2-selection--multiple .select2-selection__choice {
+        background-color: #3498db !important;
+        border: none !important;
+        color: #fff !important;
+        border-radius: 3px !important;
+        padding: 2px 8px !important;
+        margin: 2px 4px 2px 0 !important;
+        font-size: 0.82rem;
+    }
+    .select2-container--default .select2-selection--multiple .select2-selection__choice__remove {
+        color: #fff !important;
+        margin-right: 4px;
+    }
+    .select2-container--default .select2-selection--multiple .select2-selection__choice__remove:hover {
+        color: #ffd !important;
+    }
+    .select2-dropdown {
+        border: 1px solid #ced4da !important;
+        border-radius: 0 0 .25rem .25rem !important;
+        box-shadow: 0 4px 12px rgba(0,0,0,.15) !important;
+        z-index: 1060 !important;
+    }
+    .select2-results__option--highlighted[aria-selected] {
+        background-color: #3498db !important;
+    }
+    .select2-container--default .select2-search--inline .select2-search__field {
+        margin-top: 4px;
+    }
+    .select2-container .select2-search--inline .select2-search__field {
+        font-size: 0.85rem;
+    }
+    .select2-container--default .select2-selection--multiple .select2-selection__rendered {
+        display: flex !important;
+        flex-wrap: wrap !important;
+        align-items: center !important;
+    }
+</style>
 <div class="section-body">
     <div class="row">
         <div class="col-12">
@@ -24,7 +71,7 @@
 
                     {{-- Filtros --}}
                     <form method="GET" class="mb-3">
-                        <div class="row">
+                        <div class="row align-items-end">
                             @if(!$esDocenteVinculado)
                                 <div class="col-md-3 mb-2">
                                     <label class="small text-muted mb-1">Docente</label>
@@ -47,9 +94,11 @@
                                     @endforeach
                                 </select>
                             </div>
-                            <div class="{{ $esDocenteVinculado ? 'col-md-4' : 'col-md-3' }} mb-2 d-flex align-items-end" style="gap:6px;">
-                                <button type="submit" class="btn btn-primary btn-block"><i class="fas fa-search"></i> Filtrar</button>
-                                <a href="{{ route('asistencia-clases.index') }}" class="btn btn-secondary btn-block mt-0"><i class="fas fa-times"></i></a>
+                            <div class="{{ $esDocenteVinculado ? 'col-md-4' : 'col-md-3' }} mb-2">
+                                <div class="d-flex" style="gap:6px;">
+                                    <button type="submit" class="btn btn-primary btn-block"><i class="fas fa-search mr-1"></i>Filtrar</button>
+                                    <a href="{{ route('asistencia-clases.index') }}" class="btn btn-secondary btn-block mt-0"><i class="fas fa-times"></i></a>
+                                </div>
                             </div>
                         </div>
                     </form>
@@ -145,11 +194,14 @@
 <script>
 $(document).ready(function() {
     $('.select2-multi').select2({
-        theme: 'bootstrap4',
         width: '100%',
         allowClear: true,
         placeholder: 'Seleccione...',
-        closeOnSelect: false
+        closeOnSelect: false,
+        language: {
+            noResults: function() { return 'Sin resultados'; },
+            searching: function() { return 'Buscando...'; }
+        }
     });
 });
 </script>

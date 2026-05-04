@@ -12,12 +12,15 @@ use App\Models\ListaCurso;
 use App\Models\Curso;
 use App\Models\Materia;
 use App\Models\Asistencia;
+use App\Models\AsistenciaClase;
 use App\Models\Atraso;
 use App\Models\Permiso;
 use App\Models\RegistroEnfermeria;
 use App\Models\CasoPsicopedagogia;
 use App\Models\FechaFestiva;
 use App\Models\MateriaGrupo;
+use App\Models\ImportacionExcel;
+use App\Services\ImportarExcelService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -57,8 +60,19 @@ class NotaController extends Controller
         }
 
         $asignaciones = $query->get();
-        $cursos   = \App\Models\Curso::visible()->orderBy('cur_nombre')->get();
-        $materias = \App\Models\Materia::visible()->orderBy('mat_nombre')->get();
+
+        // Filtrar cursos y materias según el rol
+        if ($user->us_entidad_tipo === 'docente' && $user->us_entidad_id) {
+            $misAsignaciones = CursoMateriaDocente::where('curmatdoc_estado', 1)
+                ->where('doc_codigo', $user->us_entidad_id)->get();
+            $misCurCodigos = $misAsignaciones->pluck('cur_codigo')->unique();
+            $misMatCodigos = $misAsignaciones->pluck('mat_codigo')->unique();
+            $cursos   = \App\Models\Curso::visible()->whereIn('cur_codigo', $misCurCodigos)->orderBy('cur_nombre')->get();
+            $materias = \App\Models\Materia::visible()->whereIn('mat_codigo', $misMatCodigos)->orderBy('mat_nombre')->get();
+        } else {
+            $cursos   = \App\Models\Curso::visible()->orderBy('cur_nombre')->get();
+            $materias = \App\Models\Materia::visible()->orderBy('mat_nombre')->get();
+        }
 
         // ── Datos del Dashboard ──────────────────────────────────────────────
         $periodoIds = $periodos->pluck('periodo_id');
@@ -106,9 +120,17 @@ class NotaController extends Controller
             ->get();
 
         // Todos los estudiantes (para selector de reporte personal)
-        $todosEstudiantes = Estudiante::visible()
-            ->select('est_codigo', 'est_nombres', 'est_apellidos', 'cur_codigo')
-            ->orderBy('est_apellidos')->get();
+        // Docentes: solo estudiantes de sus cursos asignados
+        if ($user->us_entidad_tipo === 'docente' && $user->us_entidad_id) {
+            $todosEstudiantes = Estudiante::visible()
+                ->whereIn('cur_codigo', $misCurCodigos)
+                ->select('est_codigo', 'est_nombres', 'est_apellidos', 'cur_codigo')
+                ->orderBy('est_apellidos')->get();
+        } else {
+            $todosEstudiantes = Estudiante::visible()
+                ->select('est_codigo', 'est_nombres', 'est_apellidos', 'cur_codigo')
+                ->orderBy('est_apellidos')->get();
+        }
 
         return view('notas.index', compact(
             'asignaciones', 'periodos', 'dimensiones', 'cursos', 'materias',
@@ -227,11 +249,11 @@ class NotaController extends Controller
 
                 // Promedio: si hay notas, promedio de las ingresadas; si solo 1 columna, es el valor directo
                 $promDim = $count > 0 ? ($dim->dimension_columnas == 1 ? $suma : $suma / $count) : 0;
-                $promedioTrimestral += $promDim;
+                $promedioTrimestral += round($promDim);
             }
 
             $nota->update([
-                'nota_promedio_trimestral' => round($promedioTrimestral, 2)
+                'nota_promedio_trimestral' => round($promedioTrimestral)
             ]);
         }
 
@@ -305,6 +327,323 @@ class NotaController extends Controller
     }
 
     // ═══════════════════════════════════════════════════════════════
+    // REPORTE VALORACIÓN TRIMESTRAL (formato Excel)
+    // ═══════════════════════════════════════════════════════════════
+
+    public function reporteValoracion($curmatdocId, $periodoId)
+    {
+        set_time_limit(300);
+        ini_set('memory_limit', '512M');
+
+        $asignacion = CursoMateriaDocente::with(['curso', 'materia', 'docente'])->findOrFail($curmatdocId);
+        $periodo = NotaPeriodo::findOrFail($periodoId);
+        $gestion = $periodo->periodo_gestion;
+        $dimensiones = NotaDimension::activo()->gestion($gestion)->orderBy('dimension_orden')->get();
+
+        $estudiantes = Estudiante::visible()
+            ->where('colegio_estudiantes.cur_codigo', $asignacion->cur_codigo)
+            ->leftJoin('colegio_lista_curso', function ($j) use ($gestion, $asignacion) {
+                $j->whereRaw('colegio_estudiantes.est_codigo COLLATE utf8mb4_unicode_ci = colegio_lista_curso.est_codigo')
+                  ->where('colegio_lista_curso.lista_gestion', $gestion)
+                  ->where('colegio_lista_curso.cur_codigo', $asignacion->cur_codigo);
+            })
+            ->select('colegio_estudiantes.*', 'colegio_lista_curso.lista_numero')
+            ->orderBy('colegio_lista_curso.lista_numero')
+            ->orderBy('colegio_estudiantes.est_apellidos')->get();
+
+        $notasExistentes = Nota::with('detalles')
+            ->where('curmatdoc_id', $curmatdocId)
+            ->where('periodo_id', $periodoId)->get()->keyBy('est_codigo');
+
+        $data = [];
+        foreach ($estudiantes as $i => $est) {
+            $nota = $notasExistentes[$est->est_codigo] ?? null;
+            $detallesMap = [];
+            if ($nota) {
+                foreach ($nota->detalles as $det) {
+                    $detallesMap[$det->dimension_id][$det->columna_num] = $det->detalle_valor;
+                }
+            }
+
+            $fila = [
+                'numero' => $est->lista_numero ?? ($i + 1),
+                'nombre' => $est->est_apellidos . ' ' . $est->est_nombres,
+                'dimensiones' => [],
+                'promedio_trimestral' => $nota->nota_promedio_trimestral ?? 0,
+                'rango' => '',
+            ];
+
+            foreach ($dimensiones as $dim) {
+                $valores = [];
+                $suma = 0; $count = 0;
+                for ($c = 1; $c <= $dim->dimension_columnas; $c++) {
+                    $val = $detallesMap[$dim->dimension_id][$c] ?? 0;
+                    $valores[$c] = $val;
+                    if ($val > 0) { $suma += $val; $count++; }
+                }
+                $prom = $count > 0 ? ($dim->dimension_columnas == 1 ? $suma : round($suma / $count)) : 0;
+                $fila['dimensiones'][$dim->dimension_id] = [
+                    'valores' => $valores,
+                    'promedio' => $prom,
+                ];
+            }
+
+            // Rango según sistema boliviano
+            $pt = $fila['promedio_trimestral'];
+            if ($pt < 20) $fila['rango'] = '';
+            elseif ($pt < 51) $fila['rango'] = 'ED';
+            elseif ($pt < 67) $fila['rango'] = 'DA';
+            elseif ($pt < 85) $fila['rango'] = 'DO';
+            else $fila['rango'] = 'DP';
+
+            $data[] = $fila;
+        }
+
+        $pdf = Pdf::loadView('notas.reporte-valoracion-pdf', compact(
+            'asignacion', 'periodo', 'dimensiones', 'data', 'gestion'
+        ))->setPaper('legal', 'landscape');
+
+        return $pdf->stream('valoracion-' . $asignacion->cur_codigo . '-' . $asignacion->mat_codigo . '-T' . $periodo->periodo_numero . '.pdf');
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // IMPORTAR EXCEL
+    // ═══════════════════════════════════════════════════════════════
+
+    public function importarExcel(Request $request)
+    {
+        set_time_limit(300);
+        ini_set('memory_limit', '512M');
+
+        $request->validate([
+            'archivo' => 'required|file|mimes:xlsx,xls|max:10240',
+            'curmatdoc_id' => 'required|integer',
+            'periodo_id' => 'required|integer',
+            'tipo_importacion' => 'required|in:notas,asistencia,ambos',
+        ]);
+
+        $asignacion = CursoMateriaDocente::with(['curso', 'materia', 'docente'])->findOrFail($request->curmatdoc_id);
+        $periodo = NotaPeriodo::findOrFail($request->periodo_id);
+        $gestion = $periodo->periodo_gestion;
+        $trimestre = $periodo->periodo_numero;
+        $tipo = $request->tipo_importacion;
+
+        // Verificar permisos
+        $user = auth()->user();
+        if ($user->us_entidad_tipo === 'docente' && $user->us_entidad_id && $user->us_entidad_id !== $asignacion->doc_codigo) {
+            return back()->with('error', 'No tiene permisos para importar en esta asignación.');
+        }
+
+        // Guardar archivo temporal
+        $archivo = $request->file('archivo');
+        $nombreArchivo = 'import_' . time() . '_' . $archivo->getClientOriginalName();
+        $rutaArchivo = $archivo->storeAs('imports', $nombreArchivo, 'local');
+        $rutaCompleta = storage_path('app/' . $rutaArchivo);
+
+        try {
+            $service = new ImportarExcelService();
+            $service->cargar($rutaCompleta);
+
+            // Validar estructura del Excel
+            $erroresEstructura = $service->validarEstructura($trimestre, $tipo);
+            if (!empty($erroresEstructura)) {
+                @unlink($rutaCompleta);
+                return back()->with('error', 'Error en estructura del Excel: ' . implode(' | ', $erroresEstructura));
+            }
+
+            // Validar configuración del sistema
+            if (in_array($tipo, ['notas', 'ambos'])) {
+                $erroresConfig = $service->validarConfiguracion($gestion);
+                if (!empty($erroresConfig)) {
+                    @unlink($rutaCompleta);
+                    return back()->with('error', 'Error de configuración: ' . implode(' | ', $erroresConfig));
+                }
+            }
+
+            // Parsear datos
+            $data = [];
+            if (in_array($tipo, ['notas', 'ambos'])) {
+                $data['notas'] = $service->parsearNotas($trimestre, $asignacion->cur_codigo, $gestion);
+            }
+            if (in_array($tipo, ['asistencia', 'ambos'])) {
+                $data['asistencia'] = $service->parsearAsistencia($trimestre, $asignacion->cur_codigo);
+            }
+
+            $resumen = $service->getResumen();
+            $errores = $service->getErrores();
+
+            // Guardar como borrador de importación
+            $importacion = ImportacionExcel::create([
+                'curmatdoc_id' => $asignacion->curmatdoc_id,
+                'periodo_id' => $periodo->periodo_id,
+                'import_tipo' => $tipo,
+                'import_data' => $data,
+                'import_errores' => $errores,
+                'import_resumen' => $resumen,
+                'import_estado' => 0,
+                'import_usuario_id' => auth()->user()->us_id,
+                'import_archivo' => $nombreArchivo,
+                'import_fecha' => now(),
+            ]);
+
+            return redirect()->route('notas.importar-preview', $importacion->import_id);
+
+        } catch (\Exception $e) {
+            @unlink($rutaCompleta);
+            return back()->with('error', 'Error al procesar el archivo: ' . $e->getMessage());
+        }
+    }
+
+    public function importarPreview($importId)
+    {
+        $importacion = ImportacionExcel::findOrFail($importId);
+
+        if ($importacion->import_estado != 0) {
+            return redirect()->route('notas.calificar', [$importacion->curmatdoc_id, $importacion->periodo_id])
+                ->with('error', 'Esta importación ya fue procesada.');
+        }
+
+        // Verificar permisos
+        if ($importacion->import_usuario_id != auth()->user()->us_id && auth()->user()->rol_id != 1) {
+            abort(403);
+        }
+
+        $asignacion = CursoMateriaDocente::with(['curso', 'materia', 'docente'])->findOrFail($importacion->curmatdoc_id);
+        $periodo = NotaPeriodo::findOrFail($importacion->periodo_id);
+        $dimensiones = NotaDimension::activo()->gestion($periodo->periodo_gestion)->orderBy('dimension_orden')->get();
+
+        return view('notas.importar-preview', compact('importacion', 'asignacion', 'periodo', 'dimensiones'));
+    }
+
+    public function importarConfirmar($importId)
+    {
+        $importacion = ImportacionExcel::findOrFail($importId);
+
+        if ($importacion->import_estado != 0) {
+            return redirect()->route('notas.calificar', [$importacion->curmatdoc_id, $importacion->periodo_id])
+                ->with('error', 'Esta importación ya fue procesada.');
+        }
+
+        if ($importacion->import_usuario_id != auth()->user()->us_id && auth()->user()->rol_id != 1) {
+            abort(403);
+        }
+
+        $asignacion = CursoMateriaDocente::findOrFail($importacion->curmatdoc_id);
+        $periodo = NotaPeriodo::findOrFail($importacion->periodo_id);
+        $gestion = $periodo->periodo_gestion;
+        $data = $importacion->import_data;
+        $tipo = $importacion->import_tipo;
+
+        DB::beginTransaction();
+        try {
+            // ── Importar NOTAS ──
+            if (in_array($tipo, ['notas', 'ambos']) && !empty($data['notas'])) {
+                $dimensiones = NotaDimension::activo()->gestion($gestion)->orderBy('dimension_orden')->get();
+
+                foreach ($data['notas'] as $notaEst) {
+                    $nota = Nota::updateOrCreate(
+                        ['periodo_id' => $periodo->periodo_id, 'curmatdoc_id' => $asignacion->curmatdoc_id, 'est_codigo' => $notaEst['est_codigo']],
+                        [
+                            'nota_estado' => 0, // Borrador
+                            'nota_guardado_por' => auth()->user()->us_id,
+                            'nota_fecha_guardado' => now(),
+                        ]
+                    );
+
+                    $promedioTrimestral = 0;
+
+                    foreach ($notaEst['dimensiones'] as $dimId => $dimData) {
+                        $dim = $dimensiones->firstWhere('dimension_id', $dimId);
+                        if (!$dim) continue;
+
+                        $valores = $dimData['valores'] ?? [];
+                        $suma = 0;
+                        $count = 0;
+
+                        for ($col = 1; $col <= $dim->dimension_columnas; $col++) {
+                            $val = $valores[$col] ?? 0;
+                            NotaDetalle::updateOrCreate(
+                                ['nota_id' => $nota->nota_id, 'dimension_id' => $dimId, 'columna_num' => $col],
+                                ['detalle_valor' => $val]
+                            );
+                            if ($val > 0) { $suma += $val; $count++; }
+                        }
+
+                        $promDim = $count > 0 ? ($dim->dimension_columnas == 1 ? $suma : $suma / $count) : 0;
+                        $promedioTrimestral += round($promDim);
+                    }
+
+                    $nota->update(['nota_promedio_trimestral' => round($promedioTrimestral)]);
+                }
+            }
+
+            // ── Importar ASISTENCIA ──
+            if (in_array($tipo, ['asistencia', 'ambos']) && !empty($data['asistencia'])) {
+                foreach ($data['asistencia'] as $asisEst) {
+                    foreach ($asisEst['registros'] as $reg) {
+                        AsistenciaClase::updateOrCreate(
+                            [
+                                'curmatdoc_id' => $asignacion->curmatdoc_id,
+                                'periodo_id' => $periodo->periodo_id,
+                                'est_codigo' => $asisEst['est_codigo'],
+                                'asiscl_fecha' => $reg['fecha'],
+                            ],
+                            [
+                                'asiscl_estado' => $reg['estado'],
+                                'asiscl_registrado_por' => auth()->user()->us_id,
+                            ]
+                        );
+                    }
+                }
+            }
+
+            $importacion->update([
+                'import_estado' => 1,
+                'import_fecha_confirmacion' => now(),
+            ]);
+
+            DB::commit();
+
+            // Limpiar archivo
+            $rutaArchivo = storage_path('app/imports/' . $importacion->import_archivo);
+            @unlink($rutaArchivo);
+
+            $msg = 'Importación completada exitosamente.';
+            if (in_array($tipo, ['notas', 'ambos'])) $msg .= ' Notas guardadas como BORRADOR.';
+            if (in_array($tipo, ['asistencia', 'ambos'])) $msg .= ' Asistencia registrada.';
+
+            return redirect()->route('notas.calificar', [$asignacion->curmatdoc_id, $periodo->periodo_id])
+                ->with('success', $msg);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return redirect()->route('notas.importar-preview', $importId)
+                ->with('error', 'Error al confirmar importación: ' . $e->getMessage());
+        }
+    }
+
+    public function importarCancelar($importId)
+    {
+        $importacion = ImportacionExcel::findOrFail($importId);
+
+        if ($importacion->import_usuario_id != auth()->user()->us_id && auth()->user()->rol_id != 1) {
+            abort(403);
+        }
+
+        $curmatdocId = $importacion->curmatdoc_id;
+        $periodoId = $importacion->periodo_id;
+
+        // Limpiar archivo
+        $rutaArchivo = storage_path('app/imports/' . $importacion->import_archivo);
+        @unlink($rutaArchivo);
+
+        $importacion->update(['import_estado' => 2]);
+
+        return redirect()->route('notas.calificar', [$curmatdocId, $periodoId])
+            ->with('success', 'Importación cancelada.');
+    }
+
+    // ═══════════════════════════════════════════════════════════════
     // REPORTES
     // ═══════════════════════════════════════════════════════════════
 
@@ -340,45 +679,62 @@ class NotaController extends Controller
         return $nota ? round($nota->nota_promedio_trimestral) : 0;
     }
 
-    private function diasHabilesMes($mes, $year)
+    /**
+     * Calcula días hábiles (lun-vie) en un rango, excluyendo festivos.
+     */
+    private function diasHabilesRango($fechaInicio, $fechaFin, $year)
     {
-        $inicio = Carbon::create($year, $mes, 1);
-        $fin = $inicio->copy()->endOfMonth();
-        $feriados = FechaFestiva::activo()->where('festivo_tipo', 1)
-            ->whereYear('festivo_fecha', $year)->whereMonth('festivo_fecha', $mes)
+        $feriados = FechaFestiva::activo()->feriado()
+            ->whereYear('festivo_fecha', $year)
             ->pluck('festivo_fecha')->map(fn($f) => $f->format('Y-m-d'))->toArray();
+
         $dias = 0;
-        $current = $inicio->copy();
+        $current = Carbon::parse($fechaInicio)->copy();
+        $fin = Carbon::parse($fechaFin);
         while ($current <= $fin) {
-            if ($current->isWeekday() && !in_array($current->format('Y-m-d'), $feriados)) $dias++;
+            if ($current->isWeekday() && !in_array($current->format('Y-m-d'), $feriados)) {
+                $dias++;
+            }
             $current->addDay();
         }
         return $dias;
     }
 
+    /**
+     * Asistencia institucional por trimestre usando las fechas exactas del periodo.
+     * Cuenta solo lun-vie, excluye festivos.
+     */
     private function getAsistenciaTrimestreEst($estCodigo, $periodo, $year)
     {
-        $mesesTrim = [
-            1 => [2,3,4,5], 2 => [6,7,8,9], 3 => [10,11,12]
-        ];
-        $meses = $mesesTrim[$periodo->periodo_numero] ?? [];
-        $dt = 0; $ta = 0; $tl = 0; $tf = 0; $total = 0;
+        $fechaInicio = $periodo->periodo_fecha_inicio->format('Y-m-d');
+        $fechaFin = $periodo->periodo_fecha_fin->format('Y-m-d');
 
-        foreach ($meses as $mes) {
-            $diasMes = $this->diasHabilesMes($mes, $year);
-            $asis = Asistencia::where('estud_codigo', $estCodigo)
-                ->whereYear('asis_fecha', $year)->whereMonth('asis_fecha', $mes)
-                ->whereRaw('DAYOFWEEK(asis_fecha) BETWEEN 2 AND 6')
-                ->distinct('asis_fecha')->count('asis_fecha');
-            $perm = Permiso::where('estud_codigo', $estCodigo)->where('permiso_estado', 1)
-                ->whereYear('permiso_fecha_inicio', $year)->whereMonth('permiso_fecha_inicio', $mes)->count();
-            $atr = Atraso::where('estud_codigo', $estCodigo)
-                ->whereYear('atraso_fecha', $year)->whereMonth('atraso_fecha', $mes)
-                ->whereRaw('DAYOFWEEK(atraso_fecha) BETWEEN 2 AND 6')->count();
-            $falt = max(0, $diasMes - $asis - $perm);
-            $dt += $asis; $ta += $atr; $tl += $perm; $tf += $falt; $total += $diasMes;
-        }
-        return compact('dt', 'ta', 'tl', 'tf', 'total');
+        $totalDiasHabiles = $this->diasHabilesRango($fechaInicio, $fechaFin, $year);
+
+        $asis = Asistencia::where('estud_codigo', $estCodigo)
+            ->whereBetween('asis_fecha', [$fechaInicio, $fechaFin])
+            ->whereRaw('DAYOFWEEK(asis_fecha) BETWEEN 2 AND 6')
+            ->distinct('asis_fecha')->count('asis_fecha');
+
+        $perm = Permiso::where('estud_codigo', $estCodigo)->where('permiso_estado', 1)
+            ->where('permiso_fecha_inicio', '>=', $fechaInicio)
+            ->where('permiso_fecha_inicio', '<=', $fechaFin)
+            ->count();
+
+        $atr = Atraso::where('estud_codigo', $estCodigo)
+            ->whereBetween('atraso_fecha', [$fechaInicio, $fechaFin])
+            ->whereRaw('DAYOFWEEK(atraso_fecha) BETWEEN 2 AND 6')
+            ->count();
+
+        $falt = max(0, $totalDiasHabiles - $asis - $perm);
+
+        return [
+            'dt' => $asis,
+            'ta' => $atr,
+            'tl' => $perm,
+            'tf' => $falt,
+            'total' => $totalDiasHabiles,
+        ];
     }
 
     private function getEnfermeriaTrimestreEst($estCodigo, $periodo)
@@ -527,7 +883,7 @@ class NotaController extends Controller
             $fila['suma'] = $sumaGeneral;
             $fila['promedio'] = $countGeneral > 0 ? round($sumaGeneral / ($countGeneral * $periodos->count()), 1) : 0;
 
-            // Asistencia primer trimestre (DT, TA, TL, TF)
+            // Asistencia institucional (DT, TA, TL, TF)
             $asist = [];
             foreach ($periodos as $p) {
                 $asist[$p->periodo_numero] = $this->getAsistenciaTrimestreEst($est->est_codigo, $p, $year);
@@ -636,7 +992,7 @@ class NotaController extends Controller
         $pdf = Pdf::loadView('notas.reporte-general-pdf', compact(
             'curso', 'periodos', 'asignaciones', 'data', 'lista', 'gestion',
             'esTrimestre', 'periodoNombre', 'gruposMap', 'gruposActivos'
-        ))->setPaper('legal', 'landscape');
+        ))->setPaper('letter', 'landscape');
 
         return $pdf->stream('notas-general-' . $curso->cur_codigo . '.pdf');
     }

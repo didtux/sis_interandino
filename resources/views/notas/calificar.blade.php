@@ -76,12 +76,18 @@
                 <div class="card modern-card">
                     <div class="card-header d-flex justify-content-between align-items-center py-2">
                         <h5 class="mb-0">EVALUACIÓN DEL MAESTRO</h5>
-                        @if($esEditable)
-                            <div>
+                        <div>
+                            <a href="{{ route('notas.reporte-valoracion', [$asignacion->curmatdoc_id, $periodo->periodo_id]) }}" class="btn btn-danger btn-sm" target="_blank">
+                                <i class="fas fa-file-pdf mr-1"></i>PDF
+                            </a>
+                            <button type="button" class="btn btn-success btn-sm" data-toggle="modal" data-target="#modalImportarExcel">
+                                <i class="fas fa-file-excel mr-1"></i>Importar Excel
+                            </button>
+                            @if($esEditable)
                                 <button type="submit" name="accion" value="guardar" class="btn btn-secondary btn-sm"><i class="fas fa-save mr-1"></i>Guardar Borrador</button>
                                 <button type="submit" name="accion" value="enviar" class="btn btn-primary-modern btn-sm" onclick="return confirm('¿Enviar notas para aprobación?')"><i class="fas fa-paper-plane mr-1"></i>Enviar</button>
-                            </div>
-                        @endif
+                            @endif
+                        </div>
                     </div>
                     <div class="card-body p-0">
                         <div style="overflow-x:auto;">
@@ -181,6 +187,80 @@
     </div>
 </div>
 
+{{-- Modal Importar Excel --}}
+<div class="modal fade" id="modalImportarExcel" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header" style="background:linear-gradient(135deg,#27ae60,#2ecc71);color:#fff;">
+                <h5 class="modal-title"><i class="fas fa-file-excel mr-2"></i>Importar desde Excel</h5>
+                <button type="button" class="close text-white" data-dismiss="modal">&times;</button>
+            </div>
+            <form action="{{ route('notas.importar-excel') }}" method="POST" enctype="multipart/form-data" id="formImportarExcel">
+                @csrf
+                <input type="hidden" name="curmatdoc_id" value="{{ $asignacion->curmatdoc_id }}">
+                <input type="hidden" name="periodo_id" value="{{ $periodo->periodo_id }}">
+                <div class="modal-body">
+                    <div class="alert alert-info py-2" style="font-size:0.85rem;">
+                        <i class="fas fa-info-circle mr-1"></i>
+                        Seleccione el archivo Excel con formato de <strong>Registro Pedagógico</strong>.
+                        Los datos se cargarán como <strong>borrador</strong> para que pueda revisarlos antes de confirmar.
+                    </div>
+
+                    <div class="form-group">
+                        <label class="font-weight-bold">Archivo Excel <span class="text-danger">*</span></label>
+                        <div class="custom-file">
+                            <input type="file" name="archivo" class="custom-file-input" id="archivoExcel" accept=".xlsx,.xls" required>
+                            <label class="custom-file-label" for="archivoExcel" data-browse="Buscar">Seleccionar archivo...</label>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="font-weight-bold">¿Qué desea importar? <span class="text-danger">*</span></label>
+                        <div class="row">
+                            <div class="col-4">
+                                <div class="custom-control custom-radio">
+                                    <input type="radio" id="tipo_notas" name="tipo_importacion" value="notas" class="custom-control-input" checked>
+                                    <label class="custom-control-label" for="tipo_notas">
+                                        <i class="fas fa-pen text-primary mr-1"></i>Notas
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="custom-control custom-radio">
+                                    <input type="radio" id="tipo_asistencia" name="tipo_importacion" value="asistencia" class="custom-control-input">
+                                    <label class="custom-control-label" for="tipo_asistencia">
+                                        <i class="fas fa-user-check text-info mr-1"></i>Asistencia
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="custom-control custom-radio">
+                                    <input type="radio" id="tipo_ambos" name="tipo_importacion" value="ambos" class="custom-control-input">
+                                    <label class="custom-control-label" for="tipo_ambos">
+                                        <i class="fas fa-layer-group text-success mr-1"></i>Ambos
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group mb-0">
+                        <label class="font-weight-bold">Trimestre destino</label>
+                        <input type="text" class="form-control" value="{{ $periodo->periodo_nombre }} (Trimestre {{ $periodo->periodo_numero }})" readonly>
+                        <small class="text-muted">Se importará la hoja correspondiente al trimestre {{ $periodo->periodo_numero }} del Excel.</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-success" id="btnImportar">
+                        <i class="fas fa-upload mr-1"></i>Cargar y Previsualizar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <style>
 .input-nota { width:65px!important;text-align:center;padding:2px 4px;font-size:0.85rem; }
 .input-nota:focus { border-color:#3498db;box-shadow:0 0 0 .15rem rgba(52,152,219,.25); }
@@ -191,6 +271,18 @@
 @section('scripts')
 <script>
 $(document).ready(function() {
+    // Custom file input label
+    $('#archivoExcel').on('change', function() {
+        var fileName = $(this).val().split('\\').pop();
+        $(this).next('.custom-file-label').html(fileName || 'Seleccionar archivo...');
+    });
+
+    // Loading al enviar importación
+    $('#formImportarExcel').on('submit', function() {
+        var btn = $('#btnImportar');
+        btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin mr-1"></i>Procesando...');
+    });
+
     // Dimensiones config desde PHP
     var dimensiones = @json($dimensiones->map(fn($d) => ['id' => $d->dimension_id, 'max' => $d->dimension_valor_max, 'cols' => $d->dimension_columnas]));
 
@@ -215,13 +307,14 @@ $(document).ready(function() {
             if (count > 0) {
                 prom = dim.cols === 1 ? suma : suma / count;
             }
-            // Limitar al máximo de la dimensión
+            // Limitar al máximo de la dimensión y redondear
             prom = Math.min(prom, dim.max);
-            $row.find('.prom-dim-' + dim.id).text(prom.toFixed(2));
+            prom = Math.round(prom);
+            $row.find('.prom-dim-' + dim.id).text(prom);
             promTrim += prom;
         });
 
-        $row.find('.prom-trim').text(promTrim.toFixed(2));
+        $row.find('.prom-trim').text(Math.round(promTrim));
     }
 
     $('.input-nota').on('input change', function() {

@@ -90,12 +90,17 @@ Route::middleware(['auth', 'permiso', 'auditoria'])->group(function () {
     Route::post('notas/configuracion/dimension', [App\Http\Controllers\NotaController::class, 'guardarDimension'])->name('notas.guardar-dimension');
     Route::delete('notas/configuracion/dimension/{id}', [App\Http\Controllers\NotaController::class, 'eliminarDimension'])->name('notas.eliminar-dimension');
     Route::get('notas/calificar/{curmatdoc}/{periodo}', [App\Http\Controllers\NotaController::class, 'calificar'])->name('notas.calificar');
+    Route::get('notas/reporte-valoracion/{curmatdoc}/{periodo}', [App\Http\Controllers\NotaController::class, 'reporteValoracion'])->name('notas.reporte-valoracion');
     Route::post('notas/guardar', [App\Http\Controllers\NotaController::class, 'guardar'])->name('notas.guardar');
     Route::post('notas/aprobar/{curmatdoc}/{periodo}', [App\Http\Controllers\NotaController::class, 'aprobar'])->name('notas.aprobar');
     Route::get('notas-reporte-personal', [App\Http\Controllers\NotaController::class, 'reportePersonal'])->name('notas.reporte-personal');
     Route::get('notas-reporte-centralizador', [App\Http\Controllers\NotaController::class, 'reporteCentralizador'])->name('notas.reporte-centralizador');
     Route::get('notas-reporte-general', [App\Http\Controllers\NotaController::class, 'reporteGeneral'])->name('notas.reporte-general');
-    // Reportes de Notas
+    // Importar Excel
+    Route::post('notas/importar-excel', [App\Http\Controllers\NotaController::class, 'importarExcel'])->name('notas.importar-excel');
+    Route::get('notas/importar-preview/{id}', [App\Http\Controllers\NotaController::class, 'importarPreview'])->name('notas.importar-preview');
+    Route::post('notas/importar-confirmar/{id}', [App\Http\Controllers\NotaController::class, 'importarConfirmar'])->name('notas.importar-confirmar');
+    Route::post('notas/importar-cancelar/{id}', [App\Http\Controllers\NotaController::class, 'importarCancelar'])->name('notas.importar-cancelar');
 
 
     // Asistencia de Clases (Docentes)

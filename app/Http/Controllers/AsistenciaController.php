@@ -436,16 +436,14 @@ class AsistenciaController extends Controller
         return response()->json($estudiantes);
     }
 
-    // Contar días hábiles (lun-vie) excluyendo feriados
-    private function diasHabilesMes($mes, $year)
+    private function diasHabilesRango($fechaInicio, $fechaFin, $year)
     {
-        $inicio = Carbon::create($year, $mes, 1);
-        $fin = $inicio->copy()->endOfMonth();
         $feriados = FechaFestiva::activo()->where('festivo_tipo', 1)
-            ->whereYear('festivo_fecha', $year)->whereMonth('festivo_fecha', $mes)
+            ->whereYear('festivo_fecha', $year)
             ->pluck('festivo_fecha')->map(fn($f) => $f->format('Y-m-d'))->toArray();
         $dias = 0;
-        $current = $inicio->copy();
+        $current = Carbon::parse($fechaInicio)->copy();
+        $fin = Carbon::parse($fechaFin);
         while ($current <= $fin) {
             if ($current->isWeekday() && !in_array($current->format('Y-m-d'), $feriados)) {
                 $dias++;
@@ -455,23 +453,33 @@ class AsistenciaController extends Controller
         return $dias;
     }
 
-    private function getMesesNumEntreFechas($fechaInicio, $fechaFin)
+    private function getAsistenciaTrimestreEst($estCodigo, $periodo, $year)
     {
-        $meses = [];
-        $current = Carbon::parse($fechaInicio)->startOfMonth();
-        $fin = Carbon::parse($fechaFin)->endOfMonth();
-        while ($current <= $fin) {
-            $meses[] = $current->month;
-            $current->addMonth();
-        }
-        return array_unique($meses);
+        $fechaInicio = $periodo->periodo_fecha_inicio->format('Y-m-d');
+        $fechaFin = $periodo->periodo_fecha_fin->format('Y-m-d');
+        $totalDiasHabiles = $this->diasHabilesRango($fechaInicio, $fechaFin, $year);
+
+        $asis = Asistencia::where('estud_codigo', $estCodigo)
+            ->whereBetween('asis_fecha', [$fechaInicio, $fechaFin])
+            ->whereRaw('DAYOFWEEK(asis_fecha) BETWEEN 2 AND 6')
+            ->distinct('asis_fecha')->count('asis_fecha');
+
+        $perm = Permiso::where('estud_codigo', $estCodigo)->where('permiso_estado', 1)
+            ->where('permiso_fecha_inicio', '>=', $fechaInicio)
+            ->where('permiso_fecha_inicio', '<=', $fechaFin)
+            ->count();
+
+        $atr = Atraso::where('estud_codigo', $estCodigo)
+            ->whereBetween('atraso_fecha', [$fechaInicio, $fechaFin])
+            ->whereRaw('DAYOFWEEK(atraso_fecha) BETWEEN 2 AND 6')
+            ->count();
+
+        $falt = max(0, $totalDiasHabiles - $asis - $perm);
+
+        return ['dt' => $asis, 'tl' => $perm, 'tf' => $falt, 'ta' => $atr, 'total' => $totalDiasHabiles];
     }
 
-    private function getMesesEntreFechas($fechaInicio, $fechaFin)
-    {
-        $nombres = ['','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-        return array_map(fn($m) => $nombres[$m], $this->getMesesNumEntreFechas($fechaInicio, $fechaFin));
-    }
+
 
     public function reporteTrimestral(Request $request)
     {
@@ -485,24 +493,7 @@ class AsistenciaController extends Controller
 
         $trimestre = $request->trimestre;
         $year = date('Y');
-
-        // Usar periodos configurados
         $periodo = NotaPeriodo::activo()->gestion($year)->where('periodo_numero', $trimestre)->first();
-        if ($periodo) {
-            $fechaInicio = $periodo->periodo_fecha_inicio;
-            $fechaFin = $periodo->periodo_fecha_fin;
-            $mesesNombres = $this->getMesesEntreFechas($fechaInicio, $fechaFin);
-            $mesesNums = $this->getMesesNumEntreFechas($fechaInicio, $fechaFin);
-        } else {
-            $fallback = [1 => [2,3,4,5], 2 => [6,7,8,9], 3 => [10,11,12]];
-            $mesesNums = $fallback[$trimestre];
-            $nombresAll = ['','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-            $mesesNombres = array_map(fn($m) => $nombresAll[$m], $mesesNums);
-            $fechaInicio = null;
-            $fechaFin = null;
-        }
-
-        $rango = ['meses' => $mesesNombres, 'mesesNum' => $mesesNums, 'inicio' => $fechaInicio, 'fin' => $fechaFin];
 
         $estudiantes = $curso->estudiantes()->visible()->orderBy('est_apellidos')->orderBy('est_nombres')->get();
         if ($estudiantes->isEmpty()) return back()->with('error', 'No hay estudiantes registrados en el curso ' . $curso->cur_nombre);
@@ -512,8 +503,16 @@ class AsistenciaController extends Controller
             $estudiantes = $estudiantes->sortBy(fn($e) => $lista[$e->est_codigo] ?? 9999)->values();
         }
 
+        // Pre-compute data per student
+        $datosEstudiantes = [];
+        if ($periodo) {
+            foreach ($estudiantes as $est) {
+                $datosEstudiantes[$est->est_codigo] = $this->getAsistenciaTrimestreEst($est->est_codigo, $periodo, $year);
+            }
+        }
+
         $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('asistencias.reporte-trimestral-pdf',
-            compact('curso', 'estudiantes', 'trimestre', 'rango', 'lista', 'year', 'periodo'))
+            compact('curso', 'estudiantes', 'trimestre', 'lista', 'year', 'periodo', 'datosEstudiantes'))
             ->setPaper('legal', 'landscape');
         return $pdf->stream('asistencia-trimestre-' . $trimestre . '-' . date('Y-m-d') . '.pdf');
     }
@@ -528,22 +527,15 @@ class AsistenciaController extends Controller
         $year = date('Y');
         $periodos = NotaPeriodo::activo()->gestion($year)->orderBy('periodo_numero')->get();
 
-        // Construir trimestres desde periodos configurados
         $trimestresConfig = [];
         foreach ($periodos as $p) {
-            $trimestresConfig[$p->periodo_numero] = [
-                'nombre' => $p->periodo_nombre,
-                'mesesNum' => $this->getMesesNumEntreFechas($p->periodo_fecha_inicio, $p->periodo_fecha_fin),
-                'inicio' => $p->periodo_fecha_inicio,
-                'fin' => $p->periodo_fecha_fin,
-            ];
+            $trimestresConfig[$p->periodo_numero] = ['nombre' => $p->periodo_nombre];
         }
-        // Fallback si no hay periodos
         if (empty($trimestresConfig)) {
             $trimestresConfig = [
-                1 => ['nombre' => '1er Trimestre', 'mesesNum' => [2,3,4,5], 'inicio' => null, 'fin' => null],
-                2 => ['nombre' => '2do Trimestre', 'mesesNum' => [6,7,8,9], 'inicio' => null, 'fin' => null],
-                3 => ['nombre' => '3er Trimestre', 'mesesNum' => [10,11,12], 'inicio' => null, 'fin' => null],
+                1 => ['nombre' => '1er Trimestre'],
+                2 => ['nombre' => '2do Trimestre'],
+                3 => ['nombre' => '3er Trimestre'],
             ];
         }
 
@@ -555,8 +547,17 @@ class AsistenciaController extends Controller
             $estudiantes = $estudiantes->sortBy(fn($e) => $lista[$e->est_codigo] ?? 9999)->values();
         }
 
+        // Pre-compute data per student per trimestre
+        $datosEstudiantes = [];
+        foreach ($estudiantes as $est) {
+            $datosEstudiantes[$est->est_codigo] = [];
+            foreach ($periodos as $p) {
+                $datosEstudiantes[$est->est_codigo][$p->periodo_numero] = $this->getAsistenciaTrimestreEst($est->est_codigo, $p, $year);
+            }
+        }
+
         $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('asistencias.reporte-anual-pdf',
-            compact('curso', 'estudiantes', 'year', 'lista', 'trimestresConfig'))
+            compact('curso', 'estudiantes', 'year', 'lista', 'trimestresConfig', 'datosEstudiantes'))
             ->setPaper('legal', 'landscape');
         return $pdf->stream('asistencia-anual-' . date('Y-m-d') . '.pdf');
     }
@@ -580,39 +581,22 @@ class AsistenciaController extends Controller
             $estudiantes = $estudiantes->sortBy(fn($e) => $listaExcel[$e->est_codigo] ?? 9999)->values();
         }
 
-        // Usar periodos configurados
         $periodo = NotaPeriodo::activo()->gestion($year)->where('periodo_numero', $request->trimestre)->first();
-        if ($periodo) {
-            $mesesNums = $this->getMesesNumEntreFechas($periodo->periodo_fecha_inicio, $periodo->periodo_fecha_fin);
-            $mesesNombres = $this->getMesesEntreFechas($periodo->periodo_fecha_inicio, $periodo->periodo_fecha_fin);
-        } else {
-            $fallback = [1 => [2,3,4,5], 2 => [6,7,8,9], 3 => [10,11,12]];
-            $mesesNums = $fallback[$request->trimestre];
-            $nombresAll = ['','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-            $mesesNombres = array_map(fn($m) => $nombresAll[$m], $mesesNums);
-        }
+        $periodoNombre = $periodo ? $periodo->periodo_nombre : 'Trimestre ' . $request->trimestre;
 
         $data = collect();
         foreach ($estudiantes as $index => $est) {
             $fila = [$listaExcel[$est->est_codigo] ?? ($index + 1), $est->est_apellidos . ' ' . $est->est_nombres];
-            $totalTrimestre = ['dt' => 0, 'tl' => 0, 'tf' => 0, 'ta' => 0, 'total' => 0];
-
-            foreach ($mesesNums as $mes) {
-                $diasMes = $this->diasHabilesMes($mes, $year);
-                $asistencias = Asistencia::where('estud_codigo', $est->est_codigo)->whereYear('asis_fecha', $year)->whereMonth('asis_fecha', $mes)->whereRaw('DAYOFWEEK(asis_fecha) BETWEEN 2 AND 6')->distinct('asis_fecha')->count('asis_fecha');
-                $permisos = Permiso::where('estud_codigo', $est->est_codigo)->where('permiso_estado', 1)->whereYear('permiso_fecha_inicio', $year)->whereMonth('permiso_fecha_inicio', $mes)->count();
-                $atrasos = Atraso::where('estud_codigo', $est->est_codigo)->whereYear('atraso_fecha', $year)->whereMonth('atraso_fecha', $mes)->whereRaw('DAYOFWEEK(atraso_fecha) BETWEEN 2 AND 6')->count();
-                $faltas = max(0, $diasMes - $asistencias - $permisos);
-
-                $fila = array_merge($fila, [$asistencias, $permisos, $faltas, $atrasos, $diasMes]);
-                $totalTrimestre['dt'] += $asistencias; $totalTrimestre['tl'] += $permisos;
-                $totalTrimestre['tf'] += $faltas; $totalTrimestre['ta'] += $atrasos; $totalTrimestre['total'] += $diasMes;
+            if ($periodo) {
+                $d = $this->getAsistenciaTrimestreEst($est->est_codigo, $periodo, $year);
+                $fila = array_merge($fila, [$d['dt'], $d['tl'], $d['tf'], $d['ta'], $d['total']]);
+            } else {
+                $fila = array_merge($fila, [0, 0, 0, 0, 0]);
             }
-            $fila = array_merge($fila, [$totalTrimestre['dt'], $totalTrimestre['tl'], $totalTrimestre['tf'], $totalTrimestre['ta'], $totalTrimestre['total']]);
             $data->push($fila);
         }
 
-        return Excel::download(new AsistenciasTrimestralExport($data, $curso, $request->trimestre, $mesesNombres),
+        return Excel::download(new AsistenciasTrimestralExport($data, $curso, $request->trimestre, [$periodoNombre]),
             'asistencia-trimestre-' . $request->trimestre . '-' . date('Y-m-d') . '.xlsx');
     }
 
@@ -632,35 +616,18 @@ class AsistenciaController extends Controller
             $estudiantes = $estudiantes->sortBy(fn($e) => $listaExcelAnual[$e->est_codigo] ?? 9999)->values();
         }
 
-        // Usar periodos configurados
         $periodos = NotaPeriodo::activo()->gestion($year)->orderBy('periodo_numero')->get();
-        $trimestresConfig = [];
-        foreach ($periodos as $p) {
-            $trimestresConfig[$p->periodo_numero] = ['meses' => $this->getMesesNumEntreFechas($p->periodo_fecha_inicio, $p->periodo_fecha_fin)];
-        }
-        if (empty($trimestresConfig)) {
-            $trimestresConfig = [1 => ['meses' => [2,3,4,5]], 2 => ['meses' => [6,7,8,9]], 3 => ['meses' => [10,11,12]]];
-        }
 
         $data = collect();
         foreach ($estudiantes as $index => $est) {
             $fila = [$listaExcelAnual[$est->est_codigo] ?? ($index + 1), $est->est_apellidos . ' ' . $est->est_nombres];
             $totalAnual = ['dt' => 0, 'tl' => 0, 'tf' => 0, 'ta' => 0, 'total' => 0];
 
-            foreach ($trimestresConfig as $trim) {
-                $totalTrim = ['dt' => 0, 'tl' => 0, 'tf' => 0, 'ta' => 0, 'total' => 0];
-                foreach ($trim['meses'] as $mes) {
-                    $diasMes = $this->diasHabilesMes($mes, $year);
-                    $asistencias = Asistencia::where('estud_codigo', $est->est_codigo)->whereYear('asis_fecha', $year)->whereMonth('asis_fecha', $mes)->whereRaw('DAYOFWEEK(asis_fecha) BETWEEN 2 AND 6')->distinct('asis_fecha')->count('asis_fecha');
-                    $permisos = Permiso::where('estud_codigo', $est->est_codigo)->where('permiso_estado', 1)->whereYear('permiso_fecha_inicio', $year)->whereMonth('permiso_fecha_inicio', $mes)->count();
-                    $atrasos = Atraso::where('estud_codigo', $est->est_codigo)->whereYear('atraso_fecha', $year)->whereMonth('atraso_fecha', $mes)->whereRaw('DAYOFWEEK(atraso_fecha) BETWEEN 2 AND 6')->count();
-                    $faltas = max(0, $diasMes - $asistencias - $permisos);
-                    $totalTrim['dt'] += $asistencias; $totalTrim['tl'] += $permisos;
-                    $totalTrim['tf'] += $faltas; $totalTrim['ta'] += $atrasos; $totalTrim['total'] += $diasMes;
-                }
-                $fila = array_merge($fila, [$totalTrim['dt'], $totalTrim['tl'], $totalTrim['tf'], $totalTrim['ta'], $totalTrim['total']]);
-                $totalAnual['dt'] += $totalTrim['dt']; $totalAnual['tl'] += $totalTrim['tl'];
-                $totalAnual['tf'] += $totalTrim['tf']; $totalAnual['ta'] += $totalTrim['ta']; $totalAnual['total'] += $totalTrim['total'];
+            foreach ($periodos as $p) {
+                $d = $this->getAsistenciaTrimestreEst($est->est_codigo, $p, $year);
+                $fila = array_merge($fila, [$d['dt'], $d['tl'], $d['tf'], $d['ta'], $d['total']]);
+                $totalAnual['dt'] += $d['dt']; $totalAnual['tl'] += $d['tl'];
+                $totalAnual['tf'] += $d['tf']; $totalAnual['ta'] += $d['ta']; $totalAnual['total'] += $d['total'];
             }
             $fila = array_merge($fila, [$totalAnual['dt'], $totalAnual['tl'], $totalAnual['tf'], $totalAnual['ta'], $totalAnual['total']]);
             $data->push($fila);

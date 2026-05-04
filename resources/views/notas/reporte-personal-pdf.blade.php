@@ -209,7 +209,7 @@
                 <th class="rotated">LICENCIAS</th>
                 <th class="rotated">FALTAS</th>
                 <th class="rotated">DÍAS<br>TRABAJADOS</th>
-                <th class="rotated">TOTAL</th>
+                <th class="rotated">TOTAL<br>DÍAS HÁB.</th>
             @endforeach
         </tr>
         <tr>

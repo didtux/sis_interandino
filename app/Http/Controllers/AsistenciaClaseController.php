@@ -36,8 +36,19 @@ class AsistenciaClaseController extends Controller
         }
 
         $asignaciones = $query->get();
-        $cursos = \App\Models\Curso::visible()->orderBy('cur_nombre')->get();
-        $materias = \App\Models\Materia::visible()->orderBy('mat_nombre')->get();
+
+        // Filtrar cursos y materias según el rol
+        if ($user->us_entidad_tipo === 'docente' && $user->us_entidad_id) {
+            $misAsignaciones = CursoMateriaDocente::where('curmatdoc_estado', 1)
+                ->where('doc_codigo', $user->us_entidad_id)->get();
+            $curCodigos = $misAsignaciones->pluck('cur_codigo')->unique();
+            $matCodigos = $misAsignaciones->pluck('mat_codigo')->unique();
+            $cursos = \App\Models\Curso::visible()->whereIn('cur_codigo', $curCodigos)->orderBy('cur_nombre')->get();
+            $materias = \App\Models\Materia::visible()->whereIn('mat_codigo', $matCodigos)->orderBy('mat_nombre')->get();
+        } else {
+            $cursos = \App\Models\Curso::visible()->orderBy('cur_nombre')->get();
+            $materias = \App\Models\Materia::visible()->orderBy('mat_nombre')->get();
+        }
 
         return view('notas.asistencia-clases.index', compact('asignaciones', 'periodos', 'cursos', 'materias'));
     }

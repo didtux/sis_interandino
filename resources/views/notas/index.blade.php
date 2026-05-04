@@ -7,6 +7,65 @@
     $tabActivo = request('tab', 'inicio');
 @endphp
 
+{{-- Fix Select2 overflow --}}
+<style>
+    .select2-container { z-index: 1050; }
+    .select2-container .select2-selection--multiple {
+        min-height: 38px !important;
+        border: 1px solid #ced4da !important;
+        border-radius: .25rem !important;
+        padding: 2px 6px !important;
+    }
+    .select2-container--default .select2-selection--multiple .select2-selection__choice {
+        background-color: #3498db !important;
+        border: none !important;
+        color: #fff !important;
+        border-radius: 3px !important;
+        padding: 2px 8px !important;
+        margin: 2px 4px 2px 0 !important;
+        font-size: 0.82rem;
+    }
+    .select2-container--default .select2-selection--multiple .select2-selection__choice__remove {
+        color: #fff !important;
+        margin-right: 4px;
+    }
+    .select2-container--default .select2-selection--multiple .select2-selection__choice__remove:hover {
+        color: #ffd !important;
+    }
+    .select2-dropdown {
+        border: 1px solid #ced4da !important;
+        border-radius: 0 0 .25rem .25rem !important;
+        box-shadow: 0 4px 12px rgba(0,0,0,.15) !important;
+        z-index: 1060 !important;
+    }
+    .select2-results__option--highlighted[aria-selected] {
+        background-color: #3498db !important;
+    }
+    .select2-container--default .select2-search--inline .select2-search__field {
+        margin-top: 4px;
+    }
+    .select2-container .select2-search--inline .select2-search__field {
+        font-size: 0.85rem;
+    }
+    .select2-container--default .select2-selection--multiple .select2-selection__rendered {
+        display: flex !important;
+        flex-wrap: wrap !important;
+        align-items: center !important;
+    }
+    .select2-container .select2-selection--single {
+        height: 38px !important;
+        border: 1px solid #ced4da !important;
+        border-radius: .25rem !important;
+    }
+    .select2-container--default .select2-selection--single .select2-selection__rendered {
+        line-height: 36px !important;
+        padding-left: 8px;
+    }
+    .select2-container--default .select2-selection--single .select2-selection__arrow {
+        height: 36px !important;
+    }
+</style>
+
 <div class="section-body">
     <div class="row">
         <div class="col-12">
@@ -48,12 +107,14 @@
                                 <i class="fas fa-user-check mr-1"></i>Asistencia Clases
                             </a>
                         </li>
+                        @if($esAdmin)
                         <li class="nav-item">
                             <a class="nav-link {{ $tabActivo == 'reportes' ? 'active' : '' }}"
                                href="{{ route('notas.index', array_merge(request()->query(), ['tab' => 'reportes'])) }}">
                                 <i class="fas fa-file-pdf mr-1"></i>Reportes
                             </a>
                         </li>
+                        @endif
                     </ul>
                 </div>
             </div>
@@ -375,9 +436,9 @@
                     </div>
 
                     {{-- ════════════════════════════════════════════════════ --}}
-                    {{-- TAB REPORTES                                         --}}
+                    {{-- TAB REPORTES (solo admin)                             --}}
                     {{-- ════════════════════════════════════════════════════ --}}
-                    @elseif($tabActivo == 'reportes')
+                    @elseif($tabActivo == 'reportes' && $esAdmin)
 
                     <div class="row">
 
@@ -540,13 +601,17 @@ $(document).ready(function() {
 
     // ── Select2 filtros de notas (tab notas) ──
     $('.select2-multi').select2({
-        theme: 'bootstrap4', width: '100%',
+        width: '100%',
         allowClear: true, placeholder: 'Seleccione...',
-        closeOnSelect: false
+        closeOnSelect: false,
+        language: {
+            noResults: function() { return 'Sin resultados'; },
+            searching: function() { return 'Buscando...'; }
+        }
     });
 
     // ── Select2 para todos los selects del tab reportes ──
-    var s2Opts = { theme: 'bootstrap4', width: '100%', allowClear: true };
+    var s2Opts = { width: '100%', allowClear: true, language: { noResults: function() { return 'Sin resultados'; } } };
 
     $('#filtro_curso_personal').select2($.extend({}, s2Opts, {
         placeholder: '— Seleccione curso —'
