@@ -11,7 +11,7 @@
                         <a href="{{ route('psicopedagogia.create') }}" class="btn btn-primary">
                             <i class="fas fa-plus"></i> Nuevo Caso
                         </a>
-                        <a href="{{ route('psicopedagogia.reporte-pdf', request()->all()) }}" class="btn btn-danger" target="_blank">
+                        <a href="{{ route('psicopedagogia.reporte-pdf', request()->all()) }}" id="btnReportePdf" class="btn btn-danger" target="_blank">
                             <i class="fas fa-file-pdf"></i> PDF
                         </a>
                     </div>
@@ -21,7 +21,7 @@
                         <div class="alert alert-success">{{ session('success') }}</div>
                     @endif
 
-                    <form method="GET" class="mb-3">
+                    <form method="GET" class="mb-3" id="filtroPsico">
                         <div class="row">
                             <div class="col-md-3">
                                 <label>Curso</label>
@@ -282,6 +282,17 @@
 <script>
 $(document).ready(function() {
     $('.select2').select2({ theme: 'bootstrap4', width: '100%' });
+
+    // Sincroniza el botón PDF con los filtros actuales del formulario
+    var baseUrl = "{{ route('psicopedagogia.reporte-pdf') }}";
+    function actualizarPdf() {
+        var params = $('#filtroPsico').serializeArray()
+            .filter(function(p){ return p.value !== '' && p.value != null; });
+        var qs = $.param(params);
+        $('#btnReportePdf').attr('href', baseUrl + (qs ? '?' + qs : ''));
+    }
+    $('#filtroPsico').on('change input', 'select, input', actualizarPdf);
+    actualizarPdf();
 });
 </script>
 @endsection

@@ -44,7 +44,7 @@ class ConcejoController extends Controller
                        SUM(CASE WHEN n.nota_promedio_trimestral < 51 THEN 1 ELSE 0 END) AS materias_reprobadas,
                        COUNT(DISTINCT n.curmatdoc_id) AS materias_total
                 FROM colegio_estudiantes e
-                LEFT JOIN colegio_notas n ON n.est_codigo COLLATE utf8mb4_unicode_ci = e.est_codigo COLLATE utf8mb4_unicode_ci
+                LEFT JOIN colegio_notas n ON n.est_codigo COLLATE utf8mb4_unicode_ci = e.est_codigo COLLATE utf8mb4_unicode_ci AND n.nota_estado = 2
                 LEFT JOIN notas_config_periodos p ON p.periodo_id = n.periodo_id AND p.periodo_gestion = ?
                 WHERE e.cur_codigo = ?
                 GROUP BY e.est_codigo, e.est_apellidos, e.est_nombres, e.est_visible
@@ -133,6 +133,7 @@ class ConcejoController extends Controller
             JOIN colegio_curso_materia_docente cmd ON cmd.curmatdoc_id = n.curmatdoc_id
             JOIN colegio_materias m ON CONVERT(m.mat_codigo USING utf8mb4) COLLATE utf8mb4_unicode_ci = cmd.mat_codigo COLLATE utf8mb4_unicode_ci
             WHERE n.est_codigo = ?
+              AND n.nota_estado = 2
               AND n.periodo_id IN (".implode(',', $periodos->pluck('periodo_id')->all() ?: [0]).")
             ORDER BY m.mat_orden ASC
         ", [$estCodigo]);

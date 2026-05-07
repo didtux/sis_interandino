@@ -503,16 +503,82 @@ class AsistenciaController extends Controller
             $estudiantes = $estudiantes->sortBy(fn($e) => $lista[$e->est_codigo] ?? 9999)->values();
         }
 
-        // Pre-compute data per student
-        $datosEstudiantes = [];
+        // Construir meses dentro del rango del periodo
+        $mesesConfig = [];
         if ($periodo) {
-            foreach ($estudiantes as $est) {
-                $datosEstudiantes[$est->est_codigo] = $this->getAsistenciaTrimestreEst($est->est_codigo, $periodo, $year);
+            $cur = $periodo->periodo_fecha_inicio->copy()->startOfMonth();
+            $fin = $periodo->periodo_fecha_fin->copy()->startOfMonth();
+            $nombresMes = [1=>'ENERO',2=>'FEBRERO',3=>'MARZO',4=>'ABRIL',5=>'MAYO',6=>'JUNIO',7=>'JULIO',8=>'AGOSTO',9=>'SEPTIEMBRE',10=>'OCTUBRE',11=>'NOVIEMBRE',12=>'DICIEMBRE'];
+            while ($cur <= $fin) {
+                $iniMes = $cur->copy();
+                $finMes = $cur->copy()->endOfMonth();
+                if ($iniMes < $periodo->periodo_fecha_inicio) $iniMes = $periodo->periodo_fecha_inicio->copy();
+                if ($finMes > $periodo->periodo_fecha_fin)    $finMes = $periodo->periodo_fecha_fin->copy();
+                $mesesConfig[$cur->format('Y-m')] = [
+                    'nombre'      => $nombresMes[(int)$cur->format('n')],
+                    'fechaInicio' => $iniMes->format('Y-m-d'),
+                    'fechaFin'    => $finMes->format('Y-m-d'),
+                ];
+                $cur->addMonth();
             }
         }
 
+        // Pre-compute data per student por mes y total trimestre
+        $datosEstudiantes = [];
+        $datosMensuales   = [];
+        if ($periodo) {
+            foreach ($estudiantes as $est) {
+                $datosEstudiantes[$est->est_codigo] = $this->getAsistenciaTrimestreEst($est->est_codigo, $periodo, $year);
+                $datosMensuales[$est->est_codigo] = [];
+                foreach ($mesesConfig as $key => $m) {
+                    $pseudo = (object)[
+                        'periodo_fecha_inicio' => Carbon::parse($m['fechaInicio']),
+                        'periodo_fecha_fin'    => Carbon::parse($m['fechaFin']),
+                    ];
+                    $datosMensuales[$est->est_codigo][$key] = $this->getAsistenciaTrimestreEst($est->est_codigo, $pseudo, $year);
+                }
+            }
+        }
+
+        // Estadísticas del trimestre
+        $totDT=0;$totTL=0;$totTF=0;$totTA=0;$totDias=0;$mejor=null;$mejorPct=-1;$perfectos=0;
+        foreach ($estudiantes as $est) {
+            if (($est->est_visible ?? 1) == 0) continue;
+            $d = $datosEstudiantes[$est->est_codigo] ?? null;
+            if (!$d) continue;
+            $totDT += $d['dt']; $totTL += $d['tl']; $totTF += $d['tf']; $totTA += $d['ta']; $totDias += $d['total'];
+            $pct = $d['total'] > 0 ? ($d['dt'] / $d['total']) : 0;
+            if ($pct > $mejorPct) { $mejorPct = $pct; $mejor = $est; }
+            if ($d['total'] > 0 && $d['dt'] == $d['total']) $perfectos++;
+            }
+        $totalEvaluados = $estudiantes->where('est_visible', '!=', 0)->count() ?: $estudiantes->count();
+        $diasHabiles    = $periodo ? $this->diasHabilesRango($periodo->periodo_fecha_inicio->format('Y-m-d'), $periodo->periodo_fecha_fin->format('Y-m-d'), $year) : 0;
+        $sumaUnidades   = $totDT + $totTL + $totTF;
+        $stats = [
+            'estudiantes'   => $totalEvaluados,
+            'dias_habiles'  => $diasHabiles,
+            'presentes'     => $totDT,
+            'atrasos'       => $totTA,
+            'licencias'     => $totTL,
+            'faltas'        => $totTF,
+            'pct_presentes' => $sumaUnidades>0 ? round($totDT/$sumaUnidades*100, 2) : 0,
+            'pct_atrasos'   => $sumaUnidades>0 ? round($totTA/($sumaUnidades+$totTA)*100, 2) : 0,
+            'pct_licencias' => $sumaUnidades>0 ? round($totTL/$sumaUnidades*100, 2) : 0,
+            'pct_faltas'    => $sumaUnidades>0 ? round($totTF/$sumaUnidades*100, 2) : 0,
+            'prom_presentes'=> $totalEvaluados>0 ? round($totDT/$totalEvaluados, 2) : 0,
+            'prom_atrasos'  => $totalEvaluados>0 ? round($totTA/$totalEvaluados, 2) : 0,
+            'prom_faltas'   => $totalEvaluados>0 ? round($totTF/$totalEvaluados, 2) : 0,
+            'tasa_efectiva' => ($totDT+$totTL)>0 && $sumaUnidades>0 ? round(($totDT+$totTL)/$sumaUnidades*100, 2) : 0,
+            'tasa_ausencia' => $sumaUnidades>0 ? round(($totTF+$totTA)/$sumaUnidades*100, 2) : 0,
+            'puntualidad'   => ($totDT+$totTL)>0 ? round(($totDT+$totTL)/($totDT+$totTL+$totTA)*100, 2) : 0,
+            'mejor_nombre'  => $mejor ? trim($mejor->est_apellidos.' '.$mejor->est_nombres) : '-',
+            'mejor_dias'    => $mejor ? ($datosEstudiantes[$mejor->est_codigo]['dt'] ?? 0) : 0,
+            'mejor_total'   => $mejor ? ($datosEstudiantes[$mejor->est_codigo]['total'] ?? 0) : 0,
+            'perfectos'     => $perfectos,
+        ];
+
         $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('asistencias.reporte-trimestral-pdf',
-            compact('curso', 'estudiantes', 'trimestre', 'lista', 'year', 'periodo', 'datosEstudiantes'))
+            compact('curso', 'estudiantes', 'trimestre', 'lista', 'year', 'periodo', 'datosEstudiantes', 'mesesConfig', 'datosMensuales', 'stats'))
             ->setPaper('legal', 'landscape');
         return $pdf->stream('asistencia-trimestre-' . $trimestre . '-' . date('Y-m-d') . '.pdf');
     }
