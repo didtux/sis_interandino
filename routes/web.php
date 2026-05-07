@@ -46,10 +46,17 @@ Route::middleware(['auth', 'permiso', 'auditoria'])->group(function () {
     // Auditoría
     Route::get('auditoria', [App\Http\Controllers\AuditoriaController::class, 'index'])->name('auditoria.index');
     
-    // Estudiantes
-    Route::resource('estudiantes', App\Http\Controllers\EstudianteController::class);
+    // Estudiantes (rutas específicas antes del resource)
+    Route::get('estudiantes-reprobados', [App\Http\Controllers\EstudianteController::class, 'reprobados'])->name('estudiantes.reprobados');
+    Route::get('estudiantes-listado-contactos', [App\Http\Controllers\EstudianteController::class, 'listadoContactos'])->name('estudiantes.listado-contactos');
+    Route::get('estudiantes-codigos-qr', [App\Http\Controllers\EstudianteController::class, 'codigosQR'])->name('estudiantes.codigos-qr');
+    Route::get('estudiantes-listado-excel', [App\Http\Controllers\EstudianteController::class, 'listadoExcel'])->name('estudiantes.listado-excel');
+    Route::post('estudiantes/{id}/toggle-estado', [App\Http\Controllers\EstudianteController::class, 'toggleEstado'])->name('estudiantes.toggle-estado');
+    Route::post('estudiantes/{id}/subir', [App\Http\Controllers\EstudianteController::class, 'subirLista'])->name('estudiantes.subir');
+    Route::post('estudiantes/{id}/bajar', [App\Http\Controllers\EstudianteController::class, 'bajarLista'])->name('estudiantes.bajar');
     Route::get('estudiantes/{id}/kardex', [App\Http\Controllers\EstudianteController::class, 'kardex'])->name('estudiantes.kardex');
     Route::get('estudiantes-reporte-general', [App\Http\Controllers\EstudianteController::class, 'reporteGeneral'])->name('estudiantes.reporte-general');
+    Route::resource('estudiantes', App\Http\Controllers\EstudianteController::class);
     
     // Cursos
     Route::post('cursos/{id}/guardar-lista', [App\Http\Controllers\CursoController::class, 'guardarLista'])->name('cursos.guardar-lista');
@@ -58,6 +65,17 @@ Route::middleware(['auth', 'permiso', 'auditoria'])->group(function () {
     Route::post('cursos/{id}/asignar-docente', [App\Http\Controllers\CursoController::class, 'asignarDocente'])->name('cursos.asignar-docente');
     Route::delete('cursos/{id}/quitar-docente/{matCodigo}', [App\Http\Controllers\CursoController::class, 'quitarDocente'])->name('cursos.quitar-docente');
     Route::resource('cursos', App\Http\Controllers\CursoController::class);
+
+    // Parametrización: Niveles y Gestiones
+    Route::resource('parametrizacion/niveles', App\Http\Controllers\NivelController::class)
+        ->except(['show'])->names('niveles');
+    Route::post('parametrizacion/gestiones/{id}/activar', [App\Http\Controllers\GestionController::class, 'activar'])->name('gestiones.activar');
+    Route::resource('parametrizacion/gestiones', App\Http\Controllers\GestionController::class)
+        ->except(['show'])->names('gestiones');
+
+    // Unidad Educativa (configuración institución)
+    Route::get('unidad-educativa', [App\Http\Controllers\UnidadEducativaController::class, 'edit'])->name('unidad-educativa.edit');
+    Route::put('unidad-educativa', [App\Http\Controllers\UnidadEducativaController::class, 'update'])->name('unidad-educativa.update');
     
     // Docentes
     Route::post('docentes/{id}/crear-usuario', [App\Http\Controllers\DocenteController::class, 'crearUsuario'])->name('docentes.crear-usuario');
@@ -84,6 +102,13 @@ Route::middleware(['auth', 'permiso', 'auditoria'])->group(function () {
     
     // Notas
     Route::get('notas', [App\Http\Controllers\NotaController::class, 'index'])->name('notas.index');
+    Route::get('notas/rendimiento', [App\Http\Controllers\NotaController::class, 'rendimiento'])->name('notas.rendimiento');
+    Route::get('notas/centralizador-anual', [App\Http\Controllers\NotaReporteController::class, 'centralizadorAnual'])->name('notas.centralizador-anual');
+    Route::get('notas/cuadro-honor', [App\Http\Controllers\NotaReporteController::class, 'cuadroHonor'])->name('notas.cuadro-honor');
+    Route::get('notas/top3-cursos', [App\Http\Controllers\NotaReporteController::class, 'top3PorCurso'])->name('notas.top3-cursos');
+    Route::get('notas/boletin/{est}', [App\Http\Controllers\NotaReporteController::class, 'boletin'])->name('notas.boletin');
+    Route::get('concejo', [App\Http\Controllers\ConcejoController::class, 'index'])->name('concejo.index');
+    Route::get('concejo/documento/{est}', [App\Http\Controllers\ConcejoController::class, 'documento'])->name('concejo.documento');
     Route::get('notas/configuracion', [App\Http\Controllers\NotaController::class, 'configuracion'])->name('notas.configuracion');
     Route::post('notas/configuracion/periodo', [App\Http\Controllers\NotaController::class, 'guardarPeriodo'])->name('notas.guardar-periodo');
     Route::delete('notas/configuracion/periodo/{id}', [App\Http\Controllers\NotaController::class, 'eliminarPeriodo'])->name('notas.eliminar-periodo');

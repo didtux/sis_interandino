@@ -9,7 +9,7 @@
                     <h4><i class="fas fa-edit mr-2"></i>Editar Caso</h4>
                 </div>
                 <div class="card-body">
-                    <form action="{{ route('psicopedagogia.update', $caso->psico_id) }}" method="POST">
+                    <form action="{{ route('psicopedagogia.update', $caso->psico_id) }}" method="POST" enctype="multipart/form-data">
                         @csrf
                         @method('PUT')
                         
@@ -24,7 +24,7 @@
                         </div>
 
                         <div class="form-group">
-                            <label>Caso <span class="text-danger">*</span></label>
+                            <label>Kardex <span class="text-danger">*</span></label>
                             <textarea name="psico_caso" class="form-control" rows="4" required>{{ $caso->psico_caso }}</textarea>
                         </div>
 
@@ -34,8 +34,24 @@
                         </div>
 
                         <div class="form-group">
-                            <label>Kardex</label>
+                            <label>Acuerdo</label>
                             <textarea name="psico_acuerdo" class="form-control" rows="3">{{ $caso->psico_acuerdo }}</textarea>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Documento adjunto <small class="text-muted">(PDF, imagen, Word — máx. 5 MB)</small></label>
+                            @if(!empty($caso->psico_documento))
+                                <div class="mb-2">
+                                    <a href="{{ asset('storage/'.$caso->psico_documento) }}" target="_blank" class="badge badge-primary p-2">
+                                        <i class="fas fa-paperclip mr-1"></i>Ver documento actual
+                                    </a>
+                                    <label class="ml-2 small">
+                                        <input type="checkbox" name="psico_documento_remove" value="1"> Eliminar
+                                    </label>
+                                </div>
+                            @endif
+                            <input type="file" name="psico_documento" class="form-control-file"
+                                   accept=".pdf,.jpg,.jpeg,.png,.doc,.docx">
                         </div>
 
                         <div class="form-group">

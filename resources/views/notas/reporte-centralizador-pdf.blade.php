@@ -48,7 +48,10 @@
 
     <div class="header">
         <div class="logo">
-            @if(file_exists(public_path('img/logo.png')))
+            @php $sc = $config ?? \App\Models\SistemaConfiguracion::actual(); @endphp
+            @if($sc && $sc->config_logo && file_exists(public_path('storage/'.$sc->config_logo)))
+                <img src="{{ public_path('storage/'.$sc->config_logo) }}" alt="Logo">
+            @elseif(file_exists(public_path('img/logo.png')))
                 <img src="{{ public_path('img/logo.png') }}" alt="Logo">
             @endif
         </div>
@@ -157,10 +160,16 @@
         </thead>
         <tbody>
             @foreach($data as $i => $fila)
-                @php $est = $fila['estudiante']; @endphp
-                <tr>
-                    <td>{{ $lista[$est->est_codigo] ?? ($i + 1) }}</td>
-                    <td class="est-name">{{ mb_strtoupper($est->est_apellidos . ' ' . $est->est_nombres, 'UTF-8') }}</td>
+                @php
+                    $est = $fila['estudiante'];
+                    $retirado = isset($est->est_visible) && $est->est_visible == 0;
+                @endphp
+                <tr style="{{ $retirado ? 'background:#ffe6e6;' : '' }}">
+                    <td style="{{ $retirado ? 'color:#c0392b;font-weight:700;' : '' }}">{{ $lista[$est->est_codigo] ?? ($i + 1) }}</td>
+                    <td class="est-name" style="{{ $retirado ? 'color:#c0392b;font-weight:700;' : '' }}">
+                        {{ mb_strtoupper($est->est_apellidos . ' ' . $est->est_nombres, 'UTF-8') }}
+                        @if($retirado)<span style="background:#c0392b;color:#fff;padding:0 3px;border-radius:2px;font-size:5px;margin-left:2px;">RETIRADO</span>@endif
+                    </td>
 
                     @if($isAnual)
                         @foreach($materiasList as $cmd)

@@ -12,10 +12,34 @@ use Illuminate\Http\Request;
 
 class CursoController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        $cursos = Curso::visible()->withCount('estudiantes')->paginate(15);
-        return view('cursos.index', compact('cursos'));
+        $q       = trim((string) $request->input('q', ''));
+        $nivel   = $request->input('nivel', '');
+        $estado  = $request->input('estado', 'activos'); // activos | inactivos | todos
+
+        $query = Curso::query()->withCount(['estudiantes' => function($q2) {
+            $q2->where('est_visible', 1);
+        }]);
+
+        if ($estado === 'activos')        $query->where('cur_visible', 1);
+        elseif ($estado === 'inactivos')  $query->where('cur_visible', 0);
+
+        if ($q !== '') {
+            $query->where(function($w) use ($q) {
+                $w->where('cur_nombre', 'like', "%{$q}%")
+                  ->orWhere('cur_codigo', 'like', "%{$q}%")
+                  ->orWhere('cur_abreviado', 'like', "%{$q}%");
+            });
+        }
+
+        if ($nivel !== '') {
+            $query->where('cur_nivel', $nivel);
+        }
+
+        $cursos = $query->ordenado()->paginate(20)->withQueryString();
+
+        return view('cursos.index', compact('cursos', 'q', 'nivel', 'estado'));
     }
 
     public function create()
@@ -25,12 +49,20 @@ class CursoController extends Controller
 
     public function store(Request $request)
     {
-        $request->validate([
-            'cur_codigo' => 'required|unique:colegio_cursos,cur_codigo',
-            'cur_nombre' => 'required|max:20'
+        $data = $request->validate([
+            'cur_codigo'    => 'required|max:20|unique:colegio_cursos,cur_codigo',
+            'cur_nombre'    => 'required|max:20',
+            'cur_abreviado' => 'nullable|max:30',
+            'cur_nivel'     => 'nullable|in:INICIAL,PRIMARIA,SECUNDARIA',
+            'cur_cupo'      => 'nullable|integer|min:0',
+            'cur_orden'     => 'nullable|integer|min:0',
         ]);
 
-        Curso::create($request->all());
+        $data['cur_visible'] = 1;
+        $data['cur_cupo']    = $data['cur_cupo']  ?? 0;
+        $data['cur_orden']   = $data['cur_orden'] ?? 0;
+
+        Curso::create($data);
         return redirect()->route('cursos.index')->with('success', 'Curso creado exitosamente');
     }
 
@@ -70,12 +102,17 @@ class CursoController extends Controller
 
     public function update(Request $request, $id)
     {
-        $request->validate([
-            'cur_nombre' => 'required|max:20'
+        $data = $request->validate([
+            'cur_nombre'    => 'required|max:20',
+            'cur_abreviado' => 'nullable|max:30',
+            'cur_nivel'     => 'nullable|in:INICIAL,PRIMARIA,SECUNDARIA',
+            'cur_cupo'      => 'nullable|integer|min:0',
+            'cur_orden'     => 'nullable|integer|min:0',
+            'cur_visible'   => 'nullable|in:0,1',
         ]);
 
         $curso = Curso::findOrFail($id);
-        $curso->update($request->all());
+        $curso->update($data);
         return redirect()->route('cursos.index')->with('success', 'Curso actualizado exitosamente');
     }
 

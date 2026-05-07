@@ -134,6 +134,14 @@
 </li>
 @endif
 
+@if($esAdmin || $user->tieneAccesoModulo('concejo'))
+<li class="side-menus {{ Request::is('concejo*') ? 'active' : '' }}">
+    <a class="nav-link" href="{{ route('concejo.index') }}">
+        <i class="fas fa-gavel"></i><span>Concejo Educativo</span>
+    </a>
+</li>
+@endif
+
 @if($esAdmin || $user->tieneAccesoModulo('docentes'))
 <li class="side-menus {{ Request::is('docentes*') ? 'active' : '' }}">
     <a class="nav-link" href="{{ route('docentes.index') }}">
@@ -191,6 +199,9 @@
     </a>
     <ul class="collapse {{ Request::is('notas*') || Request::is('asistencia-clases*') ? 'show' : '' }}" id="notasMenu">
         <li><a href="{{ route('notas.index') }}"><i class="fas fa-clipboard-list"></i> Calificaciones</a></li>
+        @if($esAdmin || $user->tieneAccesoModulo('notas.rendimiento'))
+        <li><a href="{{ route('notas.rendimiento') }}"><i class="fas fa-chart-line"></i> Rendimiento</a></li>
+        @endif
         <li><a href="{{ route('asistencia-clases.index') }}"><i class="fas fa-clipboard-check"></i> Asistencia Clases</a></li>
         @if($esAdmin)
         <li><a href="{{ route('notas.configuracion') }}"><i class="fas fa-cog"></i> Configuración</a></li>
@@ -312,6 +323,25 @@
         @endif
         @if($esAdmin || $user->tieneAccesoModulo('estudiantes-rutas'))
         <li><a href="{{ route('estudiantes-rutas.index') }}"><i class="fas fa-users"></i> Estudiantes</a></li>
+        @endif
+    </ul>
+</li>
+@endif
+
+@if($esAdmin || $user->tieneAccesoModulo('parametrizacion') || $user->tieneAccesoModulo('unidad-educativa') || $user->tieneAccesoModulo('niveles') || $user->tieneAccesoModulo('gestiones'))
+<li class="side-menus {{ Request::is('parametrizacion*') || Request::is('unidad-educativa*') ? 'active' : '' }}">
+    <a class="nav-link menu-toggle" href="#" data-toggle="collapse" data-target="#parametrizacionMenu">
+        <i class="fas fa-cogs"></i><span>Parametrización</span>
+    </a>
+    <ul class="collapse {{ Request::is('parametrizacion*') || Request::is('unidad-educativa*') ? 'show' : '' }}" id="parametrizacionMenu">
+        @if($esAdmin || $user->tieneAccesoModulo('unidad-educativa'))
+        <li><a href="{{ route('unidad-educativa.edit') }}"><i class="fas fa-school"></i> Unidad Educativa</a></li>
+        @endif
+        @if($esAdmin || $user->tieneAccesoModulo('niveles'))
+        <li><a href="{{ route('niveles.index') }}"><i class="fas fa-layer-group"></i> Niveles</a></li>
+        @endif
+        @if($esAdmin || $user->tieneAccesoModulo('gestiones'))
+        <li><a href="{{ route('gestiones.index') }}"><i class="fas fa-calendar"></i> Gestiones</a></li>
         @endif
     </ul>
 </li>

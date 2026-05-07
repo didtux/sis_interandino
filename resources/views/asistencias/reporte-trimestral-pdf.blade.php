@@ -68,10 +68,14 @@
             @foreach($estudiantes as $index => $estudiante)
                 @php
                     $d = $datosEstudiantes[$estudiante->est_codigo] ?? ['dt'=>0,'tl'=>0,'tf'=>0,'ta'=>0,'total'=>0];
+                    $retirado = ($estudiante->est_visible ?? 1) == 0;
                 @endphp
-                <tr>
-                    <td>{{ isset($lista) && isset($lista[$estudiante->est_codigo]) ? $lista[$estudiante->est_codigo] : $index + 1 }}</td>
-                    <td class="estudiante">{{ $estudiante->est_apellidos }} {{ $estudiante->est_nombres }}</td>
+                <tr style="{{ $retirado ? 'background:#ffe6e6;' : '' }}">
+                    <td style="{{ $retirado ? 'color:#c0392b;font-weight:700;' : '' }}">{{ isset($lista) && isset($lista[$estudiante->est_codigo]) ? $lista[$estudiante->est_codigo] : $index + 1 }}</td>
+                    <td class="estudiante" style="{{ $retirado ? 'color:#c0392b;font-weight:700;' : '' }}">
+                        {{ $estudiante->est_apellidos }} {{ $estudiante->est_nombres }}
+                        @if($retirado)<span style="background:#c0392b;color:#fff;padding:0 3px;border-radius:2px;font-size:8px;margin-left:3px;">RETIRADO</span>@endif
+                    </td>
                     <td>{{ $d['dt'] }}</td>
                     <td>{{ $d['tl'] }}</td>
                     <td>{{ $d['tf'] }}</td>

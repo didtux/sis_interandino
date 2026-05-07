@@ -62,14 +62,18 @@
         </thead>
         <tbody>
             @foreach($estudiantes as $index => $est)
-                <tr>
-                    <td class="numero">{{ $index + 1 }}</td>
-                    <td>{{ strtoupper(explode(' ', $est->est_apellidos)[0] ?? '') }}</td>
-                    <td>{{ strtoupper(explode(' ', $est->est_apellidos)[1] ?? '') }}</td>
-                    <td>{{ strtoupper($est->est_nombres) }}</td>
-                    <td>{{ $est->est_ci ?? '' }}</td>
-                    <td class="fecha">{{ $est->est_fecha ? $est->est_fecha->format('Y-m-d') : ($est->created_at ? $est->created_at->format('Y-m-d') : date('Y-m-d')) }}</td>
-                    <td></td>
+                @php $retirado = ($est->est_visible ?? 1) == 0; @endphp
+                <tr style="{{ $retirado ? 'background:#ffe6e6;' : '' }}">
+                    <td class="numero" style="{{ $retirado ? 'color:#c0392b;font-weight:700;' : '' }}">{{ $index + 1 }}</td>
+                    <td style="{{ $retirado ? 'color:#c0392b;font-weight:700;' : '' }}">{{ strtoupper(explode(' ', $est->est_apellidos)[0] ?? '') }}</td>
+                    <td style="{{ $retirado ? 'color:#c0392b;font-weight:700;' : '' }}">{{ strtoupper(explode(' ', $est->est_apellidos)[1] ?? '') }}</td>
+                    <td style="{{ $retirado ? 'color:#c0392b;font-weight:700;' : '' }}">
+                        {{ strtoupper($est->est_nombres) }}
+                        @if($retirado)<span style="background:#c0392b;color:#fff;padding:0 4px;border-radius:2px;font-size:8px;margin-left:3px;">RETIRADO</span>@endif
+                    </td>
+                    <td style="{{ $retirado ? 'color:#c0392b;' : '' }}">{{ $est->est_ci ?? '' }}</td>
+                    <td class="fecha" style="{{ $retirado ? 'color:#c0392b;' : '' }}">{{ $est->est_fecha ? $est->est_fecha->format('Y-m-d') : ($est->created_at ? $est->created_at->format('Y-m-d') : date('Y-m-d')) }}</td>
+                    <td>{{ $retirado ? 'RETIRADO' : '' }}</td>
                 </tr>
             @endforeach
         </tbody>

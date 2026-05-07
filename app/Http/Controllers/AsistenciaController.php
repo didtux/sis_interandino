@@ -495,7 +495,7 @@ class AsistenciaController extends Controller
         $year = date('Y');
         $periodo = NotaPeriodo::activo()->gestion($year)->where('periodo_numero', $trimestre)->first();
 
-        $estudiantes = $curso->estudiantes()->visible()->orderBy('est_apellidos')->orderBy('est_nombres')->get();
+        $estudiantes = $curso->estudiantes()->orderBy('est_apellidos')->orderBy('est_nombres')->get();
         if ($estudiantes->isEmpty()) return back()->with('error', 'No hay estudiantes registrados en el curso ' . $curso->cur_nombre);
 
         $lista = ListaCurso::where('cur_codigo', $request->cur_codigo)->where('lista_gestion', $year)->pluck('lista_numero', 'est_codigo');
@@ -539,7 +539,7 @@ class AsistenciaController extends Controller
             ];
         }
 
-        $estudiantes = $curso->estudiantes()->visible()->orderBy('est_apellidos')->orderBy('est_nombres')->get();
+        $estudiantes = $curso->estudiantes()->orderBy('est_apellidos')->orderBy('est_nombres')->get();
         if ($estudiantes->isEmpty()) return back()->with('error', 'No hay estudiantes registrados en el curso ' . $curso->cur_nombre);
 
         $lista = ListaCurso::where('cur_codigo', $request->cur_codigo)->where('lista_gestion', $year)->pluck('lista_numero', 'est_codigo');
@@ -573,7 +573,7 @@ class AsistenciaController extends Controller
         if (!$curso) return back()->with('error', 'Curso no encontrado');
 
         $year = date('Y');
-        $estudiantes = $curso->estudiantes()->visible()->orderBy('est_apellidos')->orderBy('est_nombres')->get();
+        $estudiantes = $curso->estudiantes()->orderBy('est_apellidos')->orderBy('est_nombres')->get();
         if ($estudiantes->isEmpty()) return back()->with('error', 'No hay estudiantes registrados en el curso ' . $curso->cur_nombre);
 
         $listaExcel = ListaCurso::where('cur_codigo', $request->cur_codigo)->where('lista_gestion', $year)->pluck('lista_numero', 'est_codigo');
@@ -608,7 +608,7 @@ class AsistenciaController extends Controller
         if (!$curso) return back()->with('error', 'Curso no encontrado');
 
         $year = date('Y');
-        $estudiantes = $curso->estudiantes()->visible()->orderBy('est_apellidos')->orderBy('est_nombres')->get();
+        $estudiantes = $curso->estudiantes()->orderBy('est_apellidos')->orderBy('est_nombres')->get();
         if ($estudiantes->isEmpty()) return back()->with('error', 'No hay estudiantes registrados en el curso ' . $curso->cur_nombre);
 
         $listaExcelAnual = ListaCurso::where('cur_codigo', $request->cur_codigo)->where('lista_gestion', $year)->pluck('lista_numero', 'est_codigo');
@@ -718,7 +718,7 @@ class AsistenciaController extends Controller
                     }
                     $cursosYaProcesados[] = $curso->cur_codigo;
                     
-                    $estudiantes = $curso->estudiantes()->visible()->orderBy('est_apellidos')->orderBy('est_nombres')->get();
+                    $estudiantes = $curso->estudiantes()->orderBy('est_apellidos')->orderBy('est_nombres')->get();
 
                     // Cargar lista si existe
                     if (!isset($listaPorCurso[$curso->cur_codigo])) {
@@ -817,7 +817,7 @@ class AsistenciaController extends Controller
             $gestionFaltas = date('Y');
             
             foreach ($cursos as $curso) {
-                $estudiantes = $curso->estudiantes()->visible()->orderBy('est_apellidos')->orderBy('est_nombres')->get();
+                $estudiantes = $curso->estudiantes()->orderBy('est_apellidos')->orderBy('est_nombres')->get();
 
                 $listaC = ListaCurso::where('cur_codigo', $curso->cur_codigo)
                     ->where('lista_gestion', $gestionFaltas)->pluck('lista_numero', 'est_codigo');

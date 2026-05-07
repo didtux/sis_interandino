@@ -5,10 +5,10 @@
     <title>Reporte de Psicopedagogía</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { 
-            font-family: Arial, sans-serif; 
-            font-size: 10px;
-            padding: 15px;
+        body {
+            font-family: Arial, sans-serif;
+            font-size: 9px;
+            padding: 12px;
         }
         .header {
             display: table;
@@ -74,9 +74,18 @@
         }
         th, td {
             border: 1px solid #000;
-            padding: 6px;
+            padding: 4px 5px;
             text-align: center;
-            font-size: 9px;
+            font-size: 8px;
+            vertical-align: top;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+            white-space: normal;
+        }
+        td.txt {
+            text-align: left;
+            font-size: 7.5px;
+            line-height: 1.25;
         }
         th {
             background-color: #f0f0f0;
@@ -98,7 +107,10 @@
 
     <div class="header">
         <div class="logo">
-            @if(file_exists(public_path('img/logo.png')))
+            @php $sc = \App\Models\SistemaConfiguracion::actual(); @endphp
+            @if($sc && $sc->config_logo && file_exists(public_path('storage/'.$sc->config_logo)))
+                <img src="{{ public_path('storage/'.$sc->config_logo) }}" alt="Logo">
+            @elseif(file_exists(public_path('img/logo.png')))
                 <img src="{{ public_path('img/logo.png') }}" alt="Logo">
             @endif
         </div>
@@ -119,14 +131,14 @@
         <thead>
             <tr>
                 <th style="width: 3%;">#</th>
-                <th style="width: 8%;">FECHA</th>
-                <th style="width: 18%;">ESTUDIANTE</th>
-                <th style="width: 10%;">CURSO</th>
-                <th style="width: 20%;">CASO</th>
-                <th style="width: 15%;">SOLUCIÓN</th>
-                <th style="width: 12%;">KARDEX</th>
-                <th style="width: 8%;">TIPO</th>
-                <th style="width: 6%;">CONTACTO</th>
+                <th style="width: 7%;">FECHA</th>
+                <th style="width: 14%;">ESTUDIANTE</th>
+                <th style="width: 8%;">CURSO</th>
+                <th style="width: 24%;">KARDEX</th>
+                <th style="width: 18%;">SOLUCIÓN</th>
+                <th style="width: 12%;">ACUERDO</th>
+                <th style="width: 7%;">TIPO</th>
+                <th style="width: 7%;">CONTACTO</th>
             </tr>
         </thead>
         <tbody>
@@ -134,13 +146,13 @@
                 <tr>
                     <td>{{ $index + 1 }}</td>
                     <td>{{ $caso->psico_fecha->format('d/m/Y') }}</td>
-                    <td style="text-align: left;">{{ strtoupper($caso->estudiante->est_nombres ?? 'N/A') }} {{ strtoupper($caso->estudiante->est_apellidos ?? '') }}</td>
+                    <td class="txt">{{ strtoupper($caso->estudiante->est_nombres ?? 'N/A') }} {{ strtoupper($caso->estudiante->est_apellidos ?? '') }}</td>
                     <td>{{ $caso->estudiante->curso->cur_nombre ?? '-' }}</td>
-                    <td style="text-align: left;">{{ \Str::limit($caso->psico_caso, 50) }}</td>
-                    <td style="text-align: left;">{{ \Str::limit($caso->psico_solucion, 40) }}</td>
-                    <td style="text-align: left;">{{ \Str::limit($caso->psico_acuerdo, 30) }}</td>
+                    <td class="txt">{{ $caso->psico_caso }}</td>
+                    <td class="txt">{{ $caso->psico_solucion }}</td>
+                    <td class="txt">{{ $caso->psico_acuerdo }}</td>
                     <td>{{ $caso->psico_tipo_acuerdo }}</td>
-                    <td>{{ $caso->estudiante->padres->first()->pfam_nombres ?? '-' }}</td>
+                    <td class="txt">{{ $caso->estudiante->padres->first()->pfam_nombres ?? '-' }}</td>
                 </tr>
             @empty
                 <tr>

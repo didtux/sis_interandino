@@ -338,7 +338,7 @@
 @endphp
 <nav class="navbar" id="mainNav">
     <a href="{{ route('landing') }}" class="navbar-brand">
-        <img src="{{ asset('img/logo.png') }}" alt="Logo Interandino">
+        <img src="{{ ($sistemaConfig ?? null) && $sistemaConfig->config_logo ? asset('storage/'.$sistemaConfig->config_logo) : asset('img/logo.png') }}" alt="Logo">
         <div class="brand-text">
             <span class="name">Interandino Boliviano</span>
             <span class="sub">Contribuir · Mejorar · Desarrollar</span>
@@ -401,7 +401,7 @@
     <div class="container">
         <div class="footer-grid">
             <div class="footer-brand">
-                <img src="{{ asset('img/logo.png') }}" alt="Logo Interandino">
+                <img src="{{ ($sistemaConfig ?? null) && $sistemaConfig->config_logo ? asset('storage/'.$sistemaConfig->config_logo) : asset('img/logo.png') }}" alt="Logo">
                 <span class="name">Interandino Boliviano</span>
                 <p>Unidad Educativa Privada comprometida con la formación integral de estudiantes en El Alto, La Paz, Bolivia desde el año 2005.</p>
                 <div class="motto">"Contribuir, mejorar y desarrollar"</div>

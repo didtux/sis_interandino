@@ -13,12 +13,18 @@ class Curso extends Model
     protected $fillable = [
         'cur_codigo',
         'cur_nombre',
+        'cur_orden',
+        'cur_abreviado',
+        'cur_nivel',
+        'cur_cupo',
         'cur_visible'
     ];
 
     protected $casts = [
         'cur_fecha' => 'datetime',
-        'cur_visible' => 'integer'
+        'cur_visible' => 'integer',
+        'cur_orden' => 'integer',
+        'cur_cupo' => 'integer'
     ];
 
     // Relación con Estudiantes
@@ -61,5 +67,11 @@ class Curso extends Model
     public function scopeVisible($query)
     {
         return $query->where('cur_visible', 1);
+    }
+
+    // Scope para ordenar por cur_orden ASC (PreKinder → 6toSEC)
+    public function scopeOrdenado($query)
+    {
+        return $query->orderBy('cur_orden', 'asc')->orderBy('cur_nombre', 'asc');
     }
 }

@@ -126,9 +126,13 @@
                                                 }
                                             }
                                         @endphp
-                                        <tr>
-                                            <td style="text-align:center;font-weight:bold;">{{ $est->lista_numero ?? ($i + 1) }}</td>
-                                            <td style="white-space:nowrap;">{{ $est->est_apellidos }} {{ $est->est_nombres }}</td>
+                                        @php $retirado = ($est->est_visible ?? 1) == 0; @endphp
+                                        <tr style="{{ $retirado ? 'background:#ffe6e6;' : '' }}">
+                                            <td style="text-align:center;font-weight:bold;color:{{ $retirado ? '#c0392b' : 'inherit' }};">{{ $est->lista_numero ?? ($i + 1) }}</td>
+                                            <td style="white-space:nowrap;{{ $retirado ? 'color:#c0392b;font-weight:600;' : '' }}">
+                                                {{ $est->est_apellidos }} {{ $est->est_nombres }}
+                                                @if($retirado)<span class="badge badge-danger ml-1" style="font-size:9px;">RETIRADO</span>@endif
+                                            </td>
                                             @foreach($dimensiones as $dim)
                                                 @for($c = 1; $c <= $dim->dimension_columnas; $c++)
                                                     @php $val = $detallesMap[$dim->dimension_id][$c] ?? ''; @endphp

@@ -139,6 +139,76 @@ class NotaController extends Controller
         ));
     }
 
+    /**
+     * Vista Rendimiento: matriz estudiantes × materias con promedio trimestral.
+     */
+    public function rendimiento(Request $request)
+    {
+        $gestion = date('Y');
+        $periodos = NotaPeriodo::activo()->gestion($gestion)->orderBy('periodo_numero')->get();
+        $cursos   = Curso::visible()->ordenado()->get();
+
+        $cursoCod  = $request->input('cur_codigo');
+        $periodoId = $request->input('periodo_id', optional($periodos->first())->periodo_id);
+        $buscar    = trim((string) $request->input('buscar', ''));
+
+        $estudiantes = collect();
+        $materias    = collect();
+        $matriz      = []; // [est_codigo][mat_codigo] => promedio
+        $asignaciones = collect();
+
+        if ($cursoCod && $periodoId) {
+            $asignaciones = CursoMateriaDocente::with('materia')
+                ->where('cur_codigo', $cursoCod)
+                ->where('curmatdoc_estado', 1)
+                ->get();
+
+            $materias = $asignaciones->pluck('materia')->filter()->sortBy('mat_orden')->values();
+
+            $eq = Estudiante::where('colegio_estudiantes.cur_codigo', $cursoCod)
+                ->leftJoin('colegio_lista_curso', function($j) use ($gestion, $cursoCod){
+                    $j->whereRaw('colegio_estudiantes.est_codigo COLLATE utf8mb4_unicode_ci = colegio_lista_curso.est_codigo COLLATE utf8mb4_unicode_ci')
+                      ->where('colegio_lista_curso.lista_gestion', $gestion)
+                      ->where('colegio_lista_curso.cur_codigo', $cursoCod);
+                })
+                ->select('colegio_estudiantes.*', 'colegio_lista_curso.lista_numero');
+
+            if ($buscar !== '') {
+                $eq->where(function($w) use ($buscar) {
+                    $w->where('colegio_estudiantes.est_nombres','like',"%{$buscar}%")
+                      ->orWhere('colegio_estudiantes.est_apellidos','like',"%{$buscar}%");
+                });
+            }
+
+            $estudiantes = $eq->orderByRaw('colegio_lista_curso.lista_numero IS NULL ASC')
+                ->orderBy('colegio_lista_curso.lista_numero','asc')
+                ->orderBy('colegio_estudiantes.est_apellidos')
+                ->get();
+
+            $curmatIds = $asignaciones->pluck('curmatdoc_id');
+            $notas = Nota::whereIn('curmatdoc_id', $curmatIds)
+                ->where('periodo_id', $periodoId)
+                ->get();
+
+            $asignByCurmat = $asignaciones->keyBy('curmatdoc_id');
+            foreach ($notas as $n) {
+                $matCod = optional($asignByCurmat->get($n->curmatdoc_id))->mat_codigo;
+                if ($matCod) {
+                    $matriz[$n->est_codigo][$matCod] = [
+                        'promedio' => $n->nota_promedio_trimestral,
+                        'curmatdoc_id' => $n->curmatdoc_id,
+                        'nota_id' => $n->nota_id,
+                    ];
+                }
+            }
+        }
+
+        return view('notas.rendimiento', compact(
+            'periodos','cursos','cursoCod','periodoId','buscar',
+            'estudiantes','materias','matriz','asignaciones','gestion'
+        ));
+    }
+
     public function calificar($curmatdocId, $periodoId)
     {
         $asignacion = CursoMateriaDocente::with(['curso', 'materia', 'docente'])->findOrFail($curmatdocId);
@@ -155,8 +225,7 @@ class NotaController extends Controller
         $hoy = now()->toDateString();
         $enRango = $hoy >= $periodo->periodo_fecha_inicio->toDateString() && $hoy <= $periodo->periodo_fecha_fin->toDateString();
 
-        $estudiantes = Estudiante::visible()
-            ->where('colegio_estudiantes.cur_codigo', $asignacion->cur_codigo)
+        $estudiantes = Estudiante::where('colegio_estudiantes.cur_codigo', $asignacion->cur_codigo)
             ->leftJoin('colegio_lista_curso', function ($j) use ($gestion, $asignacion) {
                 $j->whereRaw('colegio_estudiantes.est_codigo COLLATE utf8mb4_unicode_ci = colegio_lista_curso.est_codigo')
                   ->where('colegio_lista_curso.lista_gestion', $gestion)
@@ -249,11 +318,12 @@ class NotaController extends Controller
 
                 // Promedio: si hay notas, promedio de las ingresadas; si solo 1 columna, es el valor directo
                 $promDim = $count > 0 ? ($dim->dimension_columnas == 1 ? $suma : $suma / $count) : 0;
-                $promedioTrimestral += round($promDim);
+                // Acumula con decimales (decimal(5,2)). El redondeo se aplica solo al mostrar.
+                $promedioTrimestral += $promDim;
             }
 
             $nota->update([
-                'nota_promedio_trimestral' => round($promedioTrimestral)
+                'nota_promedio_trimestral' => round($promedioTrimestral, 2)
             ]);
         }
 
@@ -340,8 +410,7 @@ class NotaController extends Controller
         $gestion = $periodo->periodo_gestion;
         $dimensiones = NotaDimension::activo()->gestion($gestion)->orderBy('dimension_orden')->get();
 
-        $estudiantes = Estudiante::visible()
-            ->where('colegio_estudiantes.cur_codigo', $asignacion->cur_codigo)
+        $estudiantes = Estudiante::where('colegio_estudiantes.cur_codigo', $asignacion->cur_codigo)
             ->leftJoin('colegio_lista_curso', function ($j) use ($gestion, $asignacion) {
                 $j->whereRaw('colegio_estudiantes.est_codigo COLLATE utf8mb4_unicode_ci = colegio_lista_curso.est_codigo')
                   ->where('colegio_lista_curso.lista_gestion', $gestion)
@@ -570,10 +639,10 @@ class NotaController extends Controller
                         }
 
                         $promDim = $count > 0 ? ($dim->dimension_columnas == 1 ? $suma : $suma / $count) : 0;
-                        $promedioTrimestral += round($promDim);
+                        $promedioTrimestral += $promDim;
                     }
 
-                    $nota->update(['nota_promedio_trimestral' => round($promedioTrimestral)]);
+                    $nota->update(['nota_promedio_trimestral' => round($promedioTrimestral, 2)]);
                 }
             }
 
@@ -652,7 +721,8 @@ class NotaController extends Controller
         $lista = ListaCurso::where('cur_codigo', $curCodigo)
             ->where('lista_gestion', $gestion)->pluck('lista_numero', 'est_codigo');
 
-        $estudiantes = Estudiante::visible()->where('cur_codigo', $curCodigo)
+        // Incluye retirados; en los PDFs se renderizan en rojo con badge RETIRADO
+        $estudiantes = Estudiante::where('cur_codigo', $curCodigo)
             ->orderBy('est_apellidos')->orderBy('est_nombres')->get();
 
         if ($lista->isNotEmpty()) {

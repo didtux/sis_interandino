@@ -9,7 +9,7 @@
                     <h4><i class="fas fa-plus mr-2"></i>Nuevo Caso Psicopedagógico</h4>
                 </div>
                 <div class="card-body">
-                    <form action="{{ route('psicopedagogia.store') }}" method="POST">
+                    <form action="{{ route('psicopedagogia.store') }}" method="POST" enctype="multipart/form-data">
                         @csrf
                         <div class="row">
                             <div class="col-md-6">
@@ -43,7 +43,7 @@
                         <div id="info-estudiante" style="display:none;" class="alert alert-info mb-3"></div>
 
                         <div class="form-group">
-                            <label>Caso <span class="text-danger">*</span></label>
+                            <label>Kardex <span class="text-danger">*</span></label>
                             <textarea name="psico_caso" class="form-control" rows="4" required></textarea>
                         </div>
 
@@ -53,8 +53,14 @@
                         </div>
 
                         <div class="form-group">
-                            <label>Kardex</label>
+                            <label>Acuerdo</label>
                             <textarea name="psico_acuerdo" class="form-control" rows="3"></textarea>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Documento adjunto <small class="text-muted">(PDF, imagen, Word — máx. 5 MB)</small></label>
+                            <input type="file" name="psico_documento" class="form-control-file"
+                                   accept=".pdf,.jpg,.jpeg,.png,.doc,.docx">
                         </div>
 
                         <div class="form-group">

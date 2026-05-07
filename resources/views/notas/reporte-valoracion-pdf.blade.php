@@ -67,7 +67,10 @@
     {{-- Cabecera institucional --}}
     <div class="header">
         <div class="logo">
-            @if(file_exists(public_path('img/logo.png')))
+            @php $sc = $config ?? \App\Models\SistemaConfiguracion::actual(); @endphp
+            @if($sc && $sc->config_logo && file_exists(public_path('storage/'.$sc->config_logo)))
+                <img src="{{ public_path('storage/'.$sc->config_logo) }}" alt="Logo">
+            @elseif(file_exists(public_path('img/logo.png')))
                 <img src="{{ public_path('img/logo.png') }}" alt="Logo">
             @endif
         </div>

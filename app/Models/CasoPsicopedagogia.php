@@ -19,6 +19,7 @@ class CasoPsicopedagogia extends Model
         'psico_acuerdo',
         'psico_tipo_acuerdo',
         'psico_observaciones',
+        'psico_documento',
         'psico_estado',
         'psico_registrado_por'
     ];

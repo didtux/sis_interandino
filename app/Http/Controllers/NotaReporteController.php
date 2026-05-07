@@ -17,6 +17,7 @@ use App\Models\CasoPsicopedagogia;
 use App\Models\MateriaGrupo;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class NotaReporteController extends Controller
 {
@@ -207,8 +208,8 @@ class NotaReporteController extends Controller
             ->where('lista_gestion', $gestion)
             ->pluck('lista_numero', 'est_codigo');
 
-        $estudiantes = Estudiante::visible()
-            ->where('cur_codigo', $request->cur_codigo)
+        // Incluye retirados para que aparezcan con su número de lista y en rojo
+        $estudiantes = Estudiante::where('cur_codigo', $request->cur_codigo)
             ->orderBy('est_apellidos')->get();
 
         if ($lista->isNotEmpty()) {
@@ -302,8 +303,8 @@ class NotaReporteController extends Controller
             ->where('lista_gestion', $gestion)
             ->pluck('lista_numero', 'est_codigo');
 
-        $estudiantes = Estudiante::visible()
-            ->where('cur_codigo', $request->cur_codigo)
+        // Incluye retirados (mostrados con su número de lista y en rojo)
+        $estudiantes = Estudiante::where('cur_codigo', $request->cur_codigo)
             ->orderBy('est_apellidos')->get();
 
         if ($lista->isNotEmpty()) {
@@ -371,5 +372,250 @@ class NotaReporteController extends Controller
         ))->setPaper('legal', 'landscape');
 
         return $pdf->stream('general-' . preg_replace('/\s+/', '_', $curso->cur_nombre) . '-' . $gestion . '.pdf');
+    }
+
+    /** Centralizador anual: 3 trimestres + promedio anual por curso */
+    public function centralizadorAnual(Request $request)
+    {
+        $cursoCod = $request->input('curso');
+        if (!$cursoCod) abort(400, 'Falta curso');
+        $gestion = (int) $request->input('gestion', date('Y'));
+
+        $curso     = Curso::where('cur_codigo', $cursoCod)->firstOrFail();
+        $config    = DB::table('sistema_configuracion')->first();
+        $periodos  = NotaPeriodo::activo()->gestion($gestion)->orderBy('periodo_numero')->get();
+        $asignaciones = CursoMateriaDocente::with('materia')
+            ->where('cur_codigo', $cursoCod)->where('curmatdoc_estado', 1)->get();
+        $materias  = $asignaciones->pluck('materia')->filter()->sortBy('mat_orden')->values();
+
+        $estudiantes = Estudiante::where('cur_codigo', $cursoCod)
+            ->leftJoin('colegio_lista_curso', function($j) use ($gestion, $cursoCod){
+                $j->whereRaw('colegio_estudiantes.est_codigo COLLATE utf8mb4_unicode_ci = colegio_lista_curso.est_codigo COLLATE utf8mb4_unicode_ci')
+                  ->where('colegio_lista_curso.lista_gestion', $gestion)
+                  ->where('colegio_lista_curso.cur_codigo', $cursoCod);
+            })
+            ->select('colegio_estudiantes.*', 'colegio_lista_curso.lista_numero')
+            ->orderByRaw('colegio_lista_curso.lista_numero IS NULL ASC')
+            ->orderBy('colegio_lista_curso.lista_numero')
+            ->orderBy('colegio_estudiantes.est_apellidos')
+            ->get();
+
+        $curmatIds = $asignaciones->pluck('curmatdoc_id');
+        $notas = Nota::whereIn('curmatdoc_id', $curmatIds)
+            ->whereIn('periodo_id', $periodos->pluck('periodo_id'))->get();
+
+        $asignByCurmat = $asignaciones->keyBy('curmatdoc_id');
+        $matriz = []; // [est][mat][per] = promedio
+        foreach ($notas as $n) {
+            $matCod = optional($asignByCurmat->get($n->curmatdoc_id))->mat_codigo;
+            if ($matCod) $matriz[$n->est_codigo][$matCod][$n->periodo_id] = $n->nota_promedio_trimestral;
+        }
+
+        $pdf = Pdf::loadView('notas.centralizador-anual-pdf', compact(
+            'curso','config','periodos','materias','estudiantes','matriz','gestion'
+        ))->setPaper('legal', 'landscape');
+
+        return $pdf->stream('centralizador-anual-'.$cursoCod.'-'.$gestion.'.pdf');
+    }
+
+    /** Cuadro de Honor: por curso, nivel o colegio */
+    public function cuadroHonor(Request $request)
+    {
+        $tipo      = $request->input('tipo', 'curso'); // curso | nivel | colegio
+        $cursoCod  = $request->input('curso');
+        $nivelIn   = $request->input('nivel');
+        $periodoId = $request->input('periodo_id'); // opcional: trimestre específico
+        $gestion   = (int) $request->input('gestion', date('Y'));
+        $config    = DB::table('sistema_configuracion')->first();
+
+        // Etiqueta del trimestre para el título
+        $trimestreLabel = '';
+        if ($periodoId) {
+            $per = DB::table('notas_config_periodos')->where('periodo_id', $periodoId)->first();
+            if ($per) {
+                $trimestreLabel = ' — ' . ($per->periodo_nombre ?? ($per->periodo_numero.'° TRIMESTRE'));
+            }
+        } else {
+            $trimestreLabel = ' — ANUAL';
+        }
+
+        // Si llega tipo=nivel sin nivel explícito pero con curso, deriva el nivel del curso
+        if ($tipo === 'nivel' && !$nivelIn && $cursoCod) {
+            $nivelIn = Curso::where('cur_codigo', $cursoCod)->value('cur_nivel');
+        }
+
+        // ── tipo = colegio: top 3 por curso, agrupado por curso ordenado ──
+        if ($tipo === 'colegio') {
+            $sqlCol = "
+                SELECT t.* FROM (
+                    SELECT e.est_codigo,
+                           CONCAT(e.est_apellidos, ' ', e.est_nombres) AS nombre,
+                           c.cur_codigo, c.cur_nombre, c.cur_nivel, c.cur_orden,
+                           ROUND(SUM(n.nota_promedio_trimestral), 2) AS suma,
+                           ROUND(AVG(n.nota_promedio_trimestral), 2) AS promedio
+                    FROM colegio_estudiantes e
+                    JOIN colegio_cursos c ON c.cur_codigo COLLATE utf8mb4_unicode_ci = e.cur_codigo COLLATE utf8mb4_unicode_ci
+                    JOIN colegio_notas n ON n.est_codigo COLLATE utf8mb4_unicode_ci = e.est_codigo COLLATE utf8mb4_unicode_ci
+                    JOIN notas_config_periodos p ON p.periodo_id = n.periodo_id
+                    WHERE e.est_visible = 1
+                      AND p.periodo_gestion = ?
+            ";
+            $paramsCol = [$gestion];
+            if ($periodoId) { $sqlCol .= " AND n.periodo_id = ? "; $paramsCol[] = $periodoId; }
+            $sqlCol .= "
+                    GROUP BY e.est_codigo, e.est_apellidos, e.est_nombres, c.cur_codigo, c.cur_nombre, c.cur_nivel, c.cur_orden
+                ) t
+                ORDER BY t.cur_orden ASC, t.cur_nombre ASC, t.promedio DESC, t.suma DESC
+            ";
+            $allRows = DB::select($sqlCol, $paramsCol);
+
+            // Agrupar por curso y tomar top 3 de cada uno
+            $porCurso = [];
+            foreach ($allRows as $r) {
+                $key = $r->cur_codigo;
+                if (!isset($porCurso[$key])) {
+                    $porCurso[$key] = [
+                        'cur_nombre' => $r->cur_nombre,
+                        'cur_nivel'  => $r->cur_nivel,
+                        'cur_orden'  => $r->cur_orden,
+                        'rows'       => [],
+                    ];
+                }
+                if (count($porCurso[$key]['rows']) < 3) {
+                    $porCurso[$key]['rows'][] = $r;
+                }
+            }
+            $titulo = 'CUADRO DE HONOR — INSTITUCIÓN' . $trimestreLabel;
+            $pdf = Pdf::loadView('notas.cuadro-honor-institucional-pdf', compact('porCurso','titulo','config','gestion'))
+                ->setPaper('letter');
+            return $pdf->stream('cuadro-honor-colegio-'.$gestion.'.pdf');
+        }
+
+        // ── tipo = curso o nivel: ranking lineal ──
+        $sql = "
+            SELECT e.est_codigo,
+                   CONCAT(e.est_apellidos, ' ', e.est_nombres) AS nombre,
+                   c.cur_nombre, c.cur_nivel,
+                   ROUND(SUM(n.nota_promedio_trimestral), 2) AS suma,
+                   ROUND(AVG(n.nota_promedio_trimestral), 2) AS promedio
+            FROM colegio_estudiantes e
+            JOIN colegio_cursos c ON c.cur_codigo COLLATE utf8mb4_unicode_ci = e.cur_codigo COLLATE utf8mb4_unicode_ci
+            JOIN colegio_notas n ON n.est_codigo COLLATE utf8mb4_unicode_ci = e.est_codigo COLLATE utf8mb4_unicode_ci
+            JOIN notas_config_periodos p ON p.periodo_id = n.periodo_id
+            WHERE e.est_visible = 1
+              AND p.periodo_gestion = ?
+        ";
+        $params = [$gestion];
+        if ($periodoId) { $sql .= " AND n.periodo_id = ? "; $params[] = $periodoId; }
+
+        if ($tipo === 'curso' && $cursoCod) {
+            $sql .= " AND e.cur_codigo = ? ";
+            $params[] = $cursoCod;
+        } elseif ($tipo === 'nivel' && $nivelIn) {
+            $sql .= " AND c.cur_nivel = ? ";
+            $params[] = $nivelIn;
+        }
+        $sql .= " GROUP BY e.est_codigo, e.est_apellidos, e.est_nombres, c.cur_nombre, c.cur_nivel
+                  ORDER BY promedio DESC, suma DESC ";
+
+        $rows = DB::select($sql, $params);
+
+        // ── Si tipo=curso: calcular ranking comparativo del curso vs otros ──
+        $rankingCursos = [];
+        if ($tipo === 'curso' && $cursoCod) {
+            $sqlRank = "
+                SELECT c.cur_codigo, c.cur_nombre, c.cur_nivel, c.cur_orden,
+                       ROUND(AVG(n.nota_promedio_trimestral), 2) AS promedio_curso,
+                       COUNT(DISTINCT e.est_codigo) AS estudiantes
+                FROM colegio_estudiantes e
+                JOIN colegio_cursos c ON c.cur_codigo COLLATE utf8mb4_unicode_ci = e.cur_codigo COLLATE utf8mb4_unicode_ci
+                JOIN colegio_notas n ON n.est_codigo COLLATE utf8mb4_unicode_ci = e.est_codigo COLLATE utf8mb4_unicode_ci
+                JOIN notas_config_periodos p ON p.periodo_id = n.periodo_id
+                WHERE e.est_visible = 1 AND p.periodo_gestion = ?
+            ";
+            $paramsRank = [$gestion];
+            if ($periodoId) { $sqlRank .= " AND n.periodo_id = ? "; $paramsRank[] = $periodoId; }
+            $sqlRank .= " GROUP BY c.cur_codigo, c.cur_nombre, c.cur_nivel, c.cur_orden
+                          ORDER BY promedio_curso DESC ";
+            $rankingCursos = DB::select($sqlRank, $paramsRank);
+        }
+
+        $titulo = match($tipo) {
+            'nivel'   => 'CUADRO DE HONOR — NIVEL ' . ($nivelIn ?? '') . $trimestreLabel,
+            default   => 'CUADRO DE HONOR — ' . (Curso::where('cur_codigo', $cursoCod)->value('cur_nombre') ?? '') . $trimestreLabel,
+        };
+
+        $pdf = Pdf::loadView('notas.cuadro-honor-pdf', compact('rows','rankingCursos','cursoCod','titulo','config','gestion','tipo'))
+            ->setPaper('letter');
+        return $pdf->stream('cuadro-honor-'.$tipo.'-'.$gestion.'.pdf');
+    }
+
+    /** Top 3 por curso */
+    public function top3PorCurso(Request $request)
+    {
+        $gestion = (int) $request->input('gestion', date('Y'));
+        $config  = DB::table('sistema_configuracion')->first();
+
+        $sql = "
+            SELECT cc.cur_codigo, cc.cur_nombre, cc.cur_orden,
+                   e.est_codigo,
+                   CONCAT(e.est_apellidos, ' ', e.est_nombres) AS nombre,
+                   ROUND(SUM(n.nota_promedio_trimestral), 2) AS suma,
+                   ROUND(AVG(n.nota_promedio_trimestral), 2) AS promedio
+            FROM colegio_lista_curso lc
+            JOIN colegio_estudiantes e ON e.est_codigo COLLATE utf8mb4_unicode_ci = lc.est_codigo COLLATE utf8mb4_unicode_ci AND e.est_visible = 1
+            JOIN colegio_cursos cc      ON cc.cur_codigo COLLATE utf8mb4_unicode_ci = lc.cur_codigo COLLATE utf8mb4_unicode_ci
+            JOIN colegio_notas n        ON n.est_codigo COLLATE utf8mb4_unicode_ci = e.est_codigo COLLATE utf8mb4_unicode_ci
+            WHERE lc.lista_gestion = ?
+            GROUP BY cc.cur_codigo, cc.cur_nombre, cc.cur_orden, e.est_codigo, e.est_apellidos, e.est_nombres
+            ORDER BY cc.cur_orden ASC, suma DESC
+        ";
+        $rows = DB::select($sql, [$gestion]);
+
+        $porCurso = [];
+        foreach ($rows as $r) {
+            $porCurso[$r->cur_codigo]['nombre'] = $r->cur_nombre;
+            $porCurso[$r->cur_codigo]['rows'][] = $r;
+        }
+        foreach ($porCurso as &$g) {
+            $g['rows'] = array_slice($g['rows'], 0, 3);
+        }
+        unset($g);
+
+        $pdf = Pdf::loadView('notas.top3-pdf', compact('porCurso','config','gestion'))->setPaper('letter');
+        return $pdf->stream('top3-cursos-'.$gestion.'.pdf');
+    }
+
+    /** Boletín individual por estudiante */
+    public function boletin($estCodigo, Request $request)
+    {
+        $gestion    = (int) $request->input('gestion', date('Y'));
+        $config     = DB::table('sistema_configuracion')->first();
+        $estudiante = Estudiante::with('curso')->where('est_codigo', $estCodigo)->firstOrFail();
+        $periodos   = NotaPeriodo::activo()->gestion($gestion)->orderBy('periodo_numero')->get();
+
+        $rows = DB::select("
+            SELECT m.mat_codigo, m.mat_nombre, m.mat_abreviatura, m.mat_orden,
+                   n.periodo_id, ROUND(n.nota_promedio_trimestral) AS prom
+            FROM colegio_notas n
+            JOIN colegio_curso_materia_docente cmd
+              ON cmd.curmatdoc_id = n.curmatdoc_id
+            JOIN colegio_materias m
+              ON CONVERT(m.mat_codigo USING utf8mb4) COLLATE utf8mb4_unicode_ci = cmd.mat_codigo COLLATE utf8mb4_unicode_ci
+            WHERE n.est_codigo = ?
+              AND n.periodo_id IN (".implode(',', $periodos->pluck('periodo_id')->all() ?: [0]).")
+            ORDER BY m.mat_orden ASC
+        ", [$estCodigo]);
+
+        $matriz = [];
+        foreach ($rows as $r) {
+            $matriz[$r->mat_codigo]['nombre'] = $r->mat_nombre;
+            $matriz[$r->mat_codigo]['per'][$r->periodo_id] = $r->prom;
+        }
+
+        $pdf = Pdf::loadView('notas.boletin-pdf', compact(
+            'estudiante','periodos','matriz','config','gestion'
+        ))->setPaper('letter');
+        return $pdf->stream('boletin-'.$estCodigo.'.pdf');
     }
 }

@@ -72,8 +72,14 @@ class PsicopedagogiaController extends Controller
             'est_codigo' => 'required|exists:colegio_estudiantes,est_codigo',
             'psico_fecha' => 'required|date',
             'psico_caso' => 'required|string',
-            'psico_tipo_acuerdo' => 'required|in:VERBAL,ESCRITO,NINGUNO'
+            'psico_tipo_acuerdo' => 'required|in:VERBAL,ESCRITO,NINGUNO',
+            'psico_documento' => 'nullable|file|mimes:pdf,jpg,jpeg,png,doc,docx|max:5120',
         ]);
+
+        $documentoPath = null;
+        if ($request->hasFile('psico_documento')) {
+            $documentoPath = $request->file('psico_documento')->store('psicopedagogia', 'public');
+        }
 
         CasoPsicopedagogia::create([
             'psico_codigo' => 'PSICO' . time(),
@@ -84,6 +90,7 @@ class PsicopedagogiaController extends Controller
             'psico_acuerdo' => $request->psico_acuerdo,
             'psico_tipo_acuerdo' => $request->psico_tipo_acuerdo,
             'psico_observaciones' => $request->psico_observaciones,
+            'psico_documento' => $documentoPath,
             'psico_registrado_por' => auth()->user()->us_codigo
         ]);
 
@@ -100,15 +107,33 @@ class PsicopedagogiaController extends Controller
     public function update(Request $request, $id)
     {
         $caso = CasoPsicopedagogia::findOrFail($id);
-        
-        $caso->update([
+
+        $request->validate([
+            'psico_documento' => 'nullable|file|mimes:pdf,jpg,jpeg,png,doc,docx|max:5120',
+        ]);
+
+        $data = [
             'psico_fecha' => $request->psico_fecha,
             'psico_caso' => $request->psico_caso,
             'psico_solucion' => $request->psico_solucion,
             'psico_acuerdo' => $request->psico_acuerdo,
             'psico_tipo_acuerdo' => $request->psico_tipo_acuerdo,
-            'psico_observaciones' => $request->psico_observaciones
-        ]);
+            'psico_observaciones' => $request->psico_observaciones,
+        ];
+
+        if ($request->hasFile('psico_documento')) {
+            if ($caso->psico_documento && \Storage::disk('public')->exists($caso->psico_documento)) {
+                \Storage::disk('public')->delete($caso->psico_documento);
+            }
+            $data['psico_documento'] = $request->file('psico_documento')->store('psicopedagogia', 'public');
+        } elseif ($request->boolean('psico_documento_remove') && $caso->psico_documento) {
+            if (\Storage::disk('public')->exists($caso->psico_documento)) {
+                \Storage::disk('public')->delete($caso->psico_documento);
+            }
+            $data['psico_documento'] = null;
+        }
+
+        $caso->update($data);
 
         return redirect()->route('psicopedagogia.index')->with('success', 'Caso actualizado');
     }

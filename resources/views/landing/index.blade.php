@@ -249,7 +249,7 @@
                     <div class="slide-deco slide-deco-2"></div>
                     <div class="slide-content">
                         <div class="slide-badge">Desde 2005 · El Alto, La Paz · Bolivia</div>
-                        <img src="{{ asset('img/logo.png') }}" alt="Logo" class="slide-logo">
+                        <img src="{{ ($sistemaConfig ?? null) && $sistemaConfig->config_logo ? asset('storage/'.$sistemaConfig->config_logo) : asset('img/logo.png') }}" alt="Logo" class="slide-logo">
                         <h1 class="slide-title">
                             Unidad Educativa Privada<br><span>"Interandino Boliviano"</span>
                         </h1>

@@ -66,9 +66,9 @@
                                 <th>Fecha</th>
                                 <th>Estudiante</th>
                                 <th>Curso</th>
-                                <th>Caso</th>
-                                <th>Solución</th>
                                 <th>Kardex</th>
+                                <th>Solución</th>
+                                <th>Acuerdo</th>
                                 <th>Observaciones</th>
                                 <th>Tipo Acuerdo</th>
                                 <th>Acciones</th>
@@ -86,6 +86,11 @@
                                     <td>{{ \Str::limit($caso->psico_observaciones, 30) }}</td>
                                     <td><span class="badge badge-info">{{ $caso->psico_tipo_acuerdo }}</span></td>
                                     <td>
+                                        @if(!empty($caso->psico_documento))
+                                            <a href="{{ asset('storage/'.$caso->psico_documento) }}" target="_blank" class="btn btn-sm btn-secondary" title="Documento adjunto">
+                                                <i class="fas fa-paperclip"></i>
+                                            </a>
+                                        @endif
                                         <button class="btn btn-sm btn-primary" data-toggle="modal" data-target="#modalDetalle{{ $caso->psico_id }}" title="Ver Detalles">
                                             <i class="fas fa-eye"></i>
                                         </button>
@@ -131,8 +136,15 @@
                                                 <hr>
                                                 <div class="row">
                                                     <div class="col-12">
-                                                        <p><strong>Caso:</strong></p>
+                                                        <p><strong>Kardex:</strong></p>
                                                         <p class="text-justify">{{ $caso->psico_caso }}</p>
+                                                        @if(!empty($caso->psico_documento))
+                                                            <p class="mb-0"><strong>Documento adjunto:</strong>
+                                                                <a href="{{ asset('storage/'.$caso->psico_documento) }}" target="_blank">
+                                                                    <i class="fas fa-paperclip mr-1"></i>Ver archivo
+                                                                </a>
+                                                            </p>
+                                                        @endif
                                                     </div>
                                                 </div>
                                                 <hr>
@@ -147,6 +159,7 @@
                                                     <div class="col-12">
                                                         <p><strong>Acuerdo:</strong></p>
                                                         <p class="text-justify">{{ $caso->psico_acuerdo ?? 'N/A' }}</p>
+                                                        <p><strong>Tipo de acuerdo:</strong> <span class="badge badge-info">{{ $caso->psico_tipo_acuerdo }}</span></p>
                                                     </div>
                                                 </div>
                                                 <hr>

@@ -100,8 +100,14 @@
         <div class="login-container">
             <div class="card login-card shadow-lg">
                 <div class="card-header-custom">
-                    <img src="{{ asset('img/logo.png') }}" alt="Logo Sistema Interandino" class="logo">
-                    <h3>Sistema Interandino</h3>
+                    @php
+                        $cfg = \App\Models\SistemaConfiguracion::actual();
+                        $logoLogin = $cfg && $cfg->config_logo ? asset('storage/'.$cfg->config_logo) : asset('img/logo.png');
+                        $tituloLogin = $cfg ? trim(($cfg->config_denominacion ?? '') . ' ' . ($cfg->config_nombre_ue ?? '')) : 'Sistema Interandino';
+                        if ($tituloLogin === '') { $tituloLogin = 'Sistema Interandino'; }
+                    @endphp
+                    <img src="{{ $logoLogin }}" alt="{{ $tituloLogin }}" class="logo">
+                    <h3>{{ $tituloLogin }}</h3>
                     <p>Iniciar Sesión</p>
                 </div>
                 <div class="card-body p-4 p-md-5">

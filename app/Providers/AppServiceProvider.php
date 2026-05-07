@@ -28,6 +28,13 @@ class AppServiceProvider extends ServiceProvider
         Schema::defaultStringLength(191);
         Paginator::useBootstrap();
 
+        try {
+            $sistemaConfig = \App\Models\SistemaConfiguracion::actual();
+        } catch (\Throwable $e) {
+            $sistemaConfig = null;
+        }
+        \Illuminate\Support\Facades\View::share('sistemaConfig', $sistemaConfig);
+
         // Directiva @puede('modulo_slug', 'crear') ... @nopuede
         \Illuminate\Support\Facades\Blade::if('puede', function ($modSlug, $accion = 'ver') {
             $user = auth()->user();
