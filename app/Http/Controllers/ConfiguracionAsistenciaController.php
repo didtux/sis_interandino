@@ -348,8 +348,22 @@ class ConfiguracionAsistenciaController extends Controller
                 $q->where('cur_codigo', $request->cur_codigo);
             });
         }
-        
-        $permisos = $query->paginate(50);
+        if ($request->filled('buscar')) {
+            $tokens = preg_split('/\s+/', trim($request->buscar), -1, PREG_SPLIT_NO_EMPTY);
+            foreach ($tokens as $tok) {
+                $query->where(function($w) use ($tok) {
+                    $w->whereHas('estudiante', function($q) use ($tok) {
+                        $q->where('est_nombres', 'like', "%{$tok}%")
+                          ->orWhere('est_apellidos', 'like', "%{$tok}%")
+                          ->orWhere('est_codigo', 'like', "%{$tok}%")
+                          ->orWhere('est_ci', 'like', "%{$tok}%");
+                    })->orWhere('permiso_codigo', 'like', "%{$tok}%")
+                      ->orWhere('permiso_motivo', 'like', "%{$tok}%");
+                });
+            }
+        }
+
+        $permisos = $query->paginate(50)->withQueryString();
         $estudiantes = Estudiante::visible()->get();
         $cursos = Curso::visible()->get();
         $padres = \App\Models\PadreFamilia::activo()->orderBy('pfam_nombres')->get();

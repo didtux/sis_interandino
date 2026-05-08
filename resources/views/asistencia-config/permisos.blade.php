@@ -39,7 +39,7 @@
                             </div>
                             <div class="col-md-3">
                                 <label>Buscar</label>
-                                <input type="text" id="searchPermiso" class="form-control" placeholder="Buscar por estudiante...">
+                                <input type="text" name="buscar" id="searchPermiso" class="form-control" placeholder="Nombre, apellido, código, motivo..." value="{{ request('buscar') }}">
                             </div>
                         </div>
                         <div class="row">
@@ -252,9 +252,27 @@ $(document).ready(function() {
 
 $('.select2').select2({ theme: 'bootstrap4', width: '100%', dropdownParent: $('#modalPermiso') });
 
+// Matcher tolerante al orden: "perez juan" o "juan perez" matchean al mismo estudiante.
+function tokenMatcher(params, data) {
+    if ($.trim(params.term) === '') return data;
+    if (typeof data.text === 'undefined') return null;
+    var norm = function(s){
+        return (s || '').toString().toLowerCase()
+            .normalize('NFD').replace(/[̀-ͯ]/g,'');
+    };
+    var hay = norm(data.text);
+    var tokens = norm(params.term).split(/\s+/).filter(Boolean);
+    for (var i = 0; i < tokens.length; i++) {
+        if (hay.indexOf(tokens[i]) === -1) return null;
+    }
+    return data;
+}
+
 $('#selectEstudiante').select2({
     theme: 'bootstrap4', width: '100%', dropdownParent: $('#modalPermiso'),
-    placeholder: 'Buscar estudiante por nombre, código o curso...', allowClear: true
+    placeholder: 'Buscar estudiante por nombre, apellido, código o curso...',
+    allowClear: true,
+    matcher: tokenMatcher
 }).on('change', function() {
     var estCodigo = $(this).val();
     if (estCodigo) {
@@ -325,9 +343,14 @@ $('#permiso_tipo').on('change', function() {
 });
 
 $('#searchPermiso').on('keyup', function() {
-    var value = $(this).val().toLowerCase();
+    var normalize = function(s){
+        return (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+    };
+    var tokens = normalize($(this).val()).split(/\s+/).filter(Boolean);
     $('#tablaPermisos tbody tr').filter(function() {
-        $(this).toggle($(this).text().toLowerCase().indexOf(value) > -1);
+        var text = normalize($(this).text());
+        var match = tokens.every(function(t){ return text.indexOf(t) > -1; });
+        $(this).toggle(match);
     });
 });
 

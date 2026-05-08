@@ -81,6 +81,9 @@
                                                 <a href="{{ route('concejo.documento', $e->est_codigo) }}?gestion={{ $gestion }}" class="btn btn-sm btn-danger" target="_blank">
                                                     <i class="fas fa-file-pdf"></i> Documento Concejo
                                                 </a>
+                                                <a href="{{ route('concejo.detalle', $e->est_codigo) }}?gestion={{ $gestion }}" class="btn btn-sm btn-info" target="_blank" title="Ver detalle de faltas, atrasos y permisos por día">
+                                                    <i class="fas fa-search-plus"></i> Detalle
+                                                </a>
                                             </td>
                                         </tr>
                                     @endforeach
@@ -127,6 +130,9 @@
                                             <td>
                                                 <a href="{{ route('concejo.documento', $m->est_codigo) }}?gestion={{ $gestion }}" class="btn btn-sm btn-danger" target="_blank">
                                                     <i class="fas fa-file-pdf"></i> Documento
+                                                </a>
+                                                <a href="{{ route('concejo.detalle', $m->est_codigo) }}?gestion={{ $gestion }}" class="btn btn-sm btn-info" target="_blank" title="Ver detalle">
+                                                    <i class="fas fa-search-plus"></i>
                                                 </a>
                                             </td>
                                         </tr>
@@ -194,6 +200,9 @@
                                             <td>
                                                 <a href="{{ route('concejo.documento', $r->est_codigo) }}?gestion={{ $gestion }}" class="btn btn-sm btn-danger" target="_blank">
                                                     <i class="fas fa-file-pdf"></i> Documento
+                                                </a>
+                                                <a href="{{ route('concejo.detalle', $r->est_codigo) }}?gestion={{ $gestion }}" class="btn btn-sm btn-info" target="_blank" title="Ver detalle">
+                                                    <i class="fas fa-search-plus"></i>
                                                 </a>
                                             </td>
                                         </tr>

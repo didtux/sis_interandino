@@ -109,6 +109,7 @@ Route::middleware(['auth', 'permiso', 'auditoria'])->group(function () {
     Route::get('notas/boletin/{est}', [App\Http\Controllers\NotaReporteController::class, 'boletin'])->name('notas.boletin');
     Route::get('concejo', [App\Http\Controllers\ConcejoController::class, 'index'])->name('concejo.index');
     Route::get('concejo/documento/{est}', [App\Http\Controllers\ConcejoController::class, 'documento'])->name('concejo.documento');
+    Route::get('concejo/detalle/{est}', [App\Http\Controllers\ConcejoController::class, 'detalle'])->name('concejo.detalle');
     Route::get('notas/configuracion', [App\Http\Controllers\NotaController::class, 'configuracion'])->name('notas.configuracion');
     Route::post('notas/configuracion/periodo', [App\Http\Controllers\NotaController::class, 'guardarPeriodo'])->name('notas.guardar-periodo');
     Route::delete('notas/configuracion/periodo/{id}', [App\Http\Controllers\NotaController::class, 'eliminarPeriodo'])->name('notas.eliminar-periodo');
