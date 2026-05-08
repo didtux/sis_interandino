@@ -138,7 +138,7 @@
                                                 @puede('estudiantes', 'eliminar')
                                                 <form action="{{ route('estudiantes.destroy', $estudiante->est_id) }}" method="POST" style="display:inline;">
                                                     @csrf @method('DELETE')
-                                                    <button class="btn btn-action btn-action-delete" onclick="return confirm('¿Eliminar?')" title="Eliminar"><i class="fas fa-trash"></i></button>
+                                                    <button class="btn btn-action btn-action-delete" onclick="return confirm('⚠️ ATENCIÓN: Esta acción ELIMINARÁ definitivamente al estudiante {{ addslashes($estudiante->est_apellidos.' '.$estudiante->est_nombres) }} y NO se puede deshacer.\n\nSi solo deseas retirarlo, usa el botón \'Dar de baja\'.\n\n¿Confirmas la eliminación irreversible?')" title="Eliminar definitivamente"><i class="fas fa-trash"></i></button>
                                                 </form>
                                                 @endpuede
                                             </div>

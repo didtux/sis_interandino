@@ -304,11 +304,10 @@ class EstudianteController extends Controller
     {
         try {
             $estudiante = Estudiante::findOrFail($id);
-            $estudiante->est_visible = 0;
-            $estudiante->save();
-            return redirect()->route('estudiantes.index')->with('success', 'Estudiante eliminado exitosamente');
+            $estudiante->delete();
+            return redirect()->route('estudiantes.index')->with('success', 'Estudiante eliminado definitivamente');
         } catch (\Exception $e) {
-            return redirect()->route('estudiantes.index')->with('error', 'Error al eliminar: ' . $e->getMessage());
+            return redirect()->route('estudiantes.index')->with('error', 'No se pudo eliminar el estudiante (puede tener registros asociados): ' . $e->getMessage());
         }
     }
 
