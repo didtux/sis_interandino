@@ -25,9 +25,13 @@ tr:nth-child(even) td{background:#f5f7fa;}
         @php $i=0; $last=null; @endphp
         @foreach($rows as $r)
             @if($last !== $r->est_codigo) @php $i++; $last = $r->est_codigo; @endphp @endif
-            <tr>
-                <td>{{ $i }}</td>
-                <td>{{ $r->est_apellidos }} {{ $r->est_nombres }}</td>
+            @php $retirado = ($r->est_visible ?? 1) == 0; @endphp
+            <tr style="{{ $retirado ? 'background:#ffe6e6;' : '' }}">
+                <td style="{{ $retirado ? 'color:#c0392b;font-weight:700;' : '' }}">{{ $r->lista_numero ?? $i }}</td>
+                <td style="{{ $retirado ? 'color:#c0392b;font-weight:700;' : '' }}">
+                    {{ $r->est_apellidos }} {{ $r->est_nombres }}
+                    @if($retirado)<span style="background:#c0392b;color:#fff;padding:0 4px;border-radius:2px;font-size:9px;margin-left:4px;">RETIRADO</span>@endif
+                </td>
                 <td>{{ $r->pfam_nombres ?: '-' }}</td>
                 <td>{{ $r->pfam_parentesco ?: '-' }}</td>
                 <td>{{ $r->pfam_telefono ?: '-' }}</td>

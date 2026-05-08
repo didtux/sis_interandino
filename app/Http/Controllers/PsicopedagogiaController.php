@@ -169,7 +169,7 @@ class PsicopedagogiaController extends Controller
         $casos = $query->orderBy('psico_fecha', 'desc')->get();
         $fechaInicio = $request->fecha_inicio ?? $casos->min('psico_fecha');
         $fechaFin = $request->fecha_fin ?? $casos->max('psico_fecha');
-        $curso = $request->filled('cur_codigo') ? \App\Models\Curso::find($request->cur_codigo) : null;
+        $curso = $request->filled('cur_codigo') ? \App\Models\Curso::where('cur_codigo', $request->cur_codigo)->first() : null;
         
         $pdf = Pdf::loadView('psicopedagogia.reporte-pdf', compact('casos', 'fechaInicio', 'fechaFin', 'curso'))->setPaper('letter', 'portrait');
         return $pdf->stream('reporte-psicopedagogia-' . date('Y-m-d') . '.pdf');

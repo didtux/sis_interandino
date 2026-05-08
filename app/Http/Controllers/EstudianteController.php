@@ -56,21 +56,28 @@ class EstudianteController extends Controller
             });
         }
 
-        // Si filtra por curso, ordena por lista_numero de la gestión actual
+        // Si filtra por curso, ordena por lista_numero de la gestión actual del MISMO curso
         if ($request->filled('curso')) {
             $gestion = date('Y');
-            $estudiantes = $query->leftJoin('colegio_lista_curso', function($j) use ($gestion){
+            $cursoCod = $request->curso;
+            $estudiantes = $query->leftJoin('colegio_lista_curso', function($j) use ($gestion, $cursoCod){
                     $j->whereRaw('colegio_lista_curso.est_codigo COLLATE utf8mb4_unicode_ci = colegio_estudiantes.est_codigo COLLATE utf8mb4_unicode_ci')
-                      ->where('colegio_lista_curso.lista_gestion', '=', $gestion);
+                      ->where('colegio_lista_curso.lista_gestion', '=', $gestion)
+                      ->where('colegio_lista_curso.cur_codigo', '=', $cursoCod);
                 })
                 ->select('colegio_estudiantes.*', 'colegio_lista_curso.lista_numero')
-                ->orderByRaw('colegio_lista_curso.lista_numero IS NULL ASC')
-                ->orderBy('colegio_lista_curso.lista_numero', 'asc')
+                ->orderByRaw('CASE WHEN colegio_lista_curso.lista_numero IS NULL THEN 1 ELSE 0 END ASC')
+                ->orderByRaw('colegio_lista_curso.lista_numero ASC')
                 ->orderBy('colegio_estudiantes.est_apellidos')
+                ->orderBy('colegio_estudiantes.est_nombres')
                 ->paginate(20)->withQueryString();
         } else {
-            $estudiantes = $query->orderBy('est_apellidos')
-                ->orderBy('est_nombres')
+            // Sin filtro de curso: orden por cur_orden y luego apellidos
+            $estudiantes = $query->leftJoin('colegio_cursos', 'colegio_cursos.cur_codigo', '=', 'colegio_estudiantes.cur_codigo')
+                ->select('colegio_estudiantes.*', 'colegio_cursos.cur_orden')
+                ->orderBy('colegio_cursos.cur_orden')
+                ->orderBy('colegio_estudiantes.est_apellidos')
+                ->orderBy('colegio_estudiantes.est_nombres')
                 ->paginate(20)->withQueryString();
         }
 
@@ -162,16 +169,24 @@ class EstudianteController extends Controller
         $cursoCod = $request->input('curso');
         if (!$cursoCod) abort(400, 'Falta curso');
 
-        $curso = Curso::where('cur_codigo', $cursoCod)->firstOrFail();
+        $gestion = (int) ($request->input('gestion') ?: date('Y'));
+        $curso   = Curso::where('cur_codigo', $cursoCod)->firstOrFail();
+
         $rows  = DB::table('colegio_estudiantes as e')
+            ->leftJoin('colegio_lista_curso as lc', function($j) use ($gestion, $cursoCod) {
+                $j->whereRaw('lc.est_codigo COLLATE utf8mb4_unicode_ci = e.est_codigo COLLATE utf8mb4_unicode_ci')
+                  ->where('lc.lista_gestion', $gestion)
+                  ->where('lc.cur_codigo', $cursoCod);
+            })
             ->leftJoin('rela_estudiantespadres as rp', function($j){
                 $j->on('rp.est_id','=','e.est_codigo')->where('rp.estpad_estado',1);
             })
             ->leftJoin('cole_padresfamilia as p','p.pfam_codigo','=','rp.pfam_id')
             ->where('e.cur_codigo', $cursoCod)
-            ->where('e.est_visible', 1)
+            ->orderByRaw('COALESCE(lc.lista_numero, 9999) ASC')
             ->orderBy('e.est_apellidos')
-            ->select('e.est_codigo','e.est_nombres','e.est_apellidos',
+            ->select('e.est_codigo','e.est_nombres','e.est_apellidos','e.est_visible',
+                     'lc.lista_numero',
                      'p.pfam_nombres', 'p.pfam_numeroscelular as pfam_telefono', 'p.pfam_parentesco')
             ->get();
 
@@ -199,27 +214,40 @@ class EstudianteController extends Controller
     public function listadoExcel(Request $request)
     {
         $cursoCod = $request->input('curso');
-        $query = Estudiante::with('curso','padres')->where('est_visible', 1);
+        $gestion  = (int) ($request->input('gestion') ?: date('Y'));
+
+        $query = Estudiante::with('curso','padres');
         if ($cursoCod) $query->where('cur_codigo', $cursoCod);
         $estudiantes = $query->orderBy('est_apellidos')->orderBy('est_nombres')->get();
+
+        // Ordenar por número de lista (gestión actual) cuando aplica
+        $listaQ = DB::table('colegio_lista_curso')->where('lista_gestion', $gestion);
+        if ($cursoCod) $listaQ->where('cur_codigo', $cursoCod);
+        $lista = $listaQ->pluck('lista_numero', 'est_codigo');
+        if ($lista->isNotEmpty()) {
+            $estudiantes = $estudiantes->sortBy(fn($e) => $lista[$e->est_codigo] ?? 9999)->values();
+        }
 
         $filename = 'estudiantes-'.($cursoCod ?: 'todos').'-'.date('Y-m-d').'.csv';
         $headers  = [
             'Content-Type'        => 'text/csv; charset=UTF-8',
             'Content-Disposition' => 'attachment; filename="'.$filename.'"',
         ];
-        return response()->stream(function() use ($estudiantes) {
+        return response()->stream(function() use ($estudiantes, $lista) {
             $out = fopen('php://output', 'w');
             // BOM UTF-8 para Excel
             fwrite($out, chr(0xEF).chr(0xBB).chr(0xBF));
-            fputcsv($out, ['Codigo','Apellidos','Nombres','CI','Curso','Sexo','FechaNac','Telefono','Padre/Tutor','Tel.Padre']);
+            fputcsv($out, ['#','Codigo','Apellidos','Nombres','CI','Curso','Sexo','FechaNac','Telefono','Padre/Tutor','Tel.Padre','Estado']);
             foreach ($estudiantes as $e) {
                 $padre = $e->padres->first();
+                $num   = $lista[$e->est_codigo] ?? '';
                 fputcsv($out, [
+                    $num,
                     $e->est_codigo, $e->est_apellidos, $e->est_nombres, $e->est_ci,
                     $e->curso->cur_nombre ?? '', $e->est_sexo ?? '', $e->est_fechanac ?? '',
                     $e->est_celular ?? '',
                     $padre->pfam_nombres ?? '', $padre->pfam_numeroscelular ?? '',
+                    ($e->est_visible == 0 ? 'RETIRADO' : 'ACTIVO'),
                 ]);
             }
             fclose($out);

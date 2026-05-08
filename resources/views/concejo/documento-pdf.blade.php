@@ -21,15 +21,30 @@ th{background:#1c4789;color:#fff;}
     <h3>DOCUMENTO PARA CONCEJO EDUCATIVO — Gestión {{ $gestion }}</h3>
     <div>{{ date('d/m/Y H:i') }} — Control-Cole</div>
 </div>
-<div class="datos">
-    <div>
-        <b>Estudiante:</b> {{ $estudiante->est_apellidos }} {{ $estudiante->est_nombres }}<br>
-        <b>Grado:</b> {{ optional($estudiante->curso)->cur_nombre ?? '-' }}<br>
-        <b>U.E. de procedencia:</b> {{ $estudiante->est_ueprocedencia ?? '-' }}<br>
-        <b>CI:</b> {{ $estudiante->est_ci ?? '-' }}
-    </div>
-    @if($estudiante->est_foto)<img src="{{ public_path('storage/'.$estudiante->est_foto) }}" class="foto">@endif
-</div>
+<table style="width:100%;border:1px solid #888;margin:8px 0;border-collapse:collapse;">
+    <tr>
+        <td style="vertical-align:top;padding:6px;border:none;width:50%;">
+            <b>Estudiante:</b> {{ $estudiante->est_apellidos }} {{ $estudiante->est_nombres }}<br>
+            <b>Grado:</b> {{ optional($estudiante->curso)->cur_nombre ?? '-' }}<br>
+            <b>U.E. de procedencia:</b> {{ $estudiante->est_ueprocedencia ?? '-' }}<br>
+            <b>CI:</b> {{ $estudiante->est_ci ?? '-' }}
+        </td>
+        <td style="vertical-align:top;padding:6px;border:none;border-left:1px solid #ccc;width:35%;">
+            <b>Padres / Tutores:</b><br>
+            @forelse($estudiante->padres as $pf)
+                {{ $pf->pfam_nombres ?? '-' }} {{ $pf->pfam_apellidos ?? '' }}
+                @if(!empty($pf->pfam_parentesco)) <span style="color:#555;">({{ $pf->pfam_parentesco }})</span>@endif
+                @if(!empty($pf->pfam_numeroscelular)) — {{ $pf->pfam_numeroscelular }}@endif
+                <br>
+            @empty
+                <span style="color:#888;">Sin registros</span>
+            @endforelse
+        </td>
+        <td style="vertical-align:top;padding:6px;border:none;width:15%;text-align:right;">
+            @if($estudiante->est_foto)<img src="{{ public_path('storage/'.$estudiante->est_foto) }}" class="foto">@endif
+        </td>
+    </tr>
+</table>
 
 <table class="totales">
     <tr>

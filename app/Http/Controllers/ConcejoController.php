@@ -123,7 +123,7 @@ class ConcejoController extends Controller
     {
         $gestion    = (int) $request->input('gestion', date('Y'));
         $config     = DB::table('sistema_configuracion')->first();
-        $estudiante = Estudiante::with('curso')->where('est_codigo', $estCodigo)->firstOrFail();
+        $estudiante = Estudiante::with('curso','padres')->where('est_codigo', $estCodigo)->firstOrFail();
         $periodos   = NotaPeriodo::activo()->gestion($gestion)->orderBy('periodo_numero')->get();
 
         $notas = DB::select("
@@ -144,10 +144,34 @@ class ConcejoController extends Controller
             $matriz[$r->mat_codigo]['per'][$r->periodo_id] = $r->prom;
         }
 
-        // Asistencia anual
-        $atrasos    = DB::table('asistencia_atrasos')->where('estud_codigo', $estCodigo)->whereYear('atraso_fecha', $gestion)->count();
-        $faltas     = DB::table('notas_asistencia_clases')->where('est_codigo', $estCodigo)->where('asiscl_estado', 'F')->whereYear('asiscl_fecha', $gestion)->count();
-        $licencias  = DB::table('asistencia_permisos')->where('estud_codigo', $estCodigo)->where('permiso_tipo', 'LICENCIA')->whereYear('permiso_fecha_inicio', $gestion)->count();
+        // Asistencia anual — misma lógica que el boletín personal (sumando por periodo)
+        $atrasos = 0; $faltas = 0; $licencias = 0;
+        foreach ($periodos as $periodo) {
+            $inicio = $periodo->periodo_fecha_inicio->format('Y-m-d');
+            $fin    = $periodo->periodo_fecha_fin->format('Y-m-d');
+
+            $diasTrabajados = DB::table('colegio_asistencia')
+                ->whereBetween('asis_fecha', [$inicio, $fin])
+                ->select('asis_fecha')->distinct()->count('asis_fecha');
+
+            $presencias = DB::table('colegio_asistencia')
+                ->where('estud_codigo', $estCodigo)
+                ->whereBetween('asis_fecha', [$inicio, $fin])->count();
+
+            $atrasos   += DB::table('asistencia_atrasos')
+                ->where('estud_codigo', $estCodigo)
+                ->whereBetween('atraso_fecha', [$inicio, $fin])->count();
+
+            $licPer = DB::table('asistencia_permisos')
+                ->where('estud_codigo', $estCodigo)
+                ->where('permiso_estado', 1)
+                ->where('permiso_fecha_inicio', '<=', $fin)
+                ->where('permiso_fecha_fin', '>=', $inicio)
+                ->count();
+            $licencias += $licPer;
+
+            $faltas += max(0, $diasTrabajados - $presencias - $licPer);
+        }
         $enfermeria = DB::table('enfermeria_registros')->where('est_codigo', $estCodigo)->whereYear('enf_fecha', $gestion)->count();
         $compromisosVerb   = DB::table('psicopedagogia_casos')->where('est_codigo', $estCodigo)->where('psico_tipo_acuerdo', 'VERBAL')->whereYear('psico_fecha', $gestion)->count();
         $compromisosEscrit = DB::table('psicopedagogia_casos')->where('est_codigo', $estCodigo)->where('psico_tipo_acuerdo', 'ESCRITO')->whereYear('psico_fecha', $gestion)->count();
