@@ -137,6 +137,8 @@
                         @php
                             $grp = $gruposMap[$cmd->mat_codigo];
                             $matCodsGrupo = $grp->materias->pluck('mat_codigo')->toArray();
+                            // Sólo las que suman al promedio del grupo
+                            $matCodsProm  = $grp->materiasPromediables->pluck('mat_codigo')->toArray();
                             $esUltima = true;
                             $found = false;
                             foreach($cmds as $c2) {
@@ -153,7 +155,7 @@
                                 @foreach($periodos as $p)
                                     @php
                                         $sumaG = 0; $cntG = 0;
-                                        foreach($matCodsGrupo as $mc) {
+                                        foreach($matCodsProm as $mc) {
                                             $v = $notasData[$mc]['trimestres'][$p->periodo_numero] ?? 0;
                                             $sumaG += $v; $cntG++;
                                         }
@@ -165,7 +167,7 @@
                                     $sumaAnualG = 0; $cntAnualG = 0;
                                     foreach($periodos as $p2) {
                                         $sg = 0; $cg = 0;
-                                        foreach($matCodsGrupo as $mc) {
+                                        foreach($matCodsProm as $mc) {
                                             $v = $notasData[$mc]['trimestres'][$p2->periodo_numero] ?? 0;
                                             $sg += $v; $cg++;
                                         }

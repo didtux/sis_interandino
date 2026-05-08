@@ -892,14 +892,8 @@ class NotaController extends Controller
             $psicoData[$p->periodo_numero] = $this->getPsicoTrimestreEst($estudiante->est_codigo, $p);
         }
 
-        // Grupos de materias
-        $gruposActivos = MateriaGrupo::activo()->with('materias')->get();
-        $gruposMap = [];
-        foreach ($gruposActivos as $grupo) {
-            foreach ($grupo->materias as $mat) {
-                $gruposMap[$mat->mat_codigo] = $grupo;
-            }
-        }
+        // Grupos derivados de mat_campo: cada campo (área) es un grupo natural.
+        [$gruposActivos, $gruposMap] = $this->buildGruposPorCampo();
 
         $pdf = Pdf::loadView('notas.reporte-personal-pdf', compact(
             'estudiante', 'curso', 'periodos', 'materiasPorCampo', 'notasData',
@@ -976,14 +970,8 @@ class NotaController extends Controller
             $data[] = $fila;
         }
 
-        // Grupos de materias
-        $gruposActivos = MateriaGrupo::activo()->with('materias')->get();
-        $gruposMap = [];
-        foreach ($gruposActivos as $grupo) {
-            foreach ($grupo->materias as $mat) {
-                $gruposMap[$mat->mat_codigo] = $grupo;
-            }
-        }
+        // Grupos derivados de mat_campo: cada campo (área) es un grupo natural.
+        [$gruposActivos, $gruposMap] = $this->buildGruposPorCampo();
 
         $pdf = Pdf::loadView('notas.reporte-centralizador-pdf', compact(
             'curso', 'periodos', 'asignaciones', 'data', 'lista', 'gestion',
@@ -1050,14 +1038,8 @@ class NotaController extends Controller
         $esTrimestre = $periodoId ? true : false;
         $periodoNombre = $periodoId ? $periodos->first()->periodo_nombre : 'AÑO ESCOLAR';
 
-        // Grupos de materias
-        $gruposActivos = MateriaGrupo::activo()->with('materias')->get();
-        $gruposMap = [];
-        foreach ($gruposActivos as $grupo) {
-            foreach ($grupo->materias as $mat) {
-                $gruposMap[$mat->mat_codigo] = $grupo;
-            }
-        }
+        // Grupos derivados de mat_campo: cada campo (área) es un grupo natural.
+        [$gruposActivos, $gruposMap] = $this->buildGruposPorCampo();
 
         $pdf = Pdf::loadView('notas.reporte-general-pdf', compact(
             'curso', 'periodos', 'asignaciones', 'data', 'lista', 'gestion',
@@ -1065,5 +1047,36 @@ class NotaController extends Controller
         ))->setPaper('letter', 'landscape');
 
         return $pdf->stream('notas-general-' . $curso->cur_codigo . '.pdf');
+    }
+
+    /**
+     * Construye los grupos de materias a partir de mat_campo.
+     * Devuelve [Collection $gruposActivos, array $gruposMap (mat_codigo => grupo)].
+     * Cada "grupo" es un objeto sintético con grupo_id, grupo_nombre, materias y materiasPromediables.
+     */
+    private function buildGruposPorCampo()
+    {
+        $materias = \App\Models\Materia::visible()
+            ->whereNotNull('mat_campo')->where('mat_campo', '!=', '')
+            ->orderBy('mat_orden')->get();
+
+        $porCampo = $materias->groupBy(fn($m) => trim((string) $m->mat_campo));
+
+        $grupos = collect();
+        $map = [];
+        foreach ($porCampo as $campo => $mats) {
+            if ($mats->count() < 2) continue; // sólo campos con 2+ materias se consideran grupo
+            $grupo = (object) [
+                'grupo_id'             => 'campo_' . md5($campo),
+                'grupo_nombre'         => $campo,
+                'materias'             => $mats->values(),
+                'materiasPromediables' => $mats->where('mat_promediable', 1)->values(),
+            ];
+            $grupos->push($grupo);
+            foreach ($mats as $m) {
+                $map[$m->mat_codigo] = $grupo;
+            }
+        }
+        return [$grupos, $map];
     }
 }

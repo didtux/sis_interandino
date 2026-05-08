@@ -212,7 +212,7 @@
                         @endif
                         @php $grp = $gruposMap[$cmd->mat_codigo] ?? null; @endphp
                         @if($grp && ($ultimaMatGrupo[$grp->grupo_id] ?? '') === $cmd->mat_codigo)
-                            @php $matCodsG = $grp->materias->pluck('mat_codigo')->toArray(); @endphp
+                            @php $matCodsG = $grp->materiasPromediables->pluck('mat_codigo')->toArray(); @endphp
                             @if($showTrimCols)
                                 @foreach($periodos as $p)
                                     @php $sg=0;$cg=0; foreach($matCodsG as $mc){$v=$fila['materias'][$mc]['trimestres'][$p->periodo_numero]??0;$sg+=$v;$cg++;} $promGT=$cg>0?round($sg/$cg,0):0; @endphp

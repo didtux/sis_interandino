@@ -3,16 +3,33 @@
 namespace App\Http\Controllers;
 
 use App\Models\Materia;
-use App\Models\MateriaGrupo;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class MateriaController extends Controller
 {
     public function index()
     {
         $materias = Materia::visible()->orderBy('mat_campo')->orderBy('mat_orden')->paginate(20);
-        $grupos = MateriaGrupo::activo()->with('materias')->orderBy('grupo_nombre')->get();
-        $todasMaterias = Materia::visible()->orderBy('mat_nombre')->get();
+
+        // Grupos derivados de mat_campo: cada campo único es un "grupo".
+        // Se construye una colección de objetos sintéticos para no tocar los blades demasiado.
+        $todasMaterias = Materia::visible()->orderBy('mat_campo')->orderBy('mat_orden')->orderBy('mat_nombre')->get();
+        $grupos = $todasMaterias
+            ->filter(fn($m) => !empty(trim((string) $m->mat_campo)))
+            ->groupBy(fn($m) => trim((string) $m->mat_campo))
+            ->map(function ($materias, $campo) {
+                $cntProm = $materias->where('mat_promediable', 1)->count();
+                return (object) [
+                    'campo'        => $campo,
+                    'materias'     => $materias->values(),
+                    'total'        => $materias->count(),
+                    'promediables' => $cntProm,
+                ];
+            })
+            ->sortKeys()
+            ->values();
+
         return view('materias.index', compact('materias', 'grupos', 'todasMaterias'));
     }
 
@@ -28,7 +45,9 @@ class MateriaController extends Controller
             'mat_nombre' => 'required|max:50'
         ]);
 
-        Materia::create($request->all());
+        $data = $request->all();
+        $data['mat_promediable'] = $request->has('mat_promediable') ? 1 : ($request->filled('mat_campo') ? 1 : 1);
+        Materia::create($data);
         return redirect()->route('materias.index')->with('success', 'Materia creada exitosamente');
     }
 
@@ -42,7 +61,10 @@ class MateriaController extends Controller
     {
         $request->validate(['mat_nombre' => 'required|max:50']);
 
-        Materia::findOrFail($id)->update($request->all());
+        $materia = Materia::findOrFail($id);
+        $data = $request->all();
+        $data['mat_promediable'] = $request->has('mat_promediable') ? 1 : 0;
+        $materia->update($data);
         return redirect()->route('materias.index')->with('success', 'Materia actualizada exitosamente');
     }
 
@@ -52,36 +74,35 @@ class MateriaController extends Controller
         return redirect()->route('materias.index')->with('success', 'Materia eliminada exitosamente');
     }
 
-    // ── Grupos de Materias ──────────────────────────────────────────
-
-    public function guardarGrupo(Request $request)
+    // ── Asignar campo a varias materias a la vez ────────────────────
+    public function asignarCampo(Request $request)
     {
         $request->validate([
-            'grupo_nombre' => 'required|max:100',
-            'materias'     => 'required|array|min:2',
-        ], [
-            'materias.min' => 'Un grupo debe tener al menos 2 materias.',
+            'mat_campo' => 'required|max:60',
+            'materias'  => 'required|array|min:1',
         ]);
-
-        $grupo = MateriaGrupo::updateOrCreate(
-            ['grupo_id' => $request->grupo_id],
-            ['grupo_nombre' => $request->grupo_nombre]
-        );
-
-        // Sincronizar materias con orden
-        $grupo->materias()->detach();
-        foreach ($request->materias as $i => $matCodigo) {
-            $grupo->materias()->attach($matCodigo, ['detalle_orden' => $i]);
-        }
-
-        return redirect()->route('materias.index')->with('success', 'Grupo "' . $grupo->grupo_nombre . '" guardado correctamente');
+        $campo = trim($request->mat_campo);
+        Materia::whereIn('mat_codigo', $request->materias)->update(['mat_campo' => $campo]);
+        return redirect()->route('materias.index', ['tab' => 'asociar'])
+            ->with('success', count($request->materias) . ' materias asignadas al campo "' . $campo . '"');
     }
 
-    public function eliminarGrupo($id)
+    // ── Marcar qué materias de un campo suman al promedio ───────────
+    public function guardarPromediables(Request $request)
     {
-        $grupo = MateriaGrupo::findOrFail($id);
-        $nombre = $grupo->grupo_nombre;
-        $grupo->delete();
-        return redirect()->route('materias.index')->with('success', 'Grupo "' . $nombre . '" eliminado');
+        $request->validate(['mat_campo' => 'required']);
+        $campo = trim($request->mat_campo);
+        $promediables = $request->input('promediables', []);
+
+        // Materias del campo: las marcadas → mat_promediable=1; las no marcadas → 0
+        $materiasCampo = Materia::where('mat_campo', $campo)->pluck('mat_codigo');
+        foreach ($materiasCampo as $cod) {
+            Materia::where('mat_codigo', $cod)
+                ->update(['mat_promediable' => in_array($cod, $promediables) ? 1 : 0]);
+        }
+
+        return redirect()
+            ->to(route('materias.index', ['tab' => 'grupos']) . '#tabGrupos')
+            ->with('success', 'Promediables actualizados para "' . $campo . '"');
     }
 }

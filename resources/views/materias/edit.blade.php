@@ -32,6 +32,13 @@
                         <input type="number" name="mat_orden" class="form-control" value="{{ old('mat_orden', $materia->mat_orden) }}" min="0">
                     </div>
                 </div>
+                <div class="form-check mb-3">
+                    <input type="checkbox" name="mat_promediable" value="1" id="mat_promediable" class="form-check-input"
+                        {{ old('mat_promediable', $materia->mat_promediable ?? 1) == 1 ? 'checked' : '' }}>
+                    <label class="form-check-label" for="mat_promediable">
+                        Suma al promedio del campo (área curricular)
+                    </label>
+                </div>
                 <button type="submit" class="btn btn-primary">Actualizar</button>
                 <a href="{{ route('materias.index') }}" class="btn btn-secondary">Cancelar</a>
             </form>

@@ -97,8 +97,8 @@ Route::middleware(['auth', 'permiso', 'auditoria'])->group(function () {
     
     // Materias
     Route::resource('materias', App\Http\Controllers\MateriaController::class);
-    Route::post('materias-grupos/guardar', [App\Http\Controllers\MateriaController::class, 'guardarGrupo'])->name('materias.guardar-grupo');
-    Route::delete('materias-grupos/{id}', [App\Http\Controllers\MateriaController::class, 'eliminarGrupo'])->name('materias.eliminar-grupo');
+    Route::post('materias/asignar-campo', [App\Http\Controllers\MateriaController::class, 'asignarCampo'])->name('materias.asignar-campo');
+    Route::post('materias/promediables', [App\Http\Controllers\MateriaController::class, 'guardarPromediables'])->name('materias.guardar-promediables');
     
     // Notas
     Route::get('notas', [App\Http\Controllers\NotaController::class, 'index'])->name('notas.index');

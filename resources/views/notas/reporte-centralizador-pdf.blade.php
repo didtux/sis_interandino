@@ -184,7 +184,7 @@
                             @php $grp = $gruposMap[$cmd->mat_codigo] ?? null; @endphp
                             @if($grp && ($ultimaMatGrupo[$grp->grupo_id] ?? '') === $cmd->mat_codigo)
                                 @php
-                                    $matCodsG = $grp->materias->pluck('mat_codigo')->toArray();
+                                    $matCodsG = $grp->materiasPromediables->pluck('mat_codigo')->toArray();
                                 @endphp
                                 @foreach($periodos as $p)
                                     @php
@@ -224,7 +224,7 @@
                             @php $grp = $gruposMap[$cmd->mat_codigo] ?? null; @endphp
                             @if($grp && ($ultimaMatGrupo[$grp->grupo_id] ?? '') === $cmd->mat_codigo)
                                 @php
-                                    $matCodsG = $grp->materias->pluck('mat_codigo')->toArray();
+                                    $matCodsG = $grp->materiasPromediables->pluck('mat_codigo')->toArray();
                                     $sg = 0; $cg = 0;
                                     foreach($matCodsG as $mc) {
                                         $v = collect($fila['materias'][$mc]['trimestres'] ?? [])->first() ?? 0;

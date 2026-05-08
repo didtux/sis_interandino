@@ -10,9 +10,9 @@ class Materia extends Model
     protected $primaryKey = 'mat_id';
     public $timestamps = false;
 
-    protected $fillable = ['mat_codigo', 'mat_nombre', 'mat_campo', 'mat_orden', 'mat_visible'];
+    protected $fillable = ['mat_codigo', 'mat_nombre', 'mat_campo', 'mat_orden', 'mat_visible', 'mat_promediable'];
 
-    protected $casts = ['mat_fecha' => 'datetime', 'mat_visible' => 'integer'];
+    protected $casts = ['mat_fecha' => 'datetime', 'mat_visible' => 'integer', 'mat_promediable' => 'integer'];
 
     public function docentes()
     {
