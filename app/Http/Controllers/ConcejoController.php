@@ -150,10 +150,26 @@ class ConcejoController extends Controller
 
         // Asistencia anual — solo desde colegio_asistencia (no del registro de docentes).
         // Falta = día trabajado del curso donde el estudiante no fue presencia y no tenía permiso vigente.
+        // Periodos disjuntos para evitar duplicados si la configuración los traslapa.
+        $periodosOrden = $periodos->sortBy('periodo_fecha_inicio')->values();
+        $rangos = [];
+        $lastEnd = null;
+        foreach ($periodosOrden as $p) {
+            $ini = \Carbon\Carbon::parse($p->periodo_fecha_inicio);
+            if ($lastEnd && $ini->lessThanOrEqualTo($lastEnd)) {
+                $ini = $lastEnd->copy()->addDay();
+            }
+            $finP = \Carbon\Carbon::parse($p->periodo_fecha_fin);
+            if ($finP->lessThan($ini)) continue;
+            $rangos[] = ['inicio'=>$ini->format('Y-m-d'), 'fin'=>$finP->format('Y-m-d')];
+            $lastEnd = $finP;
+        }
+
         $atrasos = 0; $faltas = 0; $licencias = 0; $permisosSolicitudes = 0;
-        foreach ($periodos as $periodo) {
-            $inicio = $periodo->periodo_fecha_inicio->format('Y-m-d');
-            $fin    = $periodo->periodo_fecha_fin->format('Y-m-d');
+        $vistosFaltas = []; $vistosDiasPerm = []; $vistosPermisoCod = []; $vistosAtrasos = [];
+        foreach ($rangos as $rg) {
+            $inicio = $rg['inicio'];
+            $fin    = $rg['fin'];
 
             $diasTrab = DB::table('colegio_asistencia')
                 ->whereBetween('asis_fecha', [$inicio, $fin])
@@ -165,38 +181,60 @@ class ConcejoController extends Controller
                 ->whereBetween('asis_fecha', [$inicio, $fin])
                 ->select('asis_fecha')->distinct()->pluck('asis_fecha');
 
-            $atrasos += DB::table('asistencia_atrasos')
+            $atrasosRows = DB::table('asistencia_atrasos')
                 ->where('estud_codigo', $estCodigo)
-                ->whereBetween('atraso_fecha', [$inicio, $fin])->count();
+                ->whereBetween('atraso_fecha', [$inicio, $fin])
+                ->select('atraso_fecha','atraso_hora')->get();
+            foreach ($atrasosRows as $a) {
+                $key = (string)$a->atraso_fecha.'|'.(string)$a->atraso_hora;
+                if (!isset($vistosAtrasos[$key])) { $vistosAtrasos[$key] = true; $atrasos++; }
+            }
 
+            // Permisos solicitudes: cuenta solo los que arrancan en este periodo
+            $permisosNuevos = DB::table('asistencia_permisos')
+                ->where('estud_codigo', $estCodigo)
+                ->where('permiso_estado', 1)
+                ->whereBetween('permiso_fecha_inicio', [$inicio, $fin])
+                ->select('permiso_codigo')->get();
+            foreach ($permisosNuevos as $p) {
+                if (!isset($vistosPermisoCod[$p->permiso_codigo])) {
+                    $vistosPermisoCod[$p->permiso_codigo] = true;
+                    $permisosSolicitudes++;
+                }
+            }
+
+            // Cobertura de días con permiso (permisos que se traslapan con este periodo)
             $permisos = DB::table('asistencia_permisos')
                 ->where('estud_codigo', $estCodigo)
                 ->where('permiso_estado', 1)
                 ->where('permiso_fecha_inicio', '<=', $fin)
                 ->where('permiso_fecha_fin', '>=', $inicio)
                 ->select('permiso_fecha_inicio','permiso_fecha_fin')->get();
-            $permisosSolicitudes += $permisos->count();
 
             $diasTrabSet = collect($diasTrab)->map(fn($f)=>(string)$f)->flip();
-            $diasPermiso = collect();
             foreach ($permisos as $p) {
                 $cur = \Carbon\Carbon::parse(max($p->permiso_fecha_inicio, $inicio));
                 $end = \Carbon\Carbon::parse(min($p->permiso_fecha_fin, $fin));
                 while ($cur <= $end) {
                     $f = $cur->format('Y-m-d');
-                    if ($diasTrabSet->has($f)) $diasPermiso->push($f);
+                    if ($diasTrabSet->has($f) && !isset($vistosDiasPerm[$f])) {
+                        $vistosDiasPerm[$f] = true;
+                        $licencias++;
+                    }
                     $cur->addDay();
                 }
             }
-            $diasPermiso = $diasPermiso->unique();
-            $licencias  += $diasPermiso->count();
 
-            $presSet    = collect($presencias)->map(fn($f)=>(string)$f)->flip();
-            $permisoSet = $diasPermiso->flip();
-            $faltas    += collect($diasTrab)->filter(function($f) use ($presSet, $permisoSet){
+            $presSet = collect($presencias)->map(fn($f)=>(string)$f)->flip();
+            foreach ($diasTrab as $f) {
                 $f = (string) $f;
-                return !$presSet->has($f) && !$permisoSet->has($f);
-            })->count();
+                if (isset($vistosFaltas[$f])) continue;
+                if ($presSet->has($f) || isset($vistosDiasPerm[$f])) continue;
+                $dow = (int) date('w', strtotime($f));
+                if ($dow === 0 || $dow === 6) continue;
+                $vistosFaltas[$f] = true;
+                $faltas++;
+            }
         }
         $enfermeria = DB::table('enfermeria_registros')->where('est_codigo', $estCodigo)->whereYear('enf_fecha', $gestion)->count();
         $compromisosVerb   = DB::table('psicopedagogia_casos')->where('est_codigo', $estCodigo)->where('psico_tipo_acuerdo', 'VERBAL')->whereYear('psico_fecha', $gestion)->count();
@@ -214,14 +252,37 @@ class ConcejoController extends Controller
     {
         $gestion    = (int) $request->input('gestion', date('Y'));
         $estudiante = Estudiante::with('curso')->where('est_codigo', $estCodigo)->firstOrFail();
-        $periodos   = NotaPeriodo::activo()->gestion($gestion)->orderBy('periodo_numero')->get();
+        $periodos   = NotaPeriodo::activo()->gestion($gestion)
+            ->orderBy('periodo_fecha_inicio')->orderBy('periodo_numero')->get();
+
+        // Calcular rangos disjuntos: cada trimestre arranca después del fin del anterior
+        // (resuelve solapamientos en la configuración de periodos para no duplicar registros).
+        $rangos = [];
+        $lastEnd = null;
+        foreach ($periodos as $p) {
+            $ini = \Carbon\Carbon::parse($p->periodo_fecha_inicio);
+            if ($lastEnd && $ini->lessThanOrEqualTo($lastEnd)) {
+                $ini = $lastEnd->copy()->addDay();
+            }
+            $fin = \Carbon\Carbon::parse($p->periodo_fecha_fin);
+            if ($fin->lessThan($ini)) continue;
+            $rangos[] = ['periodo'=>$p, 'inicio'=>$ini->format('Y-m-d'), 'fin'=>$fin->format('Y-m-d')];
+            $lastEnd = $fin;
+        }
 
         $detallePeriodos = [];
         $totales = ['dias_trabajados'=>0,'presencias'=>0,'faltas'=>0,'permisos_dias'=>0,'permisos_solicitudes'=>0,'atrasos'=>0];
 
-        foreach ($periodos as $periodo) {
-            $inicio = $periodo->periodo_fecha_inicio->format('Y-m-d');
-            $fin    = $periodo->periodo_fecha_fin->format('Y-m-d');
+        // Sets globales para evitar contar dos veces si por configuración hubiera traslape residual
+        $vistosFaltas   = [];
+        $vistosAtrasos  = [];
+        $vistosPermiso  = [];
+        $vistosDiasPerm = [];
+
+        foreach ($rangos as $rg) {
+            $periodo = $rg['periodo'];
+            $inicio  = $rg['inicio'];
+            $fin     = $rg['fin'];
 
             $diasTrabFechas = DB::table('colegio_asistencia')
                 ->whereBetween('asis_fecha', [$inicio, $fin])
@@ -239,40 +300,66 @@ class ConcejoController extends Controller
                 ->where('estud_codigo', $estCodigo)
                 ->whereBetween('atraso_fecha', [$inicio, $fin])
                 ->orderBy('atraso_fecha')
-                ->select('atraso_fecha','atraso_hora')->get();
+                ->select('atraso_fecha','atraso_hora')->get()
+                ->reject(function($a) use (&$vistosAtrasos) {
+                    $key = (string) $a->atraso_fecha . '|' . (string) $a->atraso_hora;
+                    if (isset($vistosAtrasos[$key])) return true;
+                    $vistosAtrasos[$key] = true;
+                    return false;
+                })->values();
 
-            // Permisos que se traslapan con el periodo
+            // Permisos cuya FECHA DE INICIO cae en este periodo (cada permiso pertenece a UN solo trimestre)
             $permisos = DB::table('asistencia_permisos')
+                ->where('estud_codigo', $estCodigo)
+                ->where('permiso_estado', 1)
+                ->whereBetween('permiso_fecha_inicio', [$inicio, $fin])
+                ->orderBy('permiso_fecha_inicio')
+                ->select('permiso_codigo','permiso_tipo','permiso_fecha_inicio','permiso_fecha_fin','permiso_motivo','permiso_origen')
+                ->get()
+                ->reject(function($p) use (&$vistosPermiso) {
+                    if (isset($vistosPermiso[$p->permiso_codigo])) return true;
+                    $vistosPermiso[$p->permiso_codigo] = true;
+                    return false;
+                })->values();
+
+            // Días con permiso dentro de este periodo (días hábiles trabajados cubiertos)
+            $diasTrabSet = collect($diasTrabFechas)->map(fn($f)=>(string)$f)->flip();
+            $diasConPermiso = collect();
+            // Para cubrir días, considerar también permisos que se traslapan aunque empezaran antes
+            $permisosCobertura = DB::table('asistencia_permisos')
                 ->where('estud_codigo', $estCodigo)
                 ->where('permiso_estado', 1)
                 ->where('permiso_fecha_inicio', '<=', $fin)
                 ->where('permiso_fecha_fin', '>=', $inicio)
-                ->orderBy('permiso_fecha_inicio')
-                ->select('permiso_codigo','permiso_tipo','permiso_fecha_inicio','permiso_fecha_fin','permiso_motivo','permiso_origen')
-                ->get();
-
-            // Días con permiso (clamp al periodo, solo días hábiles que estén en diasTrabFechas)
-            $diasTrabSet = collect($diasTrabFechas)->map(fn($f)=>(string)$f)->flip();
-            $diasConPermiso = collect();
-            foreach ($permisos as $p) {
+                ->select('permiso_fecha_inicio','permiso_fecha_fin')->get();
+            foreach ($permisosCobertura as $p) {
                 $ini = max($p->permiso_fecha_inicio, $inicio);
                 $fn  = min($p->permiso_fecha_fin, $fin);
                 $cur = \Carbon\Carbon::parse($ini);
                 $end = \Carbon\Carbon::parse($fn);
                 while ($cur <= $end) {
                     $f = $cur->format('Y-m-d');
-                    if ($diasTrabSet->has($f)) $diasConPermiso->push($f);
+                    if ($diasTrabSet->has($f) && !isset($vistosDiasPerm[$f])) {
+                        $diasConPermiso->push($f);
+                        $vistosDiasPerm[$f] = true;
+                    }
                     $cur->addDay();
                 }
             }
             $diasConPermiso = $diasConPermiso->unique()->values();
 
-            // Faltas = días trabajados que NO son presencias y NO tienen permiso
+            // Faltas = días trabajados que NO son presencias y NO tienen permiso (y no contados antes)
             $presSet    = collect($presFechas)->map(fn($f)=>(string)$f)->flip();
-            $permisoSet = $diasConPermiso->flip();
-            $faltasFechas = collect($diasTrabFechas)->filter(function($f) use ($presSet, $permisoSet){
+            $permisoSet = collect($vistosDiasPerm)->keys()->flip();
+            $faltasFechas = collect($diasTrabFechas)->filter(function($f) use ($presSet, $permisoSet, &$vistosFaltas){
                 $f = (string) $f;
-                return !$presSet->has($f) && !$permisoSet->has($f);
+                if (isset($vistosFaltas[$f])) return false;
+                if ($presSet->has($f) || $permisoSet->has($f)) return false;
+                // Defensa adicional: nunca contar fines de semana
+                $dow = (int) date('w', strtotime($f)); // 0=Dom, 6=Sáb
+                if ($dow === 0 || $dow === 6) return false;
+                $vistosFaltas[$f] = true;
+                return true;
             })->values();
 
             $detallePeriodos[] = [

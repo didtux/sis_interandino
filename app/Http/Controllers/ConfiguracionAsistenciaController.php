@@ -336,31 +336,46 @@ class ConfiguracionAsistenciaController extends Controller
     public function permisos(Request $request)
     {
         $query = Permiso::with('estudiante.curso', 'solicitantePadre', 'configuracion')->orderBy('permiso_fecha_registro', 'desc');
-        
+
         if ($request->filled('fecha_inicio')) {
             $query->whereDate('permiso_fecha_inicio', '>=', $request->fecha_inicio);
         }
         if ($request->filled('fecha_fin')) {
             $query->whereDate('permiso_fecha_fin', '<=', $request->fecha_fin);
         }
-        if ($request->filled('cur_codigo')) {
-            $query->whereHas('estudiante', function($q) use ($request) {
-                $q->where('cur_codigo', $request->cur_codigo);
-            });
-        }
-        if ($request->filled('buscar')) {
-            $tokens = preg_split('/\s+/', trim($request->buscar), -1, PREG_SPLIT_NO_EMPTY);
-            foreach ($tokens as $tok) {
-                $query->where(function($w) use ($tok) {
-                    $w->whereHas('estudiante', function($q) use ($tok) {
-                        $q->where('est_nombres', 'like', "%{$tok}%")
+
+        // Resolver filtros de curso y/o búsqueda a una lista de est_codigo
+        // (usando consulta directa para evitar problemas de collation con whereHas)
+        $aplicarFiltroEst = $request->filled('cur_codigo') || $request->filled('buscar');
+        if ($aplicarFiltroEst) {
+            $estQ = \DB::table('colegio_estudiantes');
+            if ($request->filled('cur_codigo')) {
+                $estQ->where('cur_codigo', $request->cur_codigo);
+            }
+            if ($request->filled('buscar')) {
+                $tokens = preg_split('/\s+/', trim($request->buscar), -1, PREG_SPLIT_NO_EMPTY);
+                foreach ($tokens as $tok) {
+                    $estQ->where(function($w) use ($tok) {
+                        $w->where('est_nombres', 'like', "%{$tok}%")
                           ->orWhere('est_apellidos', 'like', "%{$tok}%")
                           ->orWhere('est_codigo', 'like', "%{$tok}%")
                           ->orWhere('est_ci', 'like', "%{$tok}%");
-                    })->orWhere('permiso_codigo', 'like', "%{$tok}%")
-                      ->orWhere('permiso_motivo', 'like', "%{$tok}%");
-                });
+                    });
+                }
             }
+            $codigosEst = $estQ->pluck('est_codigo')->all();
+
+            $query->where(function($w) use ($codigosEst, $request) {
+                $w->whereIn('estud_codigo', $codigosEst ?: ['__none__']);
+                // Si el término coincide con código/motivo del permiso, también incluirlo
+                if ($request->filled('buscar')) {
+                    $tokens = preg_split('/\s+/', trim($request->buscar), -1, PREG_SPLIT_NO_EMPTY);
+                    foreach ($tokens as $tok) {
+                        $w->orWhere('permiso_codigo', 'like', "%{$tok}%")
+                          ->orWhere('permiso_motivo', 'like', "%{$tok}%");
+                    }
+                }
+            });
         }
 
         $permisos = $query->paginate(50)->withQueryString();
