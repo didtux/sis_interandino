@@ -383,7 +383,8 @@
                                             @endphp
                                             <td class="text-center" data-label="{{ $periodo->periodo_nombre }}">
                                                 <a href="{{ route('notas.calificar', [$asig->curmatdoc_id, $periodo->periodo_id]) }}"
-                                                   class="btn btn-sm {{ $btnClass }}" style="min-width:105px;">
+                                                   class="btn btn-sm {{ $btnClass }}" style="min-width:105px;"
+                                                   target="_blank" rel="noopener">
                                                     <i class="fas {{ $iconClass }} mr-1"></i>{{ $label }}
                                                 </a>
                                             </td>

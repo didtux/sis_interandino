@@ -13,7 +13,9 @@ class PagoServicioController extends Controller
 {
     public function index(Request $request)
     {
-        $query = PagoServicio::with('servicio', 'estudiante', 'padreFamilia');
+        // Excluir pagos de estudiantes retirados (est_visible = 0)
+        $query = PagoServicio::with('servicio', 'estudiante', 'padreFamilia')
+            ->whereHas('estudiante', fn($q) => $q->where('est_visible', 1));
 
         if ($request->filled('fecha_inicio')) {
             $query->whereDate('pserv_fecha', '>=', $request->fecha_inicio);

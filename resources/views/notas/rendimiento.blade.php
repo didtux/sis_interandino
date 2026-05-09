@@ -81,9 +81,9 @@
                                                 $val  = $cell['promedio'] ?? null;
                                                 $rep  = $val !== null && round($val) < 51;
                                             @endphp
-                                            <td class="text-center" style="{{ $rep ? 'color:#c0392b;font-weight:700;' : '' }}">
+                                            <td class="text-center" style="{{ $rep ? 'color:#c0392b;font-weight:700;background:#fde0e0;' : '' }}">
                                                 @if($cell)
-                                                    <a href="{{ route('notas.calificar', [$cell['curmatdoc_id'], $periodoId]) }}" style="text-decoration:none;color:inherit;">
+                                                    <a href="{{ route('notas.calificar', [$cell['curmatdoc_id'], $periodoId]) }}" target="_blank" rel="noopener" style="text-decoration:none;color:inherit;">
                                                         {{ $val !== null ? round($val) : '-' }}
                                                     </a>
                                                 @else
@@ -91,7 +91,7 @@
                                                         $asig = $asignaciones->firstWhere('mat_codigo', $m->mat_codigo);
                                                     @endphp
                                                     @if($asig)
-                                                        <a href="{{ route('notas.calificar', [$asig->curmatdoc_id, $periodoId]) }}" class="text-muted">
+                                                        <a href="{{ route('notas.calificar', [$asig->curmatdoc_id, $periodoId]) }}" target="_blank" rel="noopener" class="text-muted">
                                                             <i class="fas fa-edit"></i>
                                                         </a>
                                                     @else
@@ -100,7 +100,8 @@
                                                 @endif
                                             </td>
                                         @endforeach
-                                        <td class="text-center" style="font-weight:700;{{ $prom !== null && $prom < 51 ? 'color:#c0392b;' : '' }}">
+                                        @php $promRep = $prom !== null && $prom < 51; @endphp
+                                        <td class="text-center" style="font-weight:700;{{ $promRep ? 'color:#c0392b;background:#fde0e0;' : '' }}">
                                             {{ $prom !== null ? $prom : '-' }}
                                         </td>
                                     </tr>

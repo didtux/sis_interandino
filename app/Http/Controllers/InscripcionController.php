@@ -204,11 +204,24 @@ class InscripcionController extends Controller
 
     public function create()
     {
-        $estudiantes = Estudiante::visible()->get();
+        $gestion = (int) date('Y');
+
+        // Estudiantes que YA tienen inscripción activa en la gestión actual
+        $yaInscritos = Inscripcion::where('insc_gestion', $gestion)
+            ->where('insc_estado', 1)
+            ->pluck('est_codigo')
+            ->all();
+
+        // Sólo se muestran los que aún no tienen registro en esta gestión
+        $estudiantes = Estudiante::visible()
+            ->whereNotIn('est_codigo', $yaInscritos)
+            ->orderBy('est_apellidos')->orderBy('est_nombres')
+            ->get();
+
         $padres = PadreFamilia::where('pfam_estado', 1)->get();
         $cursos = Curso::visible()->get();
         $descuentos = \App\Models\Descuento::where('desc_estado', 1)->get();
-        return view('inscripciones.create', compact('estudiantes', 'padres', 'cursos', 'descuentos'));
+        return view('inscripciones.create', compact('estudiantes', 'padres', 'cursos', 'descuentos', 'gestion'));
     }
 
     public function store(Request $request)
@@ -258,6 +271,10 @@ class InscripcionController extends Controller
         $montoPagado = min($request->insc_monto_pagado ?? 0, 500);
         $sinFactura = $request->insc_sin_factura ?? 0;
         $soloRegistro = $request->has('insc_solo_registro');
+        // Caso Especial: inscripción retroactiva, los meses previos a insc_mes_inicio
+        // NO se contabilizan como vencidos.
+        $casoEspecial  = $request->has('insc_caso_especial');
+        $mesInicio     = $casoEspecial ? max(2, min(12, (int) ($request->insc_mes_inicio ?? date('n')))) : null;
 
         // Código secuencial INSC000XXX
         $ultimoInsc = Inscripcion::where('insc_codigo', 'REGEXP', '^INSC[0-9]{6}$')
@@ -280,10 +297,14 @@ class InscripcionController extends Controller
             'insc_monto_final' => $montoFinal,
             'insc_monto_pagado' => $montoPagadoInsc,
             'insc_saldo' => $montoFinal - $montoPagadoInsc,
-            'insc_concepto' => $request->insc_concepto . ($soloRegistro ? ' (Fuera de periodo - solo registro)' : ''),
+            'insc_concepto' => $request->insc_concepto
+                . ($soloRegistro ? ' (Fuera de periodo - solo registro)' : '')
+                . ($casoEspecial ? ' (Caso Especial - inicio retroactivo)' : ''),
             'insc_estado' => 1,
             'insc_usuario' => auth()->user()->us_codigo,
-            'insc_sin_factura' => $sinFactura
+            'insc_sin_factura' => $sinFactura,
+            'insc_caso_especial' => $casoEspecial ? 1 : 0,
+            'insc_mes_inicio' => $mesInicio,
         ]);
 
         // Registrar descuento si existe

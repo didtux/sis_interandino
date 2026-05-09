@@ -14,7 +14,9 @@ class PagoController extends Controller
 {
     public function index()
     {
-        $query = Pago::with('estudiante.curso', 'padreFamilia');
+        // Excluir pagos de estudiantes retirados (est_visible = 0)
+        $query = Pago::with('estudiante.curso', 'padreFamilia')
+            ->whereHas('estudiante', fn($q) => $q->where('est_visible', 1));
 
         if (request()->filled('fecha_inicio')) {
             $query->whereDate('pagos_fecha', '>=', request('fecha_inicio'));
@@ -151,9 +153,16 @@ class PagoController extends Controller
 
             // Saldo pendiente: solo meses disponibles (no vencidos) × mensualidad - pagado
             $mesActualNum = intval(date('n'));
+            // Caso especial: el periodo arranca en insc_mes_inicio; los meses anteriores no cuentan.
+            $mesInicioCasoEspecial = ($insc->insc_caso_especial ?? 0) == 1
+                ? (int) $insc->insc_mes_inicio
+                : null;
             // Determinar primer mes del estudiante: el menor entre mes actual y primer mes pagado
             $primerMesPagado = !empty($mesesPagados) ? min($mesesPagados) : $mesActualNum;
             $mesInicioEst = max($primerMesPagado, 2); // mínimo febrero
+            if ($mesInicioCasoEspecial) {
+                $mesInicioEst = max($mesInicioEst, $mesInicioCasoEspecial);
+            }
             $mesesVencidos = 0;
             for ($mv = 2; $mv < $mesInicioEst; $mv++) {
                 if (!in_array($mv, $mesesPagados)) $mesesVencidos++;
@@ -441,6 +450,13 @@ class PagoController extends Controller
         $estudiantes = $query->orderBy('cur_codigo')->orderBy('est_apellidos')->get();
         
         $estudiantesEnMora = $estudiantes->filter(function($est) use ($mesActual, $year) {
+            // Caso Especial: si el estudiante recién arranca en insc_mes_inicio, no está en mora
+            // antes de ese mes.
+            if ($est->inscripcion && ($est->inscripcion->insc_caso_especial ?? 0) == 1) {
+                $mesInicio = (int) ($est->inscripcion->insc_mes_inicio ?? 2);
+                if ($mesActual < $mesInicio) return false;
+            }
+
             if ($est->pagos->count() > 0) {
                 $mesesPagados = [];
                 foreach($est->pagos as $pago) {
@@ -448,7 +464,7 @@ class PagoController extends Controller
                     $mesesPagados = array_merge($mesesPagados, $mesesCubiertos);
                 }
                 $mesesPagados = array_unique($mesesPagados);
-                
+
                 if ($mesActual >= 2 && $mesActual <= 11) {
                     return !in_array($mesActual, $mesesPagados);
                 }
@@ -456,7 +472,7 @@ class PagoController extends Controller
             elseif ($est->inscripcion && $mesActual >= 2 && $mesActual <= 11) {
                 return true;
             }
-            
+
             return false;
         });
 

@@ -80,9 +80,11 @@
                             <a href="{{ route('notas.reporte-valoracion', [$asignacion->curmatdoc_id, $periodo->periodo_id]) }}" class="btn btn-danger btn-sm" target="_blank">
                                 <i class="fas fa-file-pdf mr-1"></i>PDF
                             </a>
-                            <button type="button" class="btn btn-success btn-sm" data-toggle="modal" data-target="#modalImportarExcel">
-                                <i class="fas fa-file-excel mr-1"></i>Importar Excel
-                            </button>
+                            @if($estadoNotas != 2)
+                                <button type="button" class="btn btn-success btn-sm" data-toggle="modal" data-target="#modalImportarExcel">
+                                    <i class="fas fa-file-excel mr-1"></i>Importar Excel
+                                </button>
+                            @endif
                             @if($esEditable)
                                 <button type="submit" name="accion" value="guardar" class="btn btn-secondary btn-sm"><i class="fas fa-save mr-1"></i>Guardar Borrador</button>
                                 <button type="submit" name="accion" value="enviar" class="btn btn-primary-modern btn-sm" onclick="return confirm('¿Enviar notas para aprobación?')"><i class="fas fa-paper-plane mr-1"></i>Enviar</button>
@@ -150,7 +152,8 @@
                                                 @endfor
                                                 <td style="text-align:center;font-weight:bold;background:rgba(0,0,0,0.03);" class="prom-dim-{{ $dim->dimension_id }}">0</td>
                                             @endforeach
-                                            <td style="text-align:center;font-weight:bold;font-size:1rem;background:#fef3cd;" class="prom-trim">{{ $nota->nota_promedio_trimestral ?? 0 }}</td>
+                                            @php $pt = round($nota->nota_promedio_trimestral ?? 0); $reprob = $pt > 0 && $pt < 51; @endphp
+                                            <td style="text-align:center;font-weight:bold;font-size:1rem;{{ $reprob ? 'background:#f8d7da;color:#c0392b;' : 'background:#fef3cd;' }}" class="prom-trim">{{ $nota->nota_promedio_trimestral ?? 0 }}</td>
                                         </tr>
                                     @empty
                                         <tr><td colspan="{{ $totalCols }}"><div class="empty-state"><i class="fas fa-users"></i><h5>No hay estudiantes</h5></div></td></tr>
@@ -318,7 +321,13 @@ $(document).ready(function() {
             promTrim += prom;
         });
 
-        $row.find('.prom-trim').text(Math.round(promTrim));
+        var ptVal = Math.round(promTrim);
+        var $ptCell = $row.find('.prom-trim').text(ptVal);
+        if (ptVal > 0 && ptVal < 51) {
+            $ptCell.css({ background: '#f8d7da', color: '#c0392b' });
+        } else {
+            $ptCell.css({ background: '#fef3cd', color: '' });
+        }
     }
 
     $('.input-nota').on('input change', function() {

@@ -14,7 +14,8 @@ class Inscripcion extends Model
         'insc_codigo', 'est_codigo', 'pfam_codigo', 'cur_codigo',
         'insc_gestion', 'insc_monto_total', 'insc_monto_pagado',
         'insc_saldo', 'insc_concepto', 'insc_estado', 'insc_usuario',
-        'insc_monto_descuento', 'insc_monto_final', 'insc_sin_factura'
+        'insc_monto_descuento', 'insc_monto_final', 'insc_sin_factura',
+        'insc_caso_especial', 'insc_mes_inicio'
     ];
 
     protected $casts = [
@@ -24,7 +25,9 @@ class Inscripcion extends Model
         'insc_saldo' => 'float',
         'insc_monto_descuento' => 'float',
         'insc_monto_final' => 'float',
-        'insc_sin_factura' => 'boolean'
+        'insc_sin_factura' => 'boolean',
+        'insc_caso_especial' => 'boolean',
+        'insc_mes_inicio' => 'integer'
     ];
 
     public function estudiante()

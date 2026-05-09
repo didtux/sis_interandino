@@ -100,6 +100,40 @@
                             </div>
                         @endif
 
+                        {{-- Registro Especial (Caso Especial) --}}
+                        <div class="row mt-3">
+                            <div class="col-md-12">
+                                <div class="card" style="border-left:4px solid #6610f2;">
+                                    <div class="card-body py-2 px-3">
+                                        <div class="form-check">
+                                            <input type="checkbox" class="form-check-input" id="checkCasoEspecial" name="insc_caso_especial" value="1">
+                                            <label class="form-check-label font-weight-bold" for="checkCasoEspecial" style="color:#6610f2;">
+                                                <i class="fas fa-star-of-life mr-1"></i>Registro Especial (caso especial)
+                                            </label>
+                                        </div>
+                                        <small class="text-muted d-block mt-1">
+                                            Marca esta opción cuando la inscripción debió hacerse en un mes anterior y se está registrando ahora.
+                                            Los meses previos al mes de inicio <strong>no se contabilizarán como vencidos</strong> (no aparecen en deuda ni en mora).
+                                        </small>
+
+                                        <div class="row mt-2" id="boxCasoEspecial" style="display:none;">
+                                            <div class="col-md-4">
+                                                <label class="small font-weight-bold">Mes de inicio retroactivo <span class="text-danger">*</span></label>
+                                                <select name="insc_mes_inicio" class="form-control form-control-sm" id="selMesInicioEsp">
+                                                    @for($m = 2; $m <= $mesActualPHP; $m++)
+                                                        <option value="{{ $m }}" {{ $m == $mesActualPHP ? 'selected' : '' }}>
+                                                            {{ ['','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'][$m] }}
+                                                        </option>
+                                                    @endfor
+                                                </select>
+                                                <small class="text-muted">Desde este mes se contabilizan las cuotas. Los anteriores se ignoran.</small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
                         {{-- Pago inicial --}}
                         <div class="row mt-3">
                             @if($fueraDePlazo)
@@ -182,6 +216,12 @@ var mesesNombres = ['','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio',
 var fueraDePlazo = {{ $fueraDePlazo ? 'true' : 'false' }};
 
 $('.select2').select2({ theme: 'bootstrap4', width: '100%' });
+
+$('#checkCasoEspecial').on('change', function() {
+    var on = $(this).is(':checked');
+    $('#boxCasoEspecial').toggle(on);
+    $('#selMesInicioEsp').prop('required', on);
+});
 
 $('#checkOtroPadre').on('change', function() {
     var esOtro = $(this).is(':checked');

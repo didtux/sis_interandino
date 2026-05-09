@@ -149,8 +149,8 @@
                         @if($esUltima && !in_array($grp->grupo_id, $gruposMostradosEnCampo))
                             @php $gruposMostradosEnCampo[] = $grp->grupo_id; @endphp
                             <tr style="background:#e8d5f5;">
-                                <td style="text-align:left !important;padding-left:8px !important;font-weight:bold;font-size:6.5px;color:#6c3483;">
-                                    ↳ {{ mb_strtoupper($grp->grupo_nombre, 'UTF-8') }}
+                                <td style="text-align:left !important;padding-left:14px !important;font-weight:bold;font-size:6.5px;color:#6c3483;">
+                                    {{ mb_strtoupper($grp->grupo_nombre, 'UTF-8') }}
                                 </td>
                                 @foreach($periodos as $p)
                                     @php
@@ -181,21 +181,25 @@
                         @endif
                     @endif
                 @endforeach
-                {{-- Fila promedio del campo --}}
-                <tr class="prom-campo-row">
-                    <td class="prom-campo-label">
-                        @php
-                            $palabras = explode(' ', $campo);
-                            $abrev = count($palabras) > 2 ? implode(' ', array_slice($palabras, 0, 2)) : $campo;
-                        @endphp
-                        PROMEDIO<br>{{ mb_strtoupper($abrev, 'UTF-8') }}
-                    </td>
-                    @foreach($periodos as $p)
-                        @php $v = $promediosCampo[$campo][$p->periodo_numero] ?? 0; @endphp
-                        <td style="font-weight:bold;">{{ $v > 0 ? $v : '' }}</td>
-                    @endforeach
-                    <td class="prom-anual" style="font-size:9px;">{{ ($promediosCampo[$campo]['anual'] ?? 0) > 0 ? $promediosCampo[$campo]['anual'] : '' }}</td>
-                </tr>
+                {{-- Fila promedio del campo (sólo si hay materias promediables) --}}
+                @php $cntProm = $promediosCampo[$campo]['cnt_promediable'] ?? 0; @endphp
+                @if($cntProm > 0)
+                    @php $promAnualCampo = $promediosCampo[$campo]['anual'] ?? 0; @endphp
+                    <tr class="prom-campo-row">
+                        <td class="prom-campo-label">
+                            @php
+                                $palabras = explode(' ', $campo);
+                                $abrev = count($palabras) > 2 ? implode(' ', array_slice($palabras, 0, 2)) : $campo;
+                            @endphp
+                            PROMEDIO<br>{{ mb_strtoupper($abrev, 'UTF-8') }}
+                        </td>
+                        @foreach($periodos as $p)
+                            @php $v = $promediosCampo[$campo][$p->periodo_numero] ?? 0; @endphp
+                            <td style="font-weight:bold;{{ $v > 0 && $v < 51 ? 'color:#c0392b;' : '' }}">{{ $v > 0 ? $v : '' }}</td>
+                        @endforeach
+                        <td class="prom-anual" style="font-size:9px;{{ $promAnualCampo > 0 && $promAnualCampo < 51 ? 'color:#c0392b;' : '' }}">{{ $promAnualCampo > 0 ? $promAnualCampo : '' }}</td>
+                    </tr>
+                @endif
             @endforeach
         </tbody>
     </table>

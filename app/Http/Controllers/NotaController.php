@@ -868,18 +868,23 @@ class NotaController extends Controller
             $notasData[$mat]['promedio'] = $count > 0 ? round($suma / $count) : 0;
         }
 
-        // Promedios por campo
+        // Promedios por campo — sólo materias con mat_promediable = 1
         $promediosCampo = [];
         foreach ($materiasPorCampo as $campo => $cmds) {
+            $cmdsProm = $cmds->filter(fn($cmd) => (int) ($cmd->materia->mat_promediable ?? 1) === 1);
+            $promediosCampo[$campo]['cnt_promediable'] = $cmdsProm->count();
             foreach ($periodos as $p) {
                 $s = 0; $c = 0;
-                foreach ($cmds as $cmd) {
+                foreach ($cmdsProm as $cmd) {
                     $v = $notasData[$cmd->mat_codigo]['trimestres'][$p->periodo_numero] ?? 0;
                     if ($v > 0) { $s += $v; $c++; }
                 }
                 $promediosCampo[$campo][$p->periodo_numero] = $c > 0 ? round($s / $c) : 0;
             }
-            $vals = array_filter(array_values($promediosCampo[$campo]));
+            $vals = array_filter(array_values(array_intersect_key(
+                $promediosCampo[$campo],
+                array_flip($periodos->pluck('periodo_numero')->all())
+            )));
             $promediosCampo[$campo]['anual'] = count($vals) > 0 ? round(array_sum($vals) / count($vals)) : 0;
         }
 
