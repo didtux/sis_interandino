@@ -290,33 +290,60 @@ class AsistenciaController extends Controller
         $request->validate([
             'cur_codigo' => 'required|exists:colegio_cursos,cur_codigo',
             'asis_fecha' => 'required|date',
-            'estudiantes' => 'required|array'
         ]);
 
-        $registrados = 0;
-        foreach ($request->estudiantes as $estCodigo) {
-            $hora = $request->input('hora_' . $estCodigo, date('H:i:s'));
-            
-            // Verificar si ya existe asistencia para este estudiante en esta fecha
-            $asistenciaExistente = Asistencia::where('estud_codigo', $estCodigo)
-                ->whereDate('asis_fecha', $request->asis_fecha)
-                ->exists();
-            
-            if (!$asistenciaExistente) {
-                Asistencia::create([
-                    'estud_codigo' => $estCodigo,
-                    'asis_fecha' => $request->asis_fecha,
-                    'asis_hora' => $hora,
-                    'asis_fecha2' => now()
-                ]);
-                
-                // Verificar atraso
-                $this->verificarYRegistrarAtraso($estCodigo, $hora, $request->asis_fecha);
-                $registrados++;
-            }
+        // Solo se procesan los marcados explícitamente en cada tab.
+        $presentes = array_values((array) $request->input('estudiantes', []));
+        $faltantes = array_values((array) $request->input('faltantes', []));
+
+        // Deduplicar: si por alguna razón vino en ambas listas, prevalece "presente".
+        $faltantes = array_diff($faltantes, $presentes);
+
+        if (empty($presentes) && empty($faltantes)) {
+            return back()->withInput()->with('error', 'No se marcó ningún estudiante (ni presente ni con falta).');
         }
 
-        return redirect()->route('asistencias.index')->with('success', "$registrados asistencias registradas exitosamente");
+        $regP = 0; $regF = 0;
+        foreach ($presentes as $estCodigo) {
+            $hora = $request->input('hora_' . $estCodigo, date('H:i:s'));
+
+            $existente = Asistencia::where('estud_codigo', $estCodigo)
+                ->whereDate('asis_fecha', $request->asis_fecha)
+                ->first();
+
+            if ($existente) {
+                if (substr($existente->asis_hora, 0, 5) !== substr($hora, 0, 5)) {
+                    $existente->update(['asis_hora' => $hora]);
+                }
+                continue;
+            }
+            Asistencia::create([
+                'estud_codigo' => $estCodigo,
+                'asis_fecha'   => $request->asis_fecha,
+                'asis_hora'    => $hora,
+                'asis_fecha2'  => now()
+            ]);
+            $this->verificarYRegistrarAtraso($estCodigo, $hora, $request->asis_fecha);
+            $regP++;
+        }
+
+        // Faltas: en lugar de crear un registro 'F', simplemente eliminamos la asistencia
+        // de ese día para el estudiante (también limpiamos el atraso si lo hubiera).
+        // Así se mantiene la lógica histórica donde "sin registro = falta", compatible con
+        // el flujo de asistencia vía QR del otro sistema.
+        foreach ($faltantes as $estCodigo) {
+            $borradas = Asistencia::where('estud_codigo', $estCodigo)
+                ->whereDate('asis_fecha', $request->asis_fecha)
+                ->delete();
+            // Quitar atraso del día (si se había generado por la presencia anterior)
+            Atraso::where('estud_codigo', $estCodigo)
+                ->whereDate('atraso_fecha', $request->asis_fecha)
+                ->delete();
+            $regF++;
+        }
+
+        $msg = "Registrados: {$regP} presentes, {$regF} faltas (asistencia quitada del día).";
+        return redirect()->route('asistencias.index')->with('success', $msg);
     }
     
     private function verificarYRegistrarAtraso($estudCodigo, $hora, $fecha = null)
@@ -408,9 +435,22 @@ class AsistenciaController extends Controller
         return redirect()->route('asistencias.index')->with('success', 'Asistencias registradas exitosamente');
     }
 
-    public function estudiantesPorCurso($curCodigo)
+    public function estudiantesPorCurso($curCodigo, Request $request = null)
     {
         $gestion = date('Y');
+        $fecha = request()->query('fecha');
+        $presentes = [];
+        $horas = [];
+        if ($fecha) {
+            $rows = Asistencia::whereDate('asis_fecha', $fecha)
+                ->whereIn('estud_codigo', Estudiante::where('cur_codigo', $curCodigo)->pluck('est_codigo'))
+                ->get(['estud_codigo', 'asis_hora']);
+            foreach ($rows as $r) {
+                $presentes[] = $r->estud_codigo;
+                $horas[$r->estud_codigo] = substr($r->asis_hora, 0, 5);
+            }
+        }
+
         $lista = ListaCurso::where('cur_codigo', $curCodigo)
             ->where('lista_gestion', $gestion)
             ->pluck('lista_numero', 'est_codigo');
@@ -433,7 +473,11 @@ class AsistenciaController extends Controller
             })->values();
         }
 
-        return response()->json($estudiantes);
+        return response()->json([
+            'estudiantes' => $estudiantes,
+            'presentes'  => $presentes,
+            'horas'      => $horas,
+        ]);
     }
 
     private function diasHabilesRango($fechaInicio, $fechaFin, $year)

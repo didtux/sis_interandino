@@ -623,8 +623,18 @@ class NotaReporteController extends Controller
             default   => 'CUADRO DE HONOR — ' . (Curso::where('cur_codigo', $cursoCod)->value('cur_nombre') ?? '') . $trimestreLabel,
         };
 
-        $pdf = Pdf::loadView('notas.cuadro-honor-pdf', compact('rows','rankingCursos','cursoCod','titulo','config','gestion','tipo'))
-            ->setPaper('letter');
+        $cursoActual = $cursoCod ? Curso::where('cur_codigo', $cursoCod)->first() : null;
+        $trimestreNombre = '';
+        if ($periodoId) {
+            $per = DB::table('notas_config_periodos')->where('periodo_id', $periodoId)->first();
+            $trimestreNombre = $per->periodo_nombre ?? (($per->periodo_numero ?? '') . '° TRIMESTRE');
+        } else {
+            $trimestreNombre = 'ANUAL';
+        }
+
+        $pdf = Pdf::loadView('notas.cuadro-honor-pdf', compact(
+            'rows','rankingCursos','cursoCod','cursoActual','titulo','config','gestion','tipo','trimestreNombre'
+        ))->setPaper('letter');
         return $pdf->stream('cuadro-honor-'.$tipo.'-'.$gestion.'.pdf');
     }
 
