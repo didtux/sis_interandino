@@ -538,6 +538,38 @@ class ConfiguracionAsistenciaController extends Controller
         return $pdf->stream('reporte-permisos-' . date('Y-m-d') . '.pdf');
     }
 
+    public function verificarDuplicadoPermiso(Request $request)
+    {
+        $request->validate([
+            'estud_codigo' => 'required',
+            'fecha_inicio' => 'required|date',
+            'fecha_fin' => 'required|date|after_or_equal:fecha_inicio',
+        ]);
+
+        $q = Permiso::with('estudiante')->where('permiso_estado', 1)
+            ->where('estud_codigo', $request->estud_codigo)
+            ->where('permiso_fecha_inicio', '<=', $request->fecha_fin)
+            ->where('permiso_fecha_fin', '>=', $request->fecha_inicio);
+
+        if ($request->filled('permiso_id')) {
+            $q->where('permiso_id', '!=', $request->permiso_id);
+        }
+        if ($request->filled('config_id')) {
+            $q->where(function($qq) use ($request) {
+                $qq->where('config_id', $request->config_id)->orWhereNull('config_id');
+            });
+        }
+
+        $duplicados = $q->orderBy('permiso_fecha_inicio')
+            ->get(['permiso_codigo','permiso_tipo','permiso_fecha_inicio','permiso_fecha_fin','permiso_motivo','config_id']);
+
+        return response()->json([
+            'duplicado' => $duplicados->count() > 0,
+            'cantidad'  => $duplicados->count(),
+            'permisos'  => $duplicados,
+        ]);
+    }
+
     public function destroyPermiso($id)
     {
         Permiso::findOrFail($id)->update(['permiso_estado' => 0]);

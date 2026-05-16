@@ -225,6 +225,10 @@
                         </div>
                     </div>
                 </div>
+                <div id="alertaDuplicado" class="alert alert-warning mx-3 mb-0" style="display:none;">
+                    <i class="fas fa-exclamation-triangle"></i> <strong>Posible duplicado:</strong>
+                    <span id="alertaDuplicadoTexto"></span>
+                </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
                     <button type="submit" class="btn btn-primary">Guardar</button>
@@ -354,6 +358,37 @@ $('#searchPermiso').on('keyup', function() {
     });
 });
 
+function verificarDuplicadoPermiso() {
+    var est = $('#selectEstudiante').val();
+    var fi = $('#fecha_inicio').val();
+    var ff = $('#fecha_fin').val();
+    var cfg = $('#selectHorario').val();
+    var permId = $('#permiso_id').val();
+    if (!est || !fi || !ff) { $('#alertaDuplicado').hide(); return; }
+
+    $.get('{{ route("asistencia-config.permisos.verificar-duplicado") }}', {
+        estud_codigo: est, fecha_inicio: fi, fecha_fin: ff, config_id: cfg, permiso_id: permId
+    }).done(function(resp){
+        if (resp.duplicado) {
+            var html = 'Ya existen <strong>' + resp.cantidad + '</strong> permiso(s) activos para este estudiante en el rango/turno:<ul class="mb-0 mt-1">';
+            resp.permisos.slice(0, 5).forEach(function(p){
+                html += '<li><strong>' + p.permiso_codigo + '</strong> (' + p.permiso_tipo + ') ' +
+                        p.permiso_fecha_inicio + ' → ' + p.permiso_fecha_fin +
+                        ' — <em>' + (p.permiso_motivo || '') + '</em></li>';
+            });
+            if (resp.cantidad > 5) html += '<li>... y ' + (resp.cantidad - 5) + ' más</li>';
+            html += '</ul>Los días con permiso ya existente se omitirán automáticamente al guardar.';
+            $('#alertaDuplicadoTexto').html(html);
+            $('#alertaDuplicado').show();
+        } else {
+            $('#alertaDuplicado').hide();
+        }
+    });
+}
+
+$('#fecha_inicio, #fecha_fin, #selectHorario').on('change', verificarDuplicadoPermiso);
+$('#selectEstudiante').on('change', verificarDuplicadoPermiso);
+
 $('#modalPermiso').on('hidden.bs.modal', function() {
     $('#tituloModal').text('Nuevo Permiso');
     $('#formPermiso').attr('action', '{{ route('asistencia-config.permisos.store') }}');
@@ -367,6 +402,7 @@ $('#modalPermiso').on('hidden.bs.modal', function() {
     $('#horarioInfo').text('Dejar vacío para aplicar a todos los turnos');
     $('#divNumeroLicencia').hide();
     $('#checkOtroSolicitante').prop('checked', false).trigger('change');
+    $('#alertaDuplicado').hide();
 });
 
 function editarPermiso(id) {

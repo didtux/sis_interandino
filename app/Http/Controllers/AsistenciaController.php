@@ -16,6 +16,7 @@ use Carbon\Carbon;
 use App\Exports\AsistenciasTrimestralExport;
 use App\Exports\AsistenciasAnualExport;
 use Maatwebsite\Excel\Facades\Excel;
+use Illuminate\Support\Facades\DB;
 
 class AsistenciaController extends Controller
 {
@@ -47,8 +48,27 @@ class AsistenciaController extends Controller
                 ];
             });
 
+        // Si el filtro es "falta", mostrar solo las faltas en la tabla
+        if ($request->filled('estado') && $request->estado == 'falta') {
+            $faltasRows = $this->calcularFaltas($fechaInicio, $fechaFin, $request);
+
+            $page = $request->get('page', 1);
+            $perPage = 50;
+            $asistencias = new \Illuminate\Pagination\LengthAwarePaginator(
+                $faltasRows->forPage($page, $perPage),
+                $faltasRows->count(),
+                $perPage,
+                $page,
+                ['path' => $request->url(), 'query' => $request->query()]
+            );
+            $permisos = collect();
+            $atrasos = collect();
+            $mostrarPermisos = false;
+            $mostrarFaltas = true;
+            // continúa al bloque de cards
+        }
         // Si el filtro es "permiso", mostrar desde la tabla de permisos
-        if ($request->filled('estado') && $request->estado == 'permiso') {
+        elseif ($request->filled('estado') && $request->estado == 'permiso') {
             $query = Permiso::with('estudiante.curso')
                 ->where('permiso_estado', 1)
                 ->where('permiso_fecha_inicio', '<=', $fechaFin)
@@ -154,8 +174,14 @@ class AsistenciaController extends Controller
                         return $a->esAtraso === false;
                     });
                 }
+            } else {
+                // Sin filtro de estado: mezclar faltas con asistencias en la misma lista.
+                $faltasRows = $this->calcularFaltas($fechaInicio, $fechaFin, $request);
+                $todasAsistencias = $todasAsistencias->concat($faltasRows)
+                    ->sortBy([['asis_fecha','desc'],['asis_hora','desc']])
+                    ->values();
             }
-            
+
             // Paginar manualmente
             $page = $request->get('page', 1);
             $perPage = 50;
@@ -166,7 +192,7 @@ class AsistenciaController extends Controller
                 $page,
                 ['path' => $request->url(), 'query' => $request->query()]
             );
-            
+
             $atrasos = collect();
             $mostrarPermisos = false;
         }
@@ -174,26 +200,64 @@ class AsistenciaController extends Controller
         $estudiantes = Estudiante::visible()->orderBy('est_nombres')->get();
         $cursos = Curso::visible()->get();
 
-        $totalAsistencias = Asistencia::whereBetween('asis_fecha', [$fechaInicio, $fechaFin])->count();
-        
-        // Contar atrasos y puntuales dinámicamente
-        $todasAsistencias = Asistencia::with('estudiante.curso')
-            ->whereBetween('asis_fecha', [$fechaInicio, $fechaFin])
-            ->get();
-        $totalAtrasos = 0;
-        $totalPuntuales = 0;
-        foreach ($todasAsistencias as $a) {
-            if ($this->calcularSiEsAtraso($a, $permisos)) {
-                $totalAtrasos++;
-            } else {
-                $totalPuntuales++;
+        // === Cards: respetan filtros (curso, estudiante, turno, fechas) ===
+        $cardsQuery = Asistencia::with('estudiante.curso')
+            ->whereBetween('asis_fecha', [$fechaInicio, $fechaFin]);
+        if ($request->filled('est_codigo')) {
+            $cardsQuery->where('estud_codigo', $request->est_codigo);
+        }
+        if ($request->filled('cur_codigo')) {
+            $cardsQuery->whereHas('estudiante', function($q) use ($request) {
+                $q->where('cur_codigo', $request->cur_codigo);
+            });
+        }
+        if ($request->filled('turno')) {
+            $configCards = ConfiguracionAsistencia::activo()->where('config_id', $request->turno)->first();
+            if ($configCards) {
+                $he = substr($configCards->hora_entrada, 0, 5);
+                $hs = substr($configCards->hora_salida, 0, 5);
+                $cardsQuery->whereBetween('asis_hora', [$he.':00', $hs.':59']);
+                if (!$request->filled('cur_codigo')) {
+                    $cursosPivote = \DB::table('asistencia_configuracion_cursos')
+                        ->where('config_id', $configCards->config_id)->pluck('cur_codigo')->toArray();
+                    if (!empty($cursosPivote)) {
+                        $cardsQuery->whereHas('estudiante', function($q) use ($cursosPivote) {
+                            $q->whereIn('cur_codigo', $cursosPivote);
+                        });
+                    }
+                }
             }
         }
-        
-        $totalPermisos = Permiso::where('permiso_estado', 1)
+        $todasParaCards = $cardsQuery->get();
+        $totalAsistencias = $todasParaCards->count();
+        $totalAtrasos = 0; $totalPuntuales = 0;
+
+        // Permisos del rango para que el cálculo de atrasos los excluya correctamente
+        $permisosParaCards = Permiso::where('permiso_estado', 1)
             ->where('permiso_fecha_inicio', '<=', $fechaFin)
             ->where('permiso_fecha_fin', '>=', $fechaInicio)
-            ->count();
+            ->get();
+        foreach ($todasParaCards as $a) {
+            if ($this->calcularSiEsAtraso($a, $permisosParaCards)) $totalAtrasos++;
+            else $totalPuntuales++;
+        }
+
+        // Permisos: respeta curso/estudiante
+        $permQ = Permiso::where('permiso_estado', 1)
+            ->where('permiso_fecha_inicio', '<=', $fechaFin)
+            ->where('permiso_fecha_fin', '>=', $fechaInicio);
+        if ($request->filled('est_codigo')) $permQ->where('estud_codigo', $request->est_codigo);
+        if ($request->filled('cur_codigo')) {
+            $permQ->whereHas('estudiante', function($q) use ($request) {
+                $q->where('cur_codigo', $request->cur_codigo);
+            });
+        }
+        $totalPermisos = $permQ->count();
+
+        // Faltas: usar helper que ya respeta filtros
+        $totalFaltas = $this->calcularFaltas($fechaInicio, $fechaFin, $request)->count();
+
+        $mostrarFaltas = isset($mostrarFaltas) ? $mostrarFaltas : false;
 
         return view('asistencias.index', compact(
             'asistencias',
@@ -202,8 +266,10 @@ class AsistenciaController extends Controller
             'totalPuntuales',
             'totalAtrasos',
             'totalPermisos',
+            'totalFaltas',
             'permisos',
             'mostrarPermisos',
+            'mostrarFaltas',
             'cursos',
             'turnos'
         ));
@@ -508,6 +574,73 @@ class AsistenciaController extends Controller
         ]);
     }
 
+    private function calcularFaltas($fechaInicio, $fechaFin, Request $request)
+    {
+        // Estudiantes en alcance (por curso si se filtró)
+        $estQuery = Estudiante::visible();
+        if ($request->filled('cur_codigo')) {
+            $estQuery->where('cur_codigo', $request->cur_codigo);
+        }
+        if ($request->filled('est_codigo')) {
+            $estQuery->where('est_codigo', $request->est_codigo);
+        }
+        $estudiantes = $estQuery->with('curso')->get();
+
+        // Rango de fechas hábiles
+        $fechas = [];
+        $cur = \Carbon\Carbon::parse($fechaInicio);
+        $fin = \Carbon\Carbon::parse($fechaFin);
+        while ($cur <= $fin) {
+            if ($cur->isWeekday()) $fechas[] = $cur->format('Y-m-d');
+            $cur->addDay();
+        }
+        if (empty($fechas) || $estudiantes->isEmpty()) return collect();
+
+        $estCodigos = $estudiantes->pluck('est_codigo')->all();
+
+        // Presencias y permisos por (estudiante, fecha)
+        $presSet = DB::table('colegio_asistencia')
+            ->whereIn('estud_codigo', $estCodigos)
+            ->whereBetween('asis_fecha', [$fechaInicio, $fechaFin])
+            ->selectRaw("CONCAT(estud_codigo,'|',DATE_FORMAT(asis_fecha,'%Y-%m-%d')) AS k")
+            ->pluck('k')->flip();
+
+        $permRows = DB::table('asistencia_permisos')
+            ->whereIn('estud_codigo', $estCodigos)
+            ->where('permiso_estado', 1)
+            ->where('permiso_fecha_inicio', '<=', $fechaFin)
+            ->where('permiso_fecha_fin', '>=', $fechaInicio)
+            ->get(['estud_codigo','permiso_fecha_inicio','permiso_fecha_fin']);
+        $permSet = [];
+        foreach ($permRows as $p) {
+            $iniP = max($p->permiso_fecha_inicio, $fechaInicio);
+            $finP = min($p->permiso_fecha_fin, $fechaFin);
+            $c = \Carbon\Carbon::parse($iniP);
+            $e = \Carbon\Carbon::parse($finP);
+            while ($c <= $e) {
+                if ($c->isWeekday()) $permSet[$p->estud_codigo.'|'.$c->format('Y-m-d')] = true;
+                $c->addDay();
+            }
+        }
+
+        $faltas = collect();
+        foreach ($estudiantes as $est) {
+            foreach ($fechas as $f) {
+                $k = $est->est_codigo.'|'.$f;
+                if (isset($presSet[$k]) || isset($permSet[$k])) continue;
+                $faltas->push((object)[
+                    'estud_codigo' => $est->est_codigo,
+                    'estudiante'   => $est,
+                    'asis_fecha'   => \Carbon\Carbon::parse($f),
+                    'asis_hora'    => '-',
+                    'esFalta'      => true,
+                ]);
+            }
+        }
+
+        return $faltas->sortBy([['asis_fecha','desc'],['estud_codigo','asc']])->values();
+    }
+
     private function diasHabilesRango($fechaInicio, $fechaFin, $year)
     {
         $feriados = FechaFestiva::activo()->where('festivo_tipo', 1)
@@ -531,14 +664,16 @@ class AsistenciaController extends Controller
         $fechaFin = $periodo->periodo_fecha_fin->format('Y-m-d');
         $totalDiasHabiles = $this->diasHabilesRango($fechaInicio, $fechaFin, $year);
 
+        // Presencias (días con registro de asistencia, días hábiles)
         $asis = Asistencia::where('estud_codigo', $estCodigo)
             ->whereBetween('asis_fecha', [$fechaInicio, $fechaFin])
             ->whereRaw('DAYOFWEEK(asis_fecha) BETWEEN 2 AND 6')
             ->distinct('asis_fecha')->count('asis_fecha');
 
+        // Permisos que se traslapan con el periodo (cobertura), no solo los que inician aquí.
         $perm = Permiso::where('estud_codigo', $estCodigo)->where('permiso_estado', 1)
-            ->where('permiso_fecha_inicio', '>=', $fechaInicio)
             ->where('permiso_fecha_inicio', '<=', $fechaFin)
+            ->where('permiso_fecha_fin', '>=', $fechaInicio)
             ->count();
 
         $atr = Atraso::where('estud_codigo', $estCodigo)
@@ -546,9 +681,13 @@ class AsistenciaController extends Controller
             ->whereRaw('DAYOFWEEK(atraso_fecha) BETWEEN 2 AND 6')
             ->count();
 
+        // Faltas = días hábiles sin presencia y sin permiso (solo las faltas restan a días trabajados)
         $falt = max(0, $totalDiasHabiles - $asis - $perm);
 
-        return ['dt' => $asis, 'tl' => $perm, 'tf' => $falt, 'ta' => $atr, 'total' => $totalDiasHabiles];
+        // Días trabajados = días hábiles - faltas (atrasos y permisos NO restan)
+        $dt = max(0, $totalDiasHabiles - $falt);
+
+        return ['dt' => $dt, 'tl' => $perm, 'tf' => $falt, 'ta' => $atr, 'pres' => $asis, 'total' => $totalDiasHabiles];
     }
 
 

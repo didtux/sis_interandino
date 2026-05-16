@@ -180,6 +180,7 @@ Route::middleware(['auth', 'permiso', 'auditoria'])->group(function () {
         Route::delete('/permisos/{id}', [App\Http\Controllers\ConfiguracionAsistenciaController::class, 'destroyPermiso'])->name('permisos.destroy');
         Route::get('/permisos/{id}/imprimir', [App\Http\Controllers\ConfiguracionAsistenciaController::class, 'imprimirPermiso'])->name('permisos.imprimir');
         Route::get('/permisos/reporte-pdf', [App\Http\Controllers\ConfiguracionAsistenciaController::class, 'reportePermisosPdf'])->name('permisos.reporte-pdf');
+        Route::get('/permisos/verificar-duplicado', [App\Http\Controllers\ConfiguracionAsistenciaController::class, 'verificarDuplicadoPermiso'])->name('permisos.verificar-duplicado');
         
         // Fechas Festivas
         Route::get('/festivos', [App\Http\Controllers\ConfiguracionAsistenciaController::class, 'fechasFestivas'])->name('festivos');

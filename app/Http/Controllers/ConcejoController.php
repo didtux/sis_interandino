@@ -252,50 +252,45 @@ class ConcejoController extends Controller
     {
         $gestion    = (int) $request->input('gestion', date('Y'));
         $estudiante = Estudiante::with('curso')->where('est_codigo', $estCodigo)->firstOrFail();
+        // Ordenar por número de periodo (1, 2, 3) — cada fecha se asigna al PRIMER trimestre cuyo rango la contenga.
         $periodos   = NotaPeriodo::activo()->gestion($gestion)
-            ->orderBy('periodo_fecha_inicio')->orderBy('periodo_numero')->get();
-
-        // Calcular rangos disjuntos: cada trimestre arranca después del fin del anterior
-        // (resuelve solapamientos en la configuración de periodos para no duplicar registros).
-        $rangos = [];
-        $lastEnd = null;
-        foreach ($periodos as $p) {
-            $ini = \Carbon\Carbon::parse($p->periodo_fecha_inicio);
-            if ($lastEnd && $ini->lessThanOrEqualTo($lastEnd)) {
-                $ini = $lastEnd->copy()->addDay();
-            }
-            $fin = \Carbon\Carbon::parse($p->periodo_fecha_fin);
-            if ($fin->lessThan($ini)) continue;
-            $rangos[] = ['periodo'=>$p, 'inicio'=>$ini->format('Y-m-d'), 'fin'=>$fin->format('Y-m-d')];
-            $lastEnd = $fin;
-        }
+            ->orderBy('periodo_numero')->get();
 
         $detallePeriodos = [];
         $totales = ['dias_trabajados'=>0,'presencias'=>0,'faltas'=>0,'permisos_dias'=>0,'permisos_solicitudes'=>0,'atrasos'=>0];
 
-        // Sets globales para evitar contar dos veces si por configuración hubiera traslape residual
+        // Sets globales para evitar contar dos veces cuando los trimestres se traslapan en configuración.
         $vistosFaltas   = [];
         $vistosAtrasos  = [];
         $vistosPermiso  = [];
         $vistosDiasPerm = [];
+        $vistosPres     = [];
 
-        foreach ($rangos as $rg) {
-            $periodo = $rg['periodo'];
-            $inicio  = $rg['inicio'];
-            $fin     = $rg['fin'];
+        foreach ($periodos as $periodo) {
+            $inicio = \Carbon\Carbon::parse($periodo->periodo_fecha_inicio)->format('Y-m-d');
+            $fin    = \Carbon\Carbon::parse($periodo->periodo_fecha_fin)->format('Y-m-d');
 
+            // Días hábiles donde el curso tuvo registro de asistencia (cualquier estudiante)
             $diasTrabFechas = DB::table('colegio_asistencia')
                 ->whereBetween('asis_fecha', [$inicio, $fin])
                 ->whereRaw('DAYOFWEEK(asis_fecha) BETWEEN 2 AND 6')
                 ->select('asis_fecha')->distinct()->orderBy('asis_fecha')
                 ->pluck('asis_fecha');
 
+            // Presencias del estudiante en este periodo (dedup global)
             $presFechas = DB::table('colegio_asistencia')
                 ->where('estud_codigo', $estCodigo)
                 ->whereBetween('asis_fecha', [$inicio, $fin])
                 ->select('asis_fecha')->distinct()->orderBy('asis_fecha')
-                ->pluck('asis_fecha');
+                ->pluck('asis_fecha')
+                ->reject(function($f) use (&$vistosPres) {
+                    $f = (string) $f;
+                    if (isset($vistosPres[$f])) return true;
+                    $vistosPres[$f] = true;
+                    return false;
+                })->values();
 
+            // Atrasos del estudiante en este periodo (dedup global)
             $atrasosFechas = DB::table('asistencia_atrasos')
                 ->where('estud_codigo', $estCodigo)
                 ->whereBetween('atraso_fecha', [$inicio, $fin])
@@ -322,10 +317,9 @@ class ConcejoController extends Controller
                     return false;
                 })->values();
 
-            // Días con permiso dentro de este periodo (días hábiles trabajados cubiertos)
+            // Días con permiso dentro de este periodo
             $diasTrabSet = collect($diasTrabFechas)->map(fn($f)=>(string)$f)->flip();
             $diasConPermiso = collect();
-            // Para cubrir días, considerar también permisos que se traslapan aunque empezaran antes
             $permisosCobertura = DB::table('asistencia_permisos')
                 ->where('estud_codigo', $estCodigo)
                 ->where('permiso_estado', 1)
@@ -333,10 +327,10 @@ class ConcejoController extends Controller
                 ->where('permiso_fecha_fin', '>=', $inicio)
                 ->select('permiso_fecha_inicio','permiso_fecha_fin')->get();
             foreach ($permisosCobertura as $p) {
-                $ini = max($p->permiso_fecha_inicio, $inicio);
-                $fn  = min($p->permiso_fecha_fin, $fin);
-                $cur = \Carbon\Carbon::parse($ini);
-                $end = \Carbon\Carbon::parse($fn);
+                $iniP = max($p->permiso_fecha_inicio, $inicio);
+                $finP = min($p->permiso_fecha_fin, $fin);
+                $cur  = \Carbon\Carbon::parse($iniP);
+                $end  = \Carbon\Carbon::parse($finP);
                 while ($cur <= $end) {
                     $f = $cur->format('Y-m-d');
                     if ($diasTrabSet->has($f) && !isset($vistosDiasPerm[$f])) {
@@ -348,14 +342,12 @@ class ConcejoController extends Controller
             }
             $diasConPermiso = $diasConPermiso->unique()->values();
 
-            // Faltas = días trabajados que NO son presencias y NO tienen permiso (y no contados antes)
-            $presSet    = collect($presFechas)->map(fn($f)=>(string)$f)->flip();
-            $permisoSet = collect($vistosDiasPerm)->keys()->flip();
-            $faltasFechas = collect($diasTrabFechas)->filter(function($f) use ($presSet, $permisoSet, &$vistosFaltas){
+            // Faltas = día hábil del curso donde el estudiante NO tiene presencia y NO tiene permiso (con dedup global)
+            $presFechasGlobal = $vistosPres;
+            $faltasFechas = collect($diasTrabFechas)->filter(function($f) use ($presFechasGlobal, &$vistosFaltas, &$vistosDiasPerm){
                 $f = (string) $f;
                 if (isset($vistosFaltas[$f])) return false;
-                if ($presSet->has($f) || $permisoSet->has($f)) return false;
-                // Defensa adicional: nunca contar fines de semana
+                if (isset($presFechasGlobal[$f]) || isset($vistosDiasPerm[$f])) return false;
                 $dow = (int) date('w', strtotime($f)); // 0=Dom, 6=Sáb
                 if ($dow === 0 || $dow === 6) return false;
                 $vistosFaltas[$f] = true;

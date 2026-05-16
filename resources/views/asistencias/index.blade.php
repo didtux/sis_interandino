@@ -69,6 +69,7 @@
                                     <option value="puntual" {{ request('estado') == 'puntual' ? 'selected' : '' }}>Puntual</option>
                                     <option value="atraso" {{ request('estado') == 'atraso' ? 'selected' : '' }}>Atraso</option>
                                     <option value="permiso" {{ request('estado') == 'permiso' ? 'selected' : '' }}>Permiso</option>
+                                    <option value="falta" {{ request('estado') == 'falta' ? 'selected' : '' }}>Falta</option>
                                 </select>
                             </div>
                             <div class="col-md-2">
@@ -115,37 +116,45 @@
                         </div>
                     </div>
 
-                    <!-- Estadísticas Rápidas -->
+                    <!-- Estadísticas Rápidas (reflejan los filtros aplicados) -->
                     <div class="row mb-3">
-                        <div class="col-md-3">
+                        <div class="col-md-2-4 col-md col-6 mb-2">
                             <div class="card bg-success text-white">
-                                <div class="card-body text-center">
-                                    <h3>{{ $totalAsistencias }}</h3>
-                                    <p class="mb-0">Total Asistencias</p>
+                                <div class="card-body text-center p-2">
+                                    <h3 class="mb-0">{{ $totalAsistencias }}</h3>
+                                    <p class="mb-0 small">Total Asistencias</p>
                                 </div>
                             </div>
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-md-2-4 col-md col-6 mb-2">
                             <div class="card bg-primary text-white">
-                                <div class="card-body text-center">
-                                    <h3>{{ $totalPuntuales }}</h3>
-                                    <p class="mb-0">Puntuales</p>
+                                <div class="card-body text-center p-2">
+                                    <h3 class="mb-0">{{ $totalPuntuales }}</h3>
+                                    <p class="mb-0 small">Puntuales</p>
                                 </div>
                             </div>
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-md-2-4 col-md col-6 mb-2">
                             <div class="card bg-warning text-white">
-                                <div class="card-body text-center">
-                                    <h3>{{ $totalAtrasos }}</h3>
-                                    <p class="mb-0">Atrasos</p>
+                                <div class="card-body text-center p-2">
+                                    <h3 class="mb-0">{{ $totalAtrasos }}</h3>
+                                    <p class="mb-0 small">Atrasos</p>
                                 </div>
                             </div>
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-md-2-4 col-md col-6 mb-2">
+                            <div class="card bg-danger text-white">
+                                <div class="card-body text-center p-2">
+                                    <h3 class="mb-0">{{ $totalFaltas ?? 0 }}</h3>
+                                    <p class="mb-0 small">Faltas</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-2-4 col-md col-6 mb-2">
                             <div class="card bg-info text-white">
-                                <div class="card-body text-center">
-                                    <h3>{{ $totalPermisos }}</h3>
-                                    <p class="mb-0">Permisos Activos</p>
+                                <div class="card-body text-center p-2">
+                                    <h3 class="mb-0">{{ $totalPermisos }}</h3>
+                                    <p class="mb-0 small">Permisos Activos</p>
                                 </div>
                             </div>
                         </div>
@@ -238,14 +247,18 @@
                                 @endforelse
                             @else
                                 @forelse($asistencias as $a)
-                                    <tr>
+                                    <tr @if(!empty($a->esFalta)) style="background:#fef2f2;" @endif>
                                         <td>{{ $a->estud_codigo }}</td>
                                         <td>{{ $a->estudiante->est_nombres ?? 'N/A' }} {{ $a->estudiante->est_apellidos ?? '' }}</td>
                                         <td>{{ $a->estudiante->curso->cur_nombre ?? 'N/A' }}</td>
                                         <td>{{ $a->asis_fecha->format('d/m/Y') }}</td>
                                         <td>{{ $a->asis_hora }}</td>
                                         <td>
-                                            @if(isset($a->esAtraso) && $a->esAtraso)
+                                            @if(!empty($a->esFalta))
+                                                <span class="badge badge-danger">
+                                                    <i class="fas fa-times-circle"></i> Falta
+                                                </span>
+                                            @elseif(isset($a->esAtraso) && $a->esAtraso)
                                                 <span class="badge badge-warning">
                                                     <i class="fas fa-clock"></i> Atraso
                                                 </span>
