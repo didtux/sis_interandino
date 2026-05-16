@@ -70,15 +70,20 @@ class AsistenciaController extends Controller
             $mostrarPermisos = true;
         } else {
             // Lógica normal para asistencias, atrasos y puntuales
-            $permisosQuery = Permiso::where('permiso_estado', 1)
+            $permisosQuery = Permiso::with('estudiante.curso')->where('permiso_estado', 1)
                 ->where('permiso_fecha_inicio', '<=', $fechaFin)
                 ->where('permiso_fecha_fin', '>=', $fechaInicio);
 
             if ($request->filled('est_codigo')) {
                 $permisosQuery->where('estud_codigo', $request->est_codigo);
             }
+            if ($request->filled('cur_codigo')) {
+                $permisosQuery->whereHas('estudiante', function($q) use ($request) {
+                    $q->where('cur_codigo', $request->cur_codigo);
+                });
+            }
 
-            $permisos = $permisosQuery->get();
+            $permisos = $permisosQuery->orderBy('permiso_fecha_inicio', 'desc')->get();
 
             $query = Asistencia::with('estudiante.curso')
                 ->whereBetween('asis_fecha', [$fechaInicio, $fechaFin]);
@@ -130,6 +135,12 @@ class AsistenciaController extends Controller
             // Calcular estado de cada asistencia
             foreach ($todasAsistencias as $asistencia) {
                 $asistencia->esAtraso = $this->calcularSiEsAtraso($asistencia, $permisos);
+                $permisoEst = $permisos->first(function($p) use ($asistencia) {
+                    return $p->estud_codigo === $asistencia->estud_codigo
+                        && $p->permiso_fecha_inicio <= $asistencia->asis_fecha->format('Y-m-d')
+                        && $p->permiso_fecha_fin >= $asistencia->asis_fecha->format('Y-m-d');
+                });
+                $asistencia->permisoInfo = $permisoEst;
             }
             
             // Filtrar por estado si se solicita
@@ -441,13 +452,29 @@ class AsistenciaController extends Controller
         $fecha = request()->query('fecha');
         $presentes = [];
         $horas = [];
+        $permisos = []; // est_codigo => ['tipo'=>..., 'motivo'=>..., 'codigo'=>...]
         if ($fecha) {
+            $estudiantesCurso = Estudiante::where('cur_codigo', $curCodigo)->pluck('est_codigo');
+
             $rows = Asistencia::whereDate('asis_fecha', $fecha)
-                ->whereIn('estud_codigo', Estudiante::where('cur_codigo', $curCodigo)->pluck('est_codigo'))
+                ->whereIn('estud_codigo', $estudiantesCurso)
                 ->get(['estud_codigo', 'asis_hora']);
             foreach ($rows as $r) {
                 $presentes[] = $r->estud_codigo;
                 $horas[$r->estud_codigo] = substr($r->asis_hora, 0, 5);
+            }
+
+            $permisosRows = Permiso::where('permiso_estado', 1)
+                ->whereDate('permiso_fecha_inicio', '<=', $fecha)
+                ->whereDate('permiso_fecha_fin', '>=', $fecha)
+                ->whereIn('estud_codigo', $estudiantesCurso)
+                ->get(['estud_codigo', 'permiso_tipo', 'permiso_motivo', 'permiso_codigo']);
+            foreach ($permisosRows as $p) {
+                $permisos[$p->estud_codigo] = [
+                    'tipo'   => $p->permiso_tipo,
+                    'motivo' => $p->permiso_motivo,
+                    'codigo' => $p->permiso_codigo,
+                ];
             }
         }
 
@@ -477,6 +504,7 @@ class AsistenciaController extends Controller
             'estudiantes' => $estudiantes,
             'presentes'  => $presentes,
             'horas'      => $horas,
+            'permisos'   => $permisos,
         ]);
     }
 
@@ -852,25 +880,40 @@ class AsistenciaController extends Controller
                         ->whereIn('estud_codigo', $estudiantes->pluck('est_codigo'))
                         ->get();
                     
-                    $estudiantesConPermiso = $permisosActivos->filter(function($p) use ($config) {
+                    $permisosFiltrados = $permisosActivos->filter(function($p) use ($config) {
                         return !$p->config_id || $p->config_id == $config->config_id;
-                    })->pluck('estud_codigo')->unique()->toArray();
-                    
+                    });
+                    $estudiantesConPermiso = $permisosFiltrados->pluck('estud_codigo')->unique()->toArray();
+
+                    // Construir lista de licencias (estudiante + datos del permiso)
+                    $permisoPorEst = $permisosFiltrados->keyBy('estud_codigo');
+                    $licenciasCurso = $estudiantes->filter(fn($e) => isset($permisoPorEst[$e->est_codigo]))
+                        ->map(function($e) use ($permisoPorEst) {
+                            $p = $permisoPorEst[$e->est_codigo];
+                            return (object)[
+                                'estudiante' => $e,
+                                'tipo' => $p->permiso_tipo,
+                                'motivo' => $p->permiso_motivo,
+                                'codigo' => $p->permiso_codigo,
+                            ];
+                        })->values();
+
                     $estudiantesSinAsistencia = $estudiantes->filter(function($est) use ($asistencias, $estudiantesConPermiso) {
                         return !in_array($est->est_codigo, $asistencias) && !in_array($est->est_codigo, $estudiantesConPermiso);
                     });
-                    
-                    if ($estudiantesSinAsistencia->count() > 0) {
+
+                    if ($estudiantesSinAsistencia->count() > 0 || $licenciasCurso->count() > 0) {
                         $datosPorCurso[] = [
                             'curso' => $curso,
                             'estudiantes' => $estudiantesSinAsistencia,
+                            'licencias' => $licenciasCurso,
                             'horario' => $config->config_turno . ' (' . substr($config->hora_entrada, 0, 5) . '-' . substr($config->hora_salida, 0, 5) . ')',
                             'lista' => $listaC,
                         ];
                     }
                 }
             }
-            
+
             $turno = 'TODOS LOS HORARIOS';
             $config = null;
             
@@ -947,18 +990,32 @@ class AsistenciaController extends Controller
                     ->whereIn('estud_codigo', $estudiantes->pluck('est_codigo'))
                     ->get();
                 
-                $estudiantesConPermiso = $permisosActivos->filter(function($p) use ($config) {
+                $permisosFiltrados = $permisosActivos->filter(function($p) use ($config) {
                     return !$p->config_id || $p->config_id == $config->config_id;
-                })->pluck('estud_codigo')->unique()->toArray();
-                
+                });
+                $estudiantesConPermiso = $permisosFiltrados->pluck('estud_codigo')->unique()->toArray();
+
+                $permisoPorEst = $permisosFiltrados->keyBy('estud_codigo');
+                $licenciasCurso = $estudiantes->filter(fn($e) => isset($permisoPorEst[$e->est_codigo]))
+                    ->map(function($e) use ($permisoPorEst) {
+                        $p = $permisoPorEst[$e->est_codigo];
+                        return (object)[
+                            'estudiante' => $e,
+                            'tipo' => $p->permiso_tipo,
+                            'motivo' => $p->permiso_motivo,
+                            'codigo' => $p->permiso_codigo,
+                        ];
+                    })->values();
+
                 $estudiantesSinAsistencia = $estudiantes->filter(function($est) use ($asistencias, $estudiantesConPermiso) {
                     return !in_array($est->est_codigo, $asistencias) && !in_array($est->est_codigo, $estudiantesConPermiso);
                 });
-                
-                if ($estudiantesSinAsistencia->count() > 0) {
+
+                if ($estudiantesSinAsistencia->count() > 0 || $licenciasCurso->count() > 0) {
                     $datosPorCurso[] = [
                         'curso' => $curso,
                         'estudiantes' => $estudiantesSinAsistencia,
+                        'licencias' => $licenciasCurso,
                         'lista' => $listaC,
                     ];
                 }

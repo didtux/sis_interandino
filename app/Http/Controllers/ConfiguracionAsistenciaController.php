@@ -412,18 +412,38 @@ class ConfiguracionAsistenciaController extends Controller
         $fechaFin = Carbon::parse($request->permiso_fecha_fin);
         $diasDiferencia = $fechaInicio->diffInDays($fechaFin) + 1;
 
+        $creados = 0; $omitidos = 0; $offset = 0;
         for ($i = 0; $i < $diasDiferencia; $i++) {
             $fechaActual = $fechaInicio->copy()->addDays($i);
-            $codigoPermiso = 'PER' . str_pad($nuevoNumero + $i, 4, '0', STR_PAD_LEFT);
+            $fechaStr = $fechaActual->format('Y-m-d');
+
+            // Evitar duplicados: ya existe permiso activo para ese estudiante/fecha (mismo turno o todos)
+            $yaExiste = Permiso::where('permiso_estado', 1)
+                ->where('estud_codigo', $request->estud_codigo)
+                ->whereDate('permiso_fecha_inicio', '<=', $fechaStr)
+                ->whereDate('permiso_fecha_fin', '>=', $fechaStr)
+                ->where(function($q) use ($request) {
+                    if ($request->config_id) {
+                        $q->where('config_id', $request->config_id)->orWhereNull('config_id');
+                    }
+                })
+                ->exists();
+
+            if ($yaExiste) {
+                $omitidos++;
+                continue;
+            }
+
+            $codigoPermiso = 'PER' . str_pad($nuevoNumero + $offset, 4, '0', STR_PAD_LEFT);
 
             $data = [
                 'permiso_codigo' => $codigoPermiso,
                 'permiso_tipo' => $request->permiso_tipo,
-                'permiso_numero' => $nuevoNumero + $i,
+                'permiso_numero' => $nuevoNumero + $offset,
                 'estud_codigo' => $request->estud_codigo,
                 'config_id' => $request->config_id,
-                'permiso_fecha_inicio' => $fechaActual->format('Y-m-d'),
-                'permiso_fecha_fin' => $fechaActual->format('Y-m-d'),
+                'permiso_fecha_inicio' => $fechaStr,
+                'permiso_fecha_fin' => $fechaStr,
                 'permiso_origen' => $request->permiso_origen,
                 'permiso_motivo' => $request->permiso_motivo,
                 'permiso_observacion' => $request->permiso_observacion,
@@ -433,7 +453,7 @@ class ConfiguracionAsistenciaController extends Controller
                 'permiso_aprobado_por' => auth()->user()->us_codigo
             ];
 
-            if ($request->hasFile('permiso_archivo') && $i == 0) {
+            if ($request->hasFile('permiso_archivo') && $creados === 0) {
                 $file = $request->file('permiso_archivo');
                 $filename = 'permiso_' . time() . '.' . $file->getClientOriginalExtension();
                 $file->move(public_path('uploads/permisos'), $filename);
@@ -441,9 +461,12 @@ class ConfiguracionAsistenciaController extends Controller
             }
 
             Permiso::create($data);
+            $creados++; $offset++;
         }
 
-        return redirect()->back()->with('success', "Se registraron {$diasDiferencia} permiso(s) exitosamente");
+        $msg = "Se registraron {$creados} permiso(s)";
+        if ($omitidos > 0) $msg .= " ({$omitidos} omitidos por duplicado)";
+        return redirect()->back()->with('success', $msg);
     }
 
     public function updatePermiso(Request $request, $id)

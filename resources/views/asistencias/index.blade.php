@@ -151,6 +151,51 @@
                         </div>
                     </div>
 
+                    @if(!(isset($mostrarPermisos) && $mostrarPermisos) && isset($permisos) && $permisos->count() > 0)
+                        <div class="card border-info mb-3">
+                            <div class="card-header bg-info text-white py-2 d-flex justify-content-between align-items-center">
+                                <span><i class="fas fa-id-badge mr-1"></i> Permisos / Licencias activas en el rango <strong>({{ $permisos->count() }})</strong></span>
+                                <button type="button" class="btn btn-sm btn-light" data-toggle="collapse" data-target="#panelPermisos">
+                                    <i class="fas fa-chevron-down"></i> Mostrar / Ocultar
+                                </button>
+                            </div>
+                            <div class="collapse show" id="panelPermisos">
+                                <div class="card-body p-2">
+                                    <table class="table table-sm table-striped mb-0" style="font-size:13px;">
+                                        <thead>
+                                            <tr>
+                                                <th>Código</th>
+                                                <th>Tipo</th>
+                                                <th>Estudiante</th>
+                                                <th>Curso</th>
+                                                <th>Desde</th>
+                                                <th>Hasta</th>
+                                                <th>Motivo</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach($permisos as $p)
+                                                <tr>
+                                                    <td>{{ $p->permiso_codigo }}</td>
+                                                    <td>
+                                                        <span class="badge badge-{{ $p->permiso_tipo == 'LICENCIA' ? 'info' : 'secondary' }}">
+                                                            {{ $p->permiso_tipo }}
+                                                        </span>
+                                                    </td>
+                                                    <td>{{ $p->estudiante->est_apellidos ?? '' }} {{ $p->estudiante->est_nombres ?? '' }}</td>
+                                                    <td>{{ $p->estudiante->curso->cur_nombre ?? '-' }}</td>
+                                                    <td>{{ $p->permiso_fecha_inicio ? \Carbon\Carbon::parse($p->permiso_fecha_inicio)->format('d/m/Y') : '-' }}</td>
+                                                    <td>{{ $p->permiso_fecha_fin ? \Carbon\Carbon::parse($p->permiso_fecha_fin)->format('d/m/Y') : '-' }}</td>
+                                                    <td>{{ $p->permiso_motivo }}</td>
+                                                </tr>
+                                            @endforeach
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    @endif
+
                     <table class="table table-striped" id="tablaAsistencias">
                         <thead>
                             <tr>
@@ -207,6 +252,11 @@
                                             @else
                                                 <span class="badge badge-success">
                                                     <i class="fas fa-check"></i> Puntual
+                                                </span>
+                                            @endif
+                                            @if(isset($a->permisoInfo) && $a->permisoInfo)
+                                                <span class="badge badge-info" title="{{ $a->permisoInfo->permiso_motivo ?? '' }}">
+                                                    <i class="fas fa-id-badge"></i> {{ $a->permisoInfo->permiso_tipo ?? 'PERMISO' }}
                                                 </span>
                                             @endif
                                         </td>

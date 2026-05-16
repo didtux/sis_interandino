@@ -132,12 +132,13 @@
             <tr>
                 <th style="width: 3%;">#</th>
                 <th style="width: 7%;">FECHA</th>
-                <th style="width: 14%;">ESTUDIANTE</th>
-                <th style="width: 8%;">CURSO</th>
-                <th style="width: 24%;">KARDEX</th>
-                <th style="width: 18%;">SOLUCIÓN</th>
-                <th style="width: 12%;">ACUERDO</th>
-                <th style="width: 7%;">TIPO</th>
+                <th style="width: 12%;">ESTUDIANTE</th>
+                <th style="width: 7%;">CURSO</th>
+                <th style="width: 18%;">CASO</th>
+                <th style="width: 14%;">SOLUCIÓN</th>
+                <th style="width: 15%;">KARDEX</th>
+                <th style="width: 12%;">OBSERVACIONES</th>
+                <th style="width: 5%;">TIPO</th>
                 <th style="width: 7%;">CONTACTO</th>
             </tr>
         </thead>
@@ -151,12 +152,13 @@
                     <td class="txt">{{ $caso->psico_caso }}</td>
                     <td class="txt">{{ $caso->psico_solucion }}</td>
                     <td class="txt">{{ $caso->psico_acuerdo }}</td>
+                    <td class="txt">{{ $caso->psico_observaciones }}</td>
                     <td>{{ $caso->psico_tipo_acuerdo }}</td>
                     <td class="txt">{{ $caso->estudiante->padres->first()->pfam_nombres ?? '-' }}</td>
                 </tr>
             @empty
                 <tr>
-                    <td colspan="9">No hay casos registrados</td>
+                    <td colspan="10">No hay casos registrados</td>
                 </tr>
             @endforelse
         </tbody>
