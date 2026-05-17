@@ -243,6 +243,19 @@ class InscripcionController extends Controller
             return back()->withErrors(['error' => 'Ya existe una inscripción activa para este estudiante en la gestión ' . $request->insc_gestion . '.'])->withInput();
         }
 
+        // ── Lista negra de observados (bloqueo) ──
+        $obs = \App\Models\EstudianteObservado::vigentePara($request->est_codigo, (int) $request->insc_gestion);
+        if ($obs) {
+            // Override solo para director (rol_id 1 o 4) si envía "override=1"
+            $user = auth()->user();
+            $puedeOverride = in_array($user->rol_id, [1, 4]);
+            if (!$puedeOverride || !$request->boolean('override_observado')) {
+                return back()->withErrors([
+                    'error' => 'ESTUDIANTE BLOQUEADO. Motivo ('.$obs->obs_motivo_tipo.'): '.$obs->obs_motivo.'. Solo la dirección puede levantar el bloqueo.'
+                ])->withInput();
+            }
+        }
+
         // Si se ingresó un nuevo padre, crearlo
         if ($request->filled('pfam_nombre_nuevo')) {
             $padre = PadreFamilia::create([

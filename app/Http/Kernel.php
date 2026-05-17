@@ -65,5 +65,6 @@ class Kernel extends HttpKernel
         'verified' => \Illuminate\Auth\Middleware\EnsureEmailIsVerified::class,
         'permiso' => \App\Http\Middleware\CheckPermiso::class,
         'auditoria' => \App\Http\Middleware\RegistrarAuditoria::class,
+        'reportes' => \App\Http\Middleware\ExtendExecutionTime::class,
     ];
 }

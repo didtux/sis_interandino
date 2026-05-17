@@ -5,14 +5,21 @@
     <title>Boletín - {{ $estudiante->est_apellidos }} {{ $estudiante->est_nombres }}</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: Arial, sans-serif; font-size: 8px; padding: 8mm 10mm; }
-        .header { display: table; width: 100%; margin-bottom: 5px; }
-        .logo { display: table-cell; width: 60px; vertical-align: middle; }
-        .logo img { width: 50px; height: auto; }
-        .header-info { display: table-cell; vertical-align: middle; text-align: center; }
-        .header-info h3 { font-size: 10px; margin: 0; line-height: 1.2; }
-        .header-info p { font-size: 6.5px; margin: 1px 0; }
-        .fecha-box { position: absolute; top: 8mm; right: 10mm; background: #c0392b; color: #fff; padding: 4px 10px; border-radius: 10px; font-weight: bold; font-size: 7px; text-align: center; }
+        body { font-family: Arial, sans-serif; font-size: 8px; padding: 8mm 10mm; color:#000; }
+        /* Cabecera oficial (B/N con logo color) */
+        .header-table { width:100%; border-collapse:collapse; margin-bottom:6px; }
+        .header-table td { vertical-align:middle; padding:0; }
+        .h-logo-cell { width:80px; text-align:center; }
+        .h-logo-cell img { width:64px; height:auto; }
+        .h-info-cell { text-align:center; }
+        .h-info-cell .ue-nombre { font-weight:700; font-size:14px; letter-spacing:0.5px; }
+        .h-info-cell .ue-dir    { font-size:8px; color:#333; line-height:1.3; }
+        .h-info-cell .titulo-banda { display:inline-block; margin-top:4px; padding:4px 14px; border:1.5px solid #000; font-weight:700; font-size:12px; letter-spacing:1px; }
+        .h-qr-cell { width:90px; text-align:center; }
+        .h-qr-cell img { width:75px; height:75px; }
+        .h-qr-cell .qr-label { font-size:6px; color:#555; text-transform:uppercase; letter-spacing:0.5px; margin-top:2px; }
+        .h-qr-cell .copia-tag { display:inline-block; margin-top:2px; padding:1px 6px; border:1px solid #000; font-size:7px; font-weight:700; }
+        .fecha-box { position: absolute; top: 8mm; right: 10mm; border:1.5px solid #000; padding: 3px 9px; font-weight: bold; font-size: 7px; text-align: center; background:#fff; color:#000; }
 
         /* Info estudiante */
         .info-table { width: 100%; border: 2px solid #000; border-collapse: collapse; margin-bottom: 6px; }
@@ -51,20 +58,37 @@
 <body>
     <div class="fecha-box">Fecha<br>{{ now()->format('d/m/Y') }}</div>
 
-    <div class="header">
-        <div class="logo">
-            @php $sc = $config ?? \App\Models\SistemaConfiguracion::actual(); @endphp
-            @if($sc && $sc->config_logo && file_exists(public_path('storage/'.$sc->config_logo)))
-                <img src="{{ public_path('storage/'.$sc->config_logo) }}" alt="Logo">
-            @elseif(file_exists(public_path('img/logo.png')))
-                <img src="{{ public_path('img/logo.png') }}" alt="Logo">
-            @endif
-        </div>
-        <div class="header-info">
-            <h3>Unidad Educativa<br>INTERANDINO BOLIVIANO</h3>
-            <p>Dir. Calle Victor Gutierrez Nro 3339 | Teléfonos: 2840320</p>
-        </div>
-    </div>
+    <table class="header-table">
+        <tr>
+            <td class="h-logo-cell">
+                @php $sc = $config ?? \App\Models\SistemaConfiguracion::actual(); @endphp
+                @if($sc && $sc->config_logo && file_exists(public_path('storage/'.$sc->config_logo)))
+                    <img src="{{ public_path('storage/'.$sc->config_logo) }}" alt="Logo">
+                @elseif(file_exists(public_path('img/logo.png')))
+                    <img src="{{ public_path('img/logo.png') }}" alt="Logo">
+                @endif
+            </td>
+            <td class="h-info-cell">
+                <div class="ue-nombre">UNIDAD EDUCATIVA PRIVADA INTERANDINO BOLIVIANO</div>
+                <div class="ue-dir">
+                    Calle V. Gutiérrez N° 3339 e/c Álvarez Plata y Catacora — Zona 16 de Julio · El Alto, La Paz, Bolivia<br>
+                    Telf.: 2840320 · Fax: 2846479 · Resolución Administrativa RA 311/2006
+                </div>
+                <div class="titulo-banda">BOLETÍN DE CALIFICACIONES</div>
+            </td>
+            <td class="h-qr-cell">
+                @if(!empty($qrData))
+                    <img src="{{ $qrData }}" alt="QR validación">
+                @endif
+                <div class="qr-label">Validar autenticidad</div>
+                @if(!empty($numeroCopia))
+                    <div class="copia-tag">
+                        Copia N° {{ $numeroCopia }}@if(!empty($cobrable)) · Reimp.@endif
+                    </div>
+                @endif
+            </td>
+        </tr>
+    </table>
 
     {{-- Info estudiante --}}
     <table class="info-table">
@@ -282,6 +306,11 @@
 
     <div class="footer">
         Impreso: {{ now()->format('d/m/Y H:i:s') }} | Gestión {{ $gestion }} | Boletín Individual
+        @if(!empty($token))
+            | Cód. verificación: <strong>{{ strtoupper(substr($token, 0, 12)) }}</strong>
+            @if(!empty($qrUrl))| Valida en: {{ $qrUrl }}@endif
+            @if(!empty($numeroCopia))| Copia N° {{ $numeroCopia }}@endif
+        @endif
     </div>
 </body>
 </html>

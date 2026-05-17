@@ -80,6 +80,11 @@
         <i class="fas fa-brain"></i><span>Psicopedagogía</span>
     </a>
 </li>
+<li class="side-menus {{ Request::is('mi-portal/kardex*') ? 'active' : '' }}">
+    <a class="nav-link" href="{{ route('padre-portal.kardex') }}">
+        <i class="fas fa-folder-open"></i><span>Kardex / Anotaciones</span>
+    </a>
+</li>
 @else
 {{-- ── MENÚ NORMAL ── --}}
 
@@ -118,11 +123,19 @@
 </li>
 @endif
 
-@if($esAdmin || $user->tieneAccesoModulo('estudiantes'))
-<li class="side-menus {{ Request::is('estudiantes*') ? 'active' : '' }}">
-    <a class="nav-link" href="{{ route('estudiantes.index') }}">
+@if($esAdmin || $user->tieneAccesoModulo('estudiantes') || $user->us_entidad_tipo === 'docente')
+<li class="side-menus {{ Request::is('estudiantes*') || Request::is('kardex-estudiante*') ? 'active' : '' }}">
+    <a class="nav-link menu-toggle" href="#" data-toggle="collapse" data-target="#estudiantesMenu">
         <i class="fas fa-user-graduate"></i><span>Estudiantes</span>
     </a>
+    <ul class="collapse {{ Request::is('estudiantes*') || Request::is('kardex-estudiante*') ? 'show' : '' }}" id="estudiantesMenu">
+        @if($esAdmin || $user->tieneAccesoModulo('estudiantes'))
+        <li><a href="{{ route('estudiantes.index') }}"><i class="fas fa-list"></i> Lista Estudiantes</a></li>
+        @endif
+        @if($esAdmin || in_array(optional($user)->rol_id, [1,4]) || $user->us_entidad_tipo === 'docente')
+        <li><a href="{{ route('kardex-estudiante.index') }}"><i class="fas fa-folder-open"></i> Kardex / Anotaciones</a></li>
+        @endif
+    </ul>
 </li>
 @endif
 
@@ -143,10 +156,16 @@
 @endif
 
 @if($esAdmin || $user->tieneAccesoModulo('docentes'))
-<li class="side-menus {{ Request::is('docentes*') ? 'active' : '' }}">
-    <a class="nav-link" href="{{ route('docentes.index') }}">
+<li class="side-menus {{ Request::is('docentes*') || Request::is('kardex-docente*') ? 'active' : '' }}">
+    <a class="nav-link menu-toggle" href="#" data-toggle="collapse" data-target="#docentesMenu">
         <i class="fas fa-chalkboard-teacher"></i><span>Docentes</span>
     </a>
+    <ul class="collapse {{ Request::is('docentes*') || Request::is('kardex-docente*') ? 'show' : '' }}" id="docentesMenu">
+        <li><a href="{{ route('docentes.index') }}"><i class="fas fa-list"></i> Lista Docentes</a></li>
+        @if($esAdmin || in_array(optional($user)->rol_id, [1,4]))
+        <li><a href="{{ route('kardex-docente.index') }}"><i class="fas fa-folder-open"></i> Kardex Docente</a></li>
+        @endif
+    </ul>
 </li>
 @endif
 
@@ -214,6 +233,15 @@
 <li class="side-menus {{ Request::is('padres*') ? 'active' : '' }}">
     <a class="nav-link" href="{{ route('padres.index') }}">
         <i class="fas fa-users"></i><span>Padres de Familia</span>
+    </a>
+</li>
+@endif
+
+{{-- Estudiantes observados (Lista Negra) — solo dirección/admin --}}
+@if($esAdmin || in_array(optional($user)->rol_id, [1,4]))
+<li class="side-menus {{ Request::is('observados*') ? 'active' : '' }}">
+    <a class="nav-link" href="{{ route('observados.index') }}">
+        <i class="fas fa-user-slash"></i><span>Estudiantes Observados</span>
     </a>
 </li>
 @endif

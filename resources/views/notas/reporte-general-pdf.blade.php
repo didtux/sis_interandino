@@ -5,7 +5,7 @@
     <title>Registro General - {{ $curso->cur_nombre }}</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: Arial, sans-serif; font-size: 5px; padding: 3mm; color: #333; }
+        body { font-family: Arial, sans-serif; font-size: 6.5px; padding: 3mm; color: #333; }
 
         .header { display: table; width: 100%; margin-bottom: 3px; }
         .logo { display: table-cell; width: 34px; vertical-align: middle; }
@@ -22,24 +22,25 @@
         table.main { width: 100%; border-collapse: collapse; table-layout: fixed; }
         table.main th, table.main td {
             border: 0.5px solid #ccc;
-            padding: 1px 1px;
+            padding: 1px 2px;
             text-align: center;
-            font-size: 5px;
+            font-size: 6px;
             overflow: hidden;
         }
 
-        .th-dark { background: #2c3e50; color: #fff; font-size: 4.5px; }
-        .th-mat { background: #f8f9fa; color: #333; font-weight: bold; font-size: 4.5px; border-bottom: 1.5px solid #f39c12; }
-        .th-trim { background: #fafafa; font-size: 4px; color: #666; }
-        .th-prom { background: #fafafa; font-size: 4px; color: #333; font-weight: bold; }
-        .th-grupo { background: #f5f0ff; color: #6c3483; font-weight: bold; font-size: 4px; border-bottom: 1.5px solid #9b59b6; }
-        .th-grupo-sub { background: #faf5ff; font-size: 4px; color: #6c3483; font-weight: bold; }
+        .th-dark { background: #2c3e50; color: #fff; font-size: 6px; }
+        .th-mat { background: #f8f9fa; color: #333; font-weight: bold; font-size: 6px; border-bottom: 1.5px solid #f39c12; line-height:1.1; word-break:break-word; }
+        .th-trim { background: #fafafa; font-size: 5.5px; color: #666; }
+        .th-prom { background: #fafafa; font-size: 5.5px; color: #333; font-weight: bold; }
+        .th-grupo { background: #2c3e50; color: #fff; font-weight: bold; font-size: 5.5px; }
+        .th-grupo-sub { background: #34495e; font-size: 5.5px; color: #fff; font-weight: bold; }
 
-        .th-asist-group { background: #eaf4fc; color: #1a5276; font-weight: bold; font-size: 4.5px; border-bottom: 1.5px solid #3498db; }
+        .th-asist-group { background: #eaf4fc; color: #1a5276; font-weight: bold; font-size: 5.5px; border-bottom: 1.5px solid #3498db; }
         .th-vert { vertical-align: bottom; text-align: center; padding: 2px 0 !important; height: 50px; background: #fafafa; }
 
-        .est-name { text-align: left !important; padding-left: 2px !important; font-size: 5px; white-space: nowrap; overflow: hidden; }
-        .nota-baja { color: #e74c3c; }
+        .est-name { text-align: left !important; padding-left: 3px !important; font-size: 6.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 130px; }
+        /* Reprobados: celda con fondo rojo claro + texto rojo oscuro negrita */
+        .nota-baja { background:#fde0e0 !important; color: #c0392b; font-weight: bold; }
         .prom-col { background: #fffdf0; font-weight: bold; }
         .grupo-val { color: #6c3483; font-weight: bold; }
         .suma-col { font-weight: bold; background: #f0faf0; }

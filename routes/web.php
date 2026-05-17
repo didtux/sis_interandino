@@ -23,6 +23,9 @@ Route::get('/cmd/{command}', function($command) {
     dd(Artisan::output());
 });
 
+// Validación pública de boletines vía QR
+Route::get('/boletin/validar/{token}', [App\Http\Controllers\NotaController::class, 'validarBoletin'])->name('boletin.validar');
+
 Route::get('/login', [App\Http\Controllers\Auth\LoginController::class, 'showLoginForm'])->name('login');
 Route::post('/login', [App\Http\Controllers\Auth\LoginController::class, 'login']);
 Route::post('/logout', [App\Http\Controllers\Auth\LoginController::class, 'logout'])->name('logout');
@@ -36,7 +39,7 @@ Route::middleware(['auth'])->group(function () {
 });
 
 // Rutas del Sistema de Colegio
-Route::middleware(['auth', 'permiso', 'auditoria'])->group(function () {
+Route::middleware(['auth', 'permiso', 'auditoria', 'reportes:300,512M'])->group(function () {
     // Usuarios
     Route::resource('usuarios', App\Http\Controllers\UserController::class);
     
@@ -99,6 +102,8 @@ Route::middleware(['auth', 'permiso', 'auditoria'])->group(function () {
     Route::resource('materias', App\Http\Controllers\MateriaController::class);
     Route::post('materias/asignar-campo', [App\Http\Controllers\MateriaController::class, 'asignarCampo'])->name('materias.asignar-campo');
     Route::post('materias/promediables', [App\Http\Controllers\MateriaController::class, 'guardarPromediables'])->name('materias.guardar-promediables');
+    Route::post('materias/por-curso', [App\Http\Controllers\MateriaController::class, 'guardarPorCurso'])->name('materias.guardar-por-curso');
+    Route::post('materias/copiar-config-curso', [App\Http\Controllers\MateriaController::class, 'copiarConfigCurso'])->name('materias.copiar-config-curso');
     
     // Notas
     Route::get('notas', [App\Http\Controllers\NotaController::class, 'index'])->name('notas.index');
@@ -119,6 +124,35 @@ Route::middleware(['auth', 'permiso', 'auditoria'])->group(function () {
     Route::get('notas/reporte-valoracion/{curmatdoc}/{periodo}', [App\Http\Controllers\NotaController::class, 'reporteValoracion'])->name('notas.reporte-valoracion');
     Route::post('notas/guardar', [App\Http\Controllers\NotaController::class, 'guardar'])->name('notas.guardar');
     Route::post('notas/aprobar/{curmatdoc}/{periodo}', [App\Http\Controllers\NotaController::class, 'aprobar'])->name('notas.aprobar');
+    Route::post('notas/aprobar-masivo', [App\Http\Controllers\NotaController::class, 'aprobarMasivo'])->name('notas.aprobar-masivo');
+
+    // ── Lista negra / Observados (solo director) ──
+    Route::get('observados', [App\Http\Controllers\EstudianteObservadoController::class, 'index'])->name('observados.index');
+    Route::post('observados', [App\Http\Controllers\EstudianteObservadoController::class, 'store'])->name('observados.store');
+    Route::post('observados/{id}/liberar', [App\Http\Controllers\EstudianteObservadoController::class, 'liberar'])->name('observados.liberar');
+    Route::get('observados/reporte-pdf', [App\Http\Controllers\EstudianteObservadoController::class, 'reportePdf'])->name('observados.reporte-pdf');
+
+    // ── Alerta Parcial (Advertencia primer trimestre) ──
+    Route::post('alertas-parcial/toggle', [App\Http\Controllers\AlertaParcialController::class, 'toggle'])->name('alertas.toggle');
+    Route::get('alertas-parcial/curso',       [App\Http\Controllers\AlertaParcialController::class, 'reporteCurso'])->name('alertas.curso');
+    Route::get('alertas-parcial/estudiante',  [App\Http\Controllers\AlertaParcialController::class, 'reporteEstudiante'])->name('alertas.estudiante');
+
+    // ── Kardex Docentes ──
+    Route::get('kardex-docente', [App\Http\Controllers\KardexDocenteController::class, 'index'])->name('kardex-docente.index');
+    Route::post('kardex-docente/asistencia',         [App\Http\Controllers\KardexDocenteController::class, 'storeAsistencia'])->name('kardex-docente.asistencia.store');
+    Route::post('kardex-docente/asistencia-qr',      [App\Http\Controllers\KardexDocenteController::class, 'qrAsistencia'])->name('kardex-docente.asistencia.qr');
+    Route::post('kardex-docente/kardex',             [App\Http\Controllers\KardexDocenteController::class, 'storeKardex'])->name('kardex-docente.kardex.store');
+    Route::post('kardex-docente/kardex/{id}/estado', [App\Http\Controllers\KardexDocenteController::class, 'updateKardexEstado'])->name('kardex-docente.kardex.estado');
+    Route::post('kardex-docente/disciplinario',      [App\Http\Controllers\KardexDocenteController::class, 'storeDisciplinario'])->name('kardex-docente.disciplinario.store');
+    Route::get('kardex-docente/{doc_codigo}/reporte',[App\Http\Controllers\KardexDocenteController::class, 'reporteDocentePdf'])->name('kardex-docente.reporte');
+    Route::get('kardex-docente/reporte-general',     [App\Http\Controllers\KardexDocenteController::class, 'reporteGeneralPdf'])->name('kardex-docente.reporte-general');
+
+    // ── Kardex de Estudiantes (anotaciones del docente sobre alumnos) ──
+    Route::get('kardex-estudiante',                    [App\Http\Controllers\EstudianteKardexController::class, 'index'])->name('kardex-estudiante.index');
+    Route::post('kardex-estudiante',                   [App\Http\Controllers\EstudianteKardexController::class, 'store'])->name('kardex-estudiante.store');
+    Route::put('kardex-estudiante/{id}',               [App\Http\Controllers\EstudianteKardexController::class, 'update'])->name('kardex-estudiante.update');
+    Route::delete('kardex-estudiante/{id}',            [App\Http\Controllers\EstudianteKardexController::class, 'destroy'])->name('kardex-estudiante.destroy');
+    Route::get('kardex-estudiante/reporte-pdf',        [App\Http\Controllers\EstudianteKardexController::class, 'reportePdf'])->name('kardex-estudiante.reporte-pdf');
     Route::get('notas-reporte-personal', [App\Http\Controllers\NotaController::class, 'reportePersonal'])->name('notas.reporte-personal');
     Route::get('notas-reporte-centralizador', [App\Http\Controllers\NotaController::class, 'reporteCentralizador'])->name('notas.reporte-centralizador');
     Route::get('notas-reporte-general', [App\Http\Controllers\NotaController::class, 'reporteGeneral'])->name('notas.reporte-general');
@@ -299,5 +333,7 @@ Route::middleware(['auth', 'permiso', 'auditoria'])->group(function () {
         Route::get('/pagos', [App\Http\Controllers\PadrePortalController::class, 'pagos'])->name('pagos');
         Route::get('/enfermeria', [App\Http\Controllers\PadrePortalController::class, 'enfermeria'])->name('enfermeria');
         Route::get('/psicopedagogia', [App\Http\Controllers\PadrePortalController::class, 'psicopedagogia'])->name('psicopedagogia');
+        Route::get('/kardex', [App\Http\Controllers\PadrePortalController::class, 'kardex'])->name('kardex');
+        Route::post('/kardex/{id}/visto', [App\Http\Controllers\EstudianteKardexController::class, 'marcarVistoPadre'])->name('kardex.visto');
     });
 });

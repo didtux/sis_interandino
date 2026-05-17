@@ -76,89 +76,18 @@ class NotaReporteController extends Controller
         }
         unset($mat);
 
-        // ── Asistencia por periodo ──────────────────────────────────────────
-        // Misma lógica que ConcejoController: periodos disjuntos, exclusión de fines de semana,
-        // permisos solapados se reparten sin duplicar, faltas = días hábiles trabajados sin
-        // presencia y sin permiso vigente.
-        $periodosOrden = $periodos->sortBy('periodo_fecha_inicio')->values();
-        $rangos = [];
-        $lastEnd = null;
-        foreach ($periodosOrden as $p) {
-            $ini = \Carbon\Carbon::parse($p->periodo_fecha_inicio);
-            if ($lastEnd && $ini->lessThanOrEqualTo($lastEnd)) {
-                $ini = $lastEnd->copy()->addDay();
-            }
-            $finP = \Carbon\Carbon::parse($p->periodo_fecha_fin);
-            if ($finP->lessThan($ini)) continue;
-            $rangos[$p->periodo_numero] = ['inicio'=>$ini->format('Y-m-d'), 'fin'=>$finP->format('Y-m-d')];
-            $lastEnd = $finP;
-        }
+        // ── Asistencia por periodo (Service unificado con dedup global) ────────
+        $periodosOrden = $periodos->sortBy('periodo_numero')->values();
+        $resumenAsis   = (new \App\Services\AsistenciaResumenService())
+            ->resumenPorTrimestre($request->est_codigo, $periodosOrden);
 
-        $vistosFaltas = []; $vistosDiasPerm = []; $vistosAtrasos = [];
         $asistenciaPorPeriodo = [];
-        foreach ($rangos as $pn => $rg) {
-            $inicio = $rg['inicio'];
-            $fin    = $rg['fin'];
-
-            $diasTrab = DB::table('colegio_asistencia')
-                ->whereBetween('asis_fecha', [$inicio, $fin])
-                ->whereRaw('DAYOFWEEK(asis_fecha) BETWEEN 2 AND 6')
-                ->select('asis_fecha')->distinct()->pluck('asis_fecha');
-
-            $presFechas = DB::table('colegio_asistencia')
-                ->where('estud_codigo', $request->est_codigo)
-                ->whereBetween('asis_fecha', [$inicio, $fin])
-                ->select('asis_fecha')->distinct()->pluck('asis_fecha');
-
-            $atrasos = 0;
-            $atrasosRows = DB::table('asistencia_atrasos')
-                ->where('estud_codigo', $request->est_codigo)
-                ->whereBetween('atraso_fecha', [$inicio, $fin])
-                ->select('atraso_fecha','atraso_hora')->get();
-            foreach ($atrasosRows as $a) {
-                $key = (string)$a->atraso_fecha.'|'.(string)$a->atraso_hora;
-                if (!isset($vistosAtrasos[$key])) { $vistosAtrasos[$key] = true; $atrasos++; }
-            }
-
-            // Cobertura de días con permiso (incluso permisos que comenzaron antes)
-            $permisosCobertura = DB::table('asistencia_permisos')
-                ->where('estud_codigo', $request->est_codigo)
-                ->where('permiso_estado', 1)
-                ->where('permiso_fecha_inicio', '<=', $fin)
-                ->where('permiso_fecha_fin', '>=', $inicio)
-                ->select('permiso_fecha_inicio','permiso_fecha_fin')->get();
-            $diasTrabSet = collect($diasTrab)->map(fn($f)=>(string)$f)->flip();
-            $licencias = 0;
-            foreach ($permisosCobertura as $perm) {
-                $cur = \Carbon\Carbon::parse(max($perm->permiso_fecha_inicio, $inicio));
-                $end = \Carbon\Carbon::parse(min($perm->permiso_fecha_fin, $fin));
-                while ($cur <= $end) {
-                    $f = $cur->format('Y-m-d');
-                    if ($diasTrabSet->has($f) && !isset($vistosDiasPerm[$f])) {
-                        $vistosDiasPerm[$f] = true;
-                        $licencias++;
-                    }
-                    $cur->addDay();
-                }
-            }
-
-            $presSet = collect($presFechas)->map(fn($f)=>(string)$f)->flip();
-            $faltas = 0;
-            foreach ($diasTrab as $f) {
-                $f = (string) $f;
-                if (isset($vistosFaltas[$f])) continue;
-                if ($presSet->has($f) || isset($vistosDiasPerm[$f])) continue;
-                $dow = (int) date('w', strtotime($f));
-                if ($dow === 0 || $dow === 6) continue;
-                $vistosFaltas[$f] = true;
-                $faltas++;
-            }
-
+        foreach ($resumenAsis as $pn => $r) {
             $asistenciaPorPeriodo[$pn] = [
-                'atrasos'        => $atrasos,
-                'licencias'      => $licencias,
-                'faltas'         => $faltas,
-                'diasTrabajados' => $diasTrab->count(),
+                'atrasos'        => $r['atrasos'],
+                'licencias'      => $r['licencias_dias'],
+                'faltas'         => $r['faltas'],
+                'diasTrabajados' => $r['dias_trabajados_curso'],
             ];
         }
 
@@ -198,8 +127,8 @@ class NotaReporteController extends Controller
             ];
         }
 
-        // Grupos de materias
-        $gruposMap = $this->buildGruposMap($curmatdocs->pluck('mat_codigo'));
+        // Grupos de materias (config por curso del estudiante)
+        $gruposMap = $this->buildGruposMap($curmatdocs->pluck('mat_codigo'), $estudiante->cur_codigo);
         $gruposActivos = collect($gruposMap)->unique('grupo_id')->values();
 
         $pdf = Pdf::loadView('notas.reporte-personal-pdf', compact(
@@ -217,8 +146,17 @@ class NotaReporteController extends Controller
      * Cada campo (área) se considera un grupo. Sólo se agrupa si hay 2+ materias
      * con el mismo campo dentro del set de mat_codigos del curso.
      */
-    private function buildGruposMap($matCodigos)
+    private function buildGruposMap($matCodigos, ?string $curCodigo = null)
     {
+        // Si tenemos contexto de curso, delegamos al MateriaCursoService (config por curso).
+        if ($curCodigo) {
+            [, $map] = (new \App\Services\MateriaCursoService())->gruposPorCampo($curCodigo);
+            $codigosSet = collect($matCodigos)->flip();
+            // Filtrar el map al subset de materias presentes (defensa).
+            return collect($map)->filter(fn($v, $k) => $codigosSet->has($k))->all();
+        }
+
+        // Fallback global (legacy).
         $codigos = $matCodigos->toArray();
         $materias = \App\Models\Materia::whereIn('mat_codigo', $codigos)
             ->whereNotNull('mat_campo')->where('mat_campo', '!=', '')
@@ -226,7 +164,6 @@ class NotaReporteController extends Controller
 
         $porCampo = $materias->groupBy(fn($m) => trim((string) $m->mat_campo));
 
-        // Construye un objeto por campo. Sólo grupos con 2+ materias en el curso.
         $gruposPorCampo = [];
         foreach ($porCampo as $campo => $mats) {
             if ($mats->count() < 2) continue;
@@ -311,8 +248,8 @@ class NotaReporteController extends Controller
                     = $nota->nota_promedio_trimestral;
             });
 
-        // Grupos de materias
-        $gruposMap = $this->buildGruposMap($curmatdocs->pluck('mat_codigo'));
+        // Grupos de materias (config por curso)
+        $gruposMap = $this->buildGruposMap($curmatdocs->pluck('mat_codigo'), $curso->cur_codigo);
         $gruposActivos = collect($gruposMap)->unique('grupo_id')->values();
 
         // Enfermería y Psicopedagogía por estudiante y periodo
@@ -408,38 +345,25 @@ class NotaReporteController extends Controller
                 $notasMatrix[$nota->periodo->periodo_numero][$nota->curmatdoc_id][$nota->est_codigo] = $nota;
             });
 
-        // Asistencia por periodo y estudiante
+        // Asistencia por periodo y estudiante (Service unificado con dedup global por estudiante)
         $asistenciaMatrix = [];
-        foreach ($periodosActivos as $periodo) {
-            $inicio = $periodo->periodo_fecha_inicio->format('Y-m-d');
-            $fin    = $periodo->periodo_fecha_fin->format('Y-m-d');
-            $pn     = $periodo->periodo_numero;
-
-            $diasTrabajados = Asistencia::whereBetween('asis_fecha', [$inicio, $fin])
-                ->select('asis_fecha')->distinct()->count();
-
-            foreach ($estudiantes as $est) {
-                $presencias = Asistencia::where('estud_codigo', $est->est_codigo)
-                    ->whereBetween('asis_fecha', [$inicio, $fin])->count();
-
-                $atrasos = Atraso::where('estud_codigo', $est->est_codigo)
-                    ->whereBetween('atraso_fecha', [$inicio, $fin])->count();
-
-                $licencias = Permiso::where('estud_codigo', $est->est_codigo)
-                    ->where('permiso_estado', 1)
-                    ->where('permiso_fecha_inicio', '<=', $fin)
-                    ->where('permiso_fecha_fin', '>=', $inicio)->count();
-
-                $faltas = max(0, $diasTrabajados - $presencias - $licencias);
-
-                $asistenciaMatrix[$pn][$est->est_codigo] = compact(
-                    'presencias', 'atrasos', 'licencias', 'faltas', 'diasTrabajados'
-                );
+        $service = new \App\Services\AsistenciaResumenService();
+        $periodosOrdenGen = $periodosActivos->sortBy('periodo_numero')->values();
+        foreach ($estudiantes as $est) {
+            $resumen = $service->resumenPorTrimestre($est->est_codigo, $periodosOrdenGen);
+            foreach ($resumen as $pn => $r) {
+                $asistenciaMatrix[$pn][$est->est_codigo] = [
+                    'presencias'     => $r['presencias'],
+                    'atrasos'        => $r['atrasos'],
+                    'licencias'      => $r['licencias_dias'],
+                    'faltas'         => $r['faltas'],
+                    'diasTrabajados' => $r['dias_trabajados_curso'],
+                ];
             }
         }
 
-        // Grupos de materias
-        $gruposMap = $this->buildGruposMap($curmatdocs->pluck('mat_codigo'));
+        // Grupos de materias (config por curso)
+        $gruposMap = $this->buildGruposMap($curmatdocs->pluck('mat_codigo'), $curso->cur_codigo ?? null);
         $gruposActivos = collect($gruposMap)->unique('grupo_id')->values();
 
         $pdf = Pdf::loadView('notas.reporte-general-pdf', compact(
@@ -520,6 +444,54 @@ class NotaReporteController extends Controller
         // Si llega tipo=nivel sin nivel explícito pero con curso, deriva el nivel del curso
         if ($tipo === 'nivel' && !$nivelIn && $cursoCod) {
             $nivelIn = Curso::where('cur_codigo', $cursoCod)->value('cur_nivel');
+        }
+
+        // ── tipo = ue / ue-nivel: ranking de CURSOS por promedio del curso ──
+        if (in_array($tipo, ['ue', 'ue-nivel'])) {
+            $sqlUE = "
+                SELECT c.cur_codigo, c.cur_nombre, c.cur_nivel, c.cur_orden,
+                       ROUND(AVG(n.nota_promedio_trimestral), 1) AS promedio_curso,
+                       COUNT(DISTINCT e.est_codigo) AS estudiantes
+                FROM colegio_estudiantes e
+                JOIN colegio_cursos c ON c.cur_codigo COLLATE utf8mb4_unicode_ci = e.cur_codigo COLLATE utf8mb4_unicode_ci
+                JOIN colegio_notas n ON n.est_codigo COLLATE utf8mb4_unicode_ci = e.est_codigo COLLATE utf8mb4_unicode_ci
+                JOIN notas_config_periodos p ON p.periodo_id = n.periodo_id
+                WHERE e.est_visible = 1
+                  AND p.periodo_gestion = ?
+            ";
+            $paramsUE = [$gestion];
+            if ($periodoId) { $sqlUE .= " AND n.periodo_id = ? "; $paramsUE[] = $periodoId; }
+            $sqlUE .= " GROUP BY c.cur_codigo, c.cur_nombre, c.cur_nivel, c.cur_orden
+                        ORDER BY promedio_curso DESC ";
+            $rankingCursos = DB::select($sqlUE, $paramsUE);
+
+            $trimestreNombre = $periodoId
+                ? (DB::table('notas_config_periodos')->where('periodo_id', $periodoId)->value('periodo_nombre') ?? '')
+                : 'ANUAL';
+
+            if ($tipo === 'ue-nivel') {
+                // Agrupar por nivel manteniendo el ranking dentro de cada nivel.
+                $porNivel = [];
+                foreach ($rankingCursos as $r) {
+                    $nivel = $r->cur_nivel ?: 'SIN NIVEL';
+                    if (!isset($porNivel[$nivel])) $porNivel[$nivel] = [];
+                    $porNivel[$nivel][] = $r;
+                }
+                // Orden de niveles (Inicial → Primario → Secundario → otros)
+                $ordenNivel = ['INICIAL'=>1,'PRIMARIA'=>2,'PRIMARIO'=>2,'SECUNDARIA'=>3,'SECUNDARIO'=>3];
+                uksort($porNivel, function($a,$b) use ($ordenNivel){
+                    return ($ordenNivel[strtoupper($a)] ?? 99) <=> ($ordenNivel[strtoupper($b)] ?? 99);
+                });
+                $titulo = 'CUADRO DE HONOR POR NIVEL' . $trimestreLabel;
+                $pdf = Pdf::loadView('notas.cuadro-honor-nivel-pdf', compact('porNivel','titulo','config','gestion','trimestreNombre'))
+                    ->setPaper('letter');
+                return $pdf->stream('cuadro-honor-nivel-'.$gestion.'.pdf');
+            }
+
+            $titulo = 'CUADRO DE HONOR — UNIDAD EDUCATIVA' . $trimestreLabel;
+            $pdf = Pdf::loadView('notas.cuadro-honor-ue-pdf', compact('rankingCursos','titulo','config','gestion','trimestreNombre'))
+                ->setPaper('letter');
+            return $pdf->stream('cuadro-honor-ue-'.$gestion.'.pdf');
         }
 
         // ── tipo = colegio: top 3 por curso, agrupado por curso ordenado ──

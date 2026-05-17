@@ -130,9 +130,15 @@
                 <div class="form-group">
                     <label>Alcance</label>
                     <select id="chTipo" class="form-control">
-                        <option value="curso">Por curso</option>
-                        <option value="nivel">Por nivel</option>
-                        <option value="colegio">Toda la institución</option>
+                        <optgroup label="🎓 Estudiantes">
+                            <option value="curso">Top de un curso</option>
+                            <option value="nivel">Top de un nivel</option>
+                            <option value="colegio">Top 3 por cada curso (institucional)</option>
+                        </optgroup>
+                        <optgroup label="🏫 Ranking de Cursos">
+                            <option value="ue">Cuadro de Honor — Unidad Educativa</option>
+                            <option value="ue-nivel">Cuadro de Honor — Por Nivel</option>
+                        </optgroup>
                     </select>
                 </div>
                 <div class="form-group" id="chCursoWrap">

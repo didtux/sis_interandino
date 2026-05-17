@@ -660,34 +660,21 @@ class AsistenciaController extends Controller
 
     private function getAsistenciaTrimestreEst($estCodigo, $periodo, $year)
     {
-        $fechaInicio = $periodo->periodo_fecha_inicio->format('Y-m-d');
-        $fechaFin = $periodo->periodo_fecha_fin->format('Y-m-d');
-        $totalDiasHabiles = $this->diasHabilesRango($fechaInicio, $fechaFin, $year);
+        $service = new \App\Services\AsistenciaResumenService();
+        $r = $service->resumen(
+            $estCodigo,
+            $periodo->periodo_fecha_inicio->format('Y-m-d'),
+            $periodo->periodo_fecha_fin->format('Y-m-d')
+        );
 
-        // Presencias (días con registro de asistencia, días hábiles)
-        $asis = Asistencia::where('estud_codigo', $estCodigo)
-            ->whereBetween('asis_fecha', [$fechaInicio, $fechaFin])
-            ->whereRaw('DAYOFWEEK(asis_fecha) BETWEEN 2 AND 6')
-            ->distinct('asis_fecha')->count('asis_fecha');
-
-        // Permisos que se traslapan con el periodo (cobertura), no solo los que inician aquí.
-        $perm = Permiso::where('estud_codigo', $estCodigo)->where('permiso_estado', 1)
-            ->where('permiso_fecha_inicio', '<=', $fechaFin)
-            ->where('permiso_fecha_fin', '>=', $fechaInicio)
-            ->count();
-
-        $atr = Atraso::where('estud_codigo', $estCodigo)
-            ->whereBetween('atraso_fecha', [$fechaInicio, $fechaFin])
-            ->whereRaw('DAYOFWEEK(atraso_fecha) BETWEEN 2 AND 6')
-            ->count();
-
-        // Faltas = días hábiles sin presencia y sin permiso (solo las faltas restan a días trabajados)
-        $falt = max(0, $totalDiasHabiles - $asis - $perm);
-
-        // Días trabajados = días hábiles - faltas (atrasos y permisos NO restan)
-        $dt = max(0, $totalDiasHabiles - $falt);
-
-        return ['dt' => $dt, 'tl' => $perm, 'tf' => $falt, 'ta' => $atr, 'pres' => $asis, 'total' => $totalDiasHabiles];
+        return [
+            'dt'    => $r['dias_trabajados_efectivos'],
+            'tl'    => $r['licencias_dias'],
+            'tf'    => $r['faltas'],
+            'ta'    => $r['atrasos'],
+            'pres'  => $r['presencias'],
+            'total' => $r['dias_trabajados_curso'],
+        ];
     }
 
 

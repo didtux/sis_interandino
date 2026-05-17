@@ -225,4 +225,24 @@ class PadrePortalController extends Controller
 
         return view('padre-portal.psicopedagogia', compact('estudiantes', 'estSeleccionado', 'casos'));
     }
+
+    public function kardex(Request $request)
+    {
+        $estudiantes = $this->getEstudiantes();
+        $estSeleccionado = $request->est_codigo
+            ? $estudiantes->firstWhere('est_codigo', $request->est_codigo)
+            : $estudiantes->first();
+
+        $registros = collect();
+        if ($estSeleccionado) {
+            $registros = \App\Models\EstudianteKardex::with('docente')
+                ->where('est_codigo', $estSeleccionado->est_codigo)
+                ->where('ek_estado', 1)
+                ->where('ek_visible_padre', 1)
+                ->orderByDesc('ek_fecha')->orderByDesc('ek_id')
+                ->paginate(20);
+        }
+
+        return view('padre-portal.kardex', compact('estudiantes', 'estSeleccionado', 'registros'));
+    }
 }

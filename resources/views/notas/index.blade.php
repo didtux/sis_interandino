@@ -291,7 +291,13 @@
                             @if(!$esDocenteVinculado)
                             <div class="col-md-3 mb-2">
                                 <label class="small text-muted mb-1">Docente</label>
-                                <input type="text" name="buscar" class="form-control" placeholder="Nombre o apellido..." value="{{ request('buscar') }}">
+                                <select name="buscar" class="form-control select2-docente" style="width:100%;">
+                                    <option value="">— Todos —</option>
+                                    @foreach($docentesList as $d)
+                                        @php $nombre = trim($d->doc_apellidos.' '.$d->doc_nombres); @endphp
+                                        <option value="{{ $nombre }}" {{ request('buscar') === $nombre ? 'selected' : '' }}>{{ $nombre }}</option>
+                                    @endforeach
+                                </select>
                             </div>
                             @endif
                             <div class="{{ $esDocenteVinculado ? 'col-md-4' : 'col-md-3' }} mb-2">
@@ -339,6 +345,22 @@
                         <span class="badge badge-secondary p-1">{{ $asignaciones->count() }} asignación(es)</span>
                     </div>
 
+                    @if($esAdmin)
+                        <div class="alert alert-info py-2 mb-2 d-flex justify-content-between align-items-center" id="bulkBar">
+                            <div>
+                                <i class="fas fa-check-double mr-1"></i>
+                                Marca las notas <strong>en estado "Enviado"</strong> y aprueba en lote.
+                                <span class="badge badge-warning ml-2" id="bulkCount">0 seleccionadas</span>
+                            </div>
+                            <div>
+                                <button type="button" class="btn btn-sm btn-light mr-1" onclick="bulkToggleAll(true)"><i class="fas fa-check"></i> Marcar todas (Enviadas)</button>
+                                <button type="button" class="btn btn-sm btn-light mr-1" onclick="bulkToggleAll(false)"><i class="far fa-square"></i> Desmarcar</button>
+                                <button type="button" class="btn btn-sm btn-success" id="btnBulkApprove" disabled onclick="bulkApprove()"><i class="fas fa-check-double mr-1"></i> Aprobar seleccionadas</button>
+                            </div>
+                        </div>
+                        <form id="formAprobarMasivo" action="{{ route('notas.aprobar-masivo') }}" method="POST" style="display:none;">@csrf</form>
+                    @endif
+
                     <div class="table-responsive-modern">
                         <table class="modern-table" id="tablaNotas">
                             <thead>
@@ -382,6 +404,11 @@
                                                 $label = match($estado) { 2=>'Aprobado', 1=>'Enviado', 3=>'Rechazado', 0=>'Borrador', default=>'Calificar' };
                                             @endphp
                                             <td class="text-center" data-label="{{ $periodo->periodo_nombre }}">
+                                                @if($esAdmin && $estado === 1)
+                                                    <input type="checkbox" class="bulk-approve-chk mr-1"
+                                                           value="{{ $asig->curmatdoc_id }}|{{ $periodo->periodo_id }}"
+                                                           onchange="bulkRefresh()" title="Marcar para aprobación masiva">
+                                                @endif
                                                 <a href="{{ route('notas.calificar', [$asig->curmatdoc_id, $periodo->periodo_id]) }}"
                                                    class="btn btn-sm {{ $btnClass }}" style="min-width:105px;"
                                                    target="_blank" rel="noopener">
@@ -600,6 +627,13 @@ var todosEstudiantes = @json($estudiantesJs);
 
 $(document).ready(function() {
 
+    // Select2 docente (autocomplete)
+    $('.select2-docente').select2({
+        theme: 'bootstrap4', width: '100%',
+        placeholder: 'Buscar docente por nombre o apellido...',
+        allowClear: true
+    });
+
     // ── Select2 filtros de notas (tab notas) ──
     $('.select2-multi').select2({
         width: '100%',
@@ -664,5 +698,30 @@ $(document).ready(function() {
     }
 
 });
+
+// ── Aprobación masiva ─────────────────────────────────────
+function bulkRefresh() {
+    var n = document.querySelectorAll('.bulk-approve-chk:checked').length;
+    var lbl = document.getElementById('bulkCount');
+    var btn = document.getElementById('btnBulkApprove');
+    if (lbl) lbl.textContent = n + ' seleccionada(s)';
+    if (btn) btn.disabled = (n === 0);
+}
+function bulkToggleAll(state) {
+    document.querySelectorAll('.bulk-approve-chk').forEach(function(c){ c.checked = state; });
+    bulkRefresh();
+}
+function bulkApprove() {
+    var checks = document.querySelectorAll('.bulk-approve-chk:checked');
+    if (!checks.length) return;
+    if (!confirm('¿Aprobar ' + checks.length + ' asignación(es) en lote? Esta acción no requiere observación.')) return;
+    var form = document.getElementById('formAprobarMasivo');
+    checks.forEach(function(c){
+        var input = document.createElement('input');
+        input.type = 'hidden'; input.name = 'items[]'; input.value = c.value;
+        form.appendChild(input);
+    });
+    form.submit();
+}
 </script>
 @endsection

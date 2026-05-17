@@ -252,124 +252,32 @@ class ConcejoController extends Controller
     {
         $gestion    = (int) $request->input('gestion', date('Y'));
         $estudiante = Estudiante::with('curso')->where('est_codigo', $estCodigo)->firstOrFail();
-        // Ordenar por número de periodo (1, 2, 3) — cada fecha se asigna al PRIMER trimestre cuyo rango la contenga.
         $periodos   = NotaPeriodo::activo()->gestion($gestion)
             ->orderBy('periodo_numero')->get();
+
+        $service = new \App\Services\AsistenciaResumenService();
+        $resumenPorTrim = $service->resumenPorTrimestre($estCodigo, $periodos);
 
         $detallePeriodos = [];
         $totales = ['dias_trabajados'=>0,'presencias'=>0,'faltas'=>0,'permisos_dias'=>0,'permisos_solicitudes'=>0,'atrasos'=>0];
 
-        // Sets globales para evitar contar dos veces cuando los trimestres se traslapan en configuración.
-        $vistosFaltas   = [];
-        $vistosAtrasos  = [];
-        $vistosPermiso  = [];
-        $vistosDiasPerm = [];
-        $vistosPres     = [];
-
-        foreach ($periodos as $periodo) {
-            $inicio = \Carbon\Carbon::parse($periodo->periodo_fecha_inicio)->format('Y-m-d');
-            $fin    = \Carbon\Carbon::parse($periodo->periodo_fecha_fin)->format('Y-m-d');
-
-            // Días hábiles donde el curso tuvo registro de asistencia (cualquier estudiante)
-            $diasTrabFechas = DB::table('colegio_asistencia')
-                ->whereBetween('asis_fecha', [$inicio, $fin])
-                ->whereRaw('DAYOFWEEK(asis_fecha) BETWEEN 2 AND 6')
-                ->select('asis_fecha')->distinct()->orderBy('asis_fecha')
-                ->pluck('asis_fecha');
-
-            // Presencias del estudiante en este periodo (dedup global)
-            $presFechas = DB::table('colegio_asistencia')
-                ->where('estud_codigo', $estCodigo)
-                ->whereBetween('asis_fecha', [$inicio, $fin])
-                ->select('asis_fecha')->distinct()->orderBy('asis_fecha')
-                ->pluck('asis_fecha')
-                ->reject(function($f) use (&$vistosPres) {
-                    $f = (string) $f;
-                    if (isset($vistosPres[$f])) return true;
-                    $vistosPres[$f] = true;
-                    return false;
-                })->values();
-
-            // Atrasos del estudiante en este periodo (dedup global)
-            $atrasosFechas = DB::table('asistencia_atrasos')
-                ->where('estud_codigo', $estCodigo)
-                ->whereBetween('atraso_fecha', [$inicio, $fin])
-                ->orderBy('atraso_fecha')
-                ->select('atraso_fecha','atraso_hora')->get()
-                ->reject(function($a) use (&$vistosAtrasos) {
-                    $key = (string) $a->atraso_fecha . '|' . (string) $a->atraso_hora;
-                    if (isset($vistosAtrasos[$key])) return true;
-                    $vistosAtrasos[$key] = true;
-                    return false;
-                })->values();
-
-            // Permisos cuya FECHA DE INICIO cae en este periodo (cada permiso pertenece a UN solo trimestre)
-            $permisos = DB::table('asistencia_permisos')
-                ->where('estud_codigo', $estCodigo)
-                ->where('permiso_estado', 1)
-                ->whereBetween('permiso_fecha_inicio', [$inicio, $fin])
-                ->orderBy('permiso_fecha_inicio')
-                ->select('permiso_codigo','permiso_tipo','permiso_fecha_inicio','permiso_fecha_fin','permiso_motivo','permiso_origen')
-                ->get()
-                ->reject(function($p) use (&$vistosPermiso) {
-                    if (isset($vistosPermiso[$p->permiso_codigo])) return true;
-                    $vistosPermiso[$p->permiso_codigo] = true;
-                    return false;
-                })->values();
-
-            // Días con permiso dentro de este periodo
-            $diasTrabSet = collect($diasTrabFechas)->map(fn($f)=>(string)$f)->flip();
-            $diasConPermiso = collect();
-            $permisosCobertura = DB::table('asistencia_permisos')
-                ->where('estud_codigo', $estCodigo)
-                ->where('permiso_estado', 1)
-                ->where('permiso_fecha_inicio', '<=', $fin)
-                ->where('permiso_fecha_fin', '>=', $inicio)
-                ->select('permiso_fecha_inicio','permiso_fecha_fin')->get();
-            foreach ($permisosCobertura as $p) {
-                $iniP = max($p->permiso_fecha_inicio, $inicio);
-                $finP = min($p->permiso_fecha_fin, $fin);
-                $cur  = \Carbon\Carbon::parse($iniP);
-                $end  = \Carbon\Carbon::parse($finP);
-                while ($cur <= $end) {
-                    $f = $cur->format('Y-m-d');
-                    if ($diasTrabSet->has($f) && !isset($vistosDiasPerm[$f])) {
-                        $diasConPermiso->push($f);
-                        $vistosDiasPerm[$f] = true;
-                    }
-                    $cur->addDay();
-                }
-            }
-            $diasConPermiso = $diasConPermiso->unique()->values();
-
-            // Faltas = día hábil del curso donde el estudiante NO tiene presencia y NO tiene permiso (con dedup global)
-            $presFechasGlobal = $vistosPres;
-            $faltasFechas = collect($diasTrabFechas)->filter(function($f) use ($presFechasGlobal, &$vistosFaltas, &$vistosDiasPerm){
-                $f = (string) $f;
-                if (isset($vistosFaltas[$f])) return false;
-                if (isset($presFechasGlobal[$f]) || isset($vistosDiasPerm[$f])) return false;
-                $dow = (int) date('w', strtotime($f)); // 0=Dom, 6=Sáb
-                if ($dow === 0 || $dow === 6) return false;
-                $vistosFaltas[$f] = true;
-                return true;
-            })->values();
-
+        foreach ($resumenPorTrim as $pn => $r) {
             $detallePeriodos[] = [
-                'periodo'           => $periodo,
-                'dias_trabajados'   => $diasTrabFechas,
-                'presencias'        => $presFechas,
-                'atrasos'           => $atrasosFechas,
-                'permisos'          => $permisos,
-                'dias_con_permiso'  => $diasConPermiso,
-                'faltas'            => $faltasFechas,
+                'periodo'           => $r['periodo'],
+                'dias_trabajados'   => $r['fechas_presencia']->concat($r['fechas_faltas'])->concat($r['fechas_dias_con_permiso'])->unique()->values(),
+                'presencias'        => $r['fechas_presencia'],
+                'atrasos'           => $r['fechas_atrasos'],
+                'permisos'          => $r['permisos'],
+                'dias_con_permiso'  => $r['fechas_dias_con_permiso'],
+                'faltas'            => $r['fechas_faltas'],
             ];
 
-            $totales['dias_trabajados']     += $diasTrabFechas->count();
-            $totales['presencias']          += $presFechas->count();
-            $totales['faltas']              += $faltasFechas->count();
-            $totales['permisos_dias']       += $diasConPermiso->count();
-            $totales['permisos_solicitudes']+= $permisos->count();
-            $totales['atrasos']             += $atrasosFechas->count();
+            $totales['dias_trabajados']     += $r['dias_trabajados_curso'];
+            $totales['presencias']          += $r['presencias'];
+            $totales['faltas']              += $r['faltas'];
+            $totales['permisos_dias']       += $r['licencias_dias'];
+            $totales['permisos_solicitudes']+= $r['licencias_solicitudes'];
+            $totales['atrasos']             += $r['atrasos'];
         }
 
         return view('concejo.detalle', compact('estudiante','periodos','detallePeriodos','totales','gestion'));

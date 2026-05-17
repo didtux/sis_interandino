@@ -41,6 +41,17 @@
                 <div class="alert alert-danger"><i class="fas fa-exclamation-circle mr-2"></i>{{ session('error') }}</div>
             @endif
 
+            @if(($esAdmin ?? false) && (!$enRango || in_array($estadoNotas, [2,3])))
+                <div class="alert alert-warning border-warning py-2">
+                    <i class="fas fa-shield-alt mr-1"></i>
+                    <strong>Modo Administrador:</strong> puedes modificar estas notas
+                    @if(!$enRango) <span class="badge badge-dark">FUERA DE PERIODO</span>@endif
+                    @if($estadoNotas == 2) <span class="badge badge-success">APROBADAS</span>@endif
+                    @if($estadoNotas == 3) <span class="badge badge-danger">RECHAZADAS</span>@endif
+                    . Todo cambio quedará registrado en <strong>Auditoría</strong>.
+                </div>
+            @endif
+
             {{-- Notificación de aprobación/rechazo --}}
             @if(in_array($estadoNotas, [2, 3]))
                 <div class="alert {{ $estadoNotas == 2 ? 'alert-success' : 'alert-danger' }} py-3">
@@ -80,9 +91,12 @@
                             <a href="{{ route('notas.reporte-valoracion', [$asignacion->curmatdoc_id, $periodo->periodo_id]) }}" class="btn btn-danger btn-sm" target="_blank">
                                 <i class="fas fa-file-pdf mr-1"></i>PDF
                             </a>
-                            @if($estadoNotas != 2)
+                            @if($estadoNotas != 2 || ($esAdmin ?? false))
                                 <button type="button" class="btn btn-success btn-sm" data-toggle="modal" data-target="#modalImportarExcel">
                                     <i class="fas fa-file-excel mr-1"></i>Importar Excel
+                                    @if(($esAdmin ?? false) && $estadoNotas == 2)
+                                        <span class="badge badge-light ml-1" title="Cambio queda en auditoría">ADMIN</span>
+                                    @endif
                                 </button>
                             @endif
                             @if($esEditable)

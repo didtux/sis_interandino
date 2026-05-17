@@ -49,9 +49,15 @@ class NotaController extends Controller
             $query->whereIn('mat_codigo', $matCodigos);
         }
         if ($request->filled('buscar')) {
-            $query->whereHas('docente', function($q) use ($request) {
-                $q->where('doc_nombres', 'like', '%'.$request->buscar.'%')
-                  ->orWhere('doc_apellidos', 'like', '%'.$request->buscar.'%');
+            $tokens = preg_split('/\s+/', trim($request->buscar));
+            $query->whereHas('docente', function($q) use ($tokens) {
+                foreach ($tokens as $t) {
+                    if ($t === '') continue;
+                    $q->where(function($qq) use ($t) {
+                        $qq->where('doc_nombres', 'like', "%$t%")
+                           ->orWhere('doc_apellidos', 'like', "%$t%");
+                    });
+                }
             });
         }
         if ($request->filled('estado')) {
@@ -132,11 +138,45 @@ class NotaController extends Controller
                 ->orderBy('est_apellidos')->get();
         }
 
+        // Lista de docentes para el filtro (solo para roles no-docentes)
+        $docentesList = collect();
+        if (!($user->us_entidad_tipo === 'docente' && $user->us_entidad_id)) {
+            $docentesList = \App\Models\Docente::orderBy('doc_apellidos')->orderBy('doc_nombres')
+                ->get(['doc_codigo','doc_nombres','doc_apellidos']);
+        }
+
         return view('notas.index', compact(
             'asignaciones', 'periodos', 'dimensiones', 'cursos', 'materias',
             'statAprobadas', 'statEnviadas', 'statBorradores', 'statRechazadas',
-            'ranking', 'enPeligro', 'todosEstudiantes', 'gestion'
+            'ranking', 'enPeligro', 'todosEstudiantes', 'gestion', 'docentesList'
         ));
+    }
+
+    /**
+     * Aprobación masiva: recibe arr de pares (curmatdoc_id, periodo_id) y aprueba.
+     */
+    public function aprobarMasivo(Request $request)
+    {
+        $request->validate([
+            'items' => 'required|array|min:1',
+        ]);
+
+        $aprobados = 0;
+        foreach ($request->items as $pair) {
+            if (!preg_match('/^\d+\|\d+$/', $pair)) continue;
+            [$cmd, $pid] = explode('|', $pair);
+            $updated = Nota::where('curmatdoc_id', $cmd)
+                ->where('periodo_id', $pid)
+                ->where('nota_estado', 1) // solo enviadas (no toca aprobadas/rechazadas)
+                ->update([
+                    'nota_estado' => 2,
+                    'nota_fecha_aprobacion' => now(),
+                    'nota_aprobado_por' => auth()->user()->us_id,
+                    'nota_observacion' => null,
+                ]);
+            if ($updated) $aprobados++;
+        }
+        return back()->with('success', "Aprobación masiva: $aprobados asignación(es) aprobadas.");
     }
 
     /**
@@ -240,7 +280,10 @@ class NotaController extends Controller
             ->where('periodo_id', $periodoId)->get()->keyBy('est_codigo');
 
         $estadoNotas = $notasExistentes->isNotEmpty() ? $notasExistentes->first()->nota_estado : 0;
-        $esEditable = $enRango && in_array($estadoNotas, [0, 3]) || !$notasExistentes->count();
+        $esAdmin = $user->rol_id == 1;
+        // Editable normal: dentro del rango y en estado 0/3 (borrador/rechazado), o aún no hay notas.
+        // Admin: SIEMPRE puede editar (queda registrado en auditoría si está fuera de tiempo o aprobado).
+        $esEditable = $esAdmin || (($enRango && in_array($estadoNotas, [0, 3])) || !$notasExistentes->count());
 
         // Datos de auditoría para mostrar al docente
         $notaInfo = $notasExistentes->isNotEmpty() ? $notasExistentes->first() : null;
@@ -253,7 +296,7 @@ class NotaController extends Controller
 
         return view('notas.calificar', compact(
             'asignacion', 'periodo', 'dimensiones', 'estudiantes',
-            'notasExistentes', 'estadoNotas', 'enRango', 'esEditable',
+            'notasExistentes', 'estadoNotas', 'enRango', 'esEditable', 'esAdmin',
             'observacionAdmin', 'fechaAprobacion', 'aprobadoPor'
         ));
     }
@@ -273,10 +316,29 @@ class NotaController extends Controller
             abort(403);
         }
 
-        // Validar rango de fechas
+        $esAdmin = $user->rol_id == 1;
+
+        // Validar rango de fechas (admin puede saltar esta restricción; queda en auditoría)
         $hoy = now()->toDateString();
-        if ($hoy < $periodo->periodo_fecha_inicio->toDateString() || $hoy > $periodo->periodo_fecha_fin->toDateString()) {
+        $fueraDeTiempo = ($hoy < $periodo->periodo_fecha_inicio->toDateString() || $hoy > $periodo->periodo_fecha_fin->toDateString());
+        if ($fueraDeTiempo && !$esAdmin) {
             return back()->with('error', 'No se pueden registrar notas fuera del rango del periodo (' . $periodo->periodo_fecha_inicio->format('d/m/Y') . ' - ' . $periodo->periodo_fecha_fin->format('d/m/Y') . ')');
+        }
+
+        // Snapshot previo para auditoría (solo si admin está cambiando fuera de tiempo o sobre notas aprobadas)
+        $estadoPrevio = Nota::where('curmatdoc_id', $curmatdocId)->where('periodo_id', $periodoId)->value('nota_estado');
+        $requiereAuditoria = $esAdmin && ($fueraDeTiempo || in_array($estadoPrevio, [2, 3]));
+        $snapshotAnterior = null;
+        if ($requiereAuditoria) {
+            $snapshotAnterior = Nota::with('detalles')->where('curmatdoc_id', $curmatdocId)->where('periodo_id', $periodoId)
+                ->get()->map(function($n) {
+                    return [
+                        'est_codigo' => $n->est_codigo,
+                        'promedio'   => $n->nota_promedio_trimestral,
+                        'estado'     => $n->nota_estado,
+                        'detalles'   => $n->detalles->map(fn($d) => ['dim'=>$d->dimension_id,'col'=>$d->columna_num,'val'=>$d->detalle_valor])->all(),
+                    ];
+                })->all();
         }
 
         $gestion = $periodo->periodo_gestion;
@@ -327,7 +389,35 @@ class NotaController extends Controller
             ]);
         }
 
+        // Auditoría para cambios admin fuera de tiempo o sobre notas aprobadas/rechazadas
+        if ($requiereAuditoria) {
+            $snapshotNuevo = Nota::with('detalles')->where('curmatdoc_id', $curmatdocId)->where('periodo_id', $periodoId)
+                ->get()->map(function($n) {
+                    return [
+                        'est_codigo' => $n->est_codigo,
+                        'promedio'   => $n->nota_promedio_trimestral,
+                        'estado'     => $n->nota_estado,
+                        'detalles'   => $n->detalles->map(fn($d) => ['dim'=>$d->dimension_id,'col'=>$d->columna_num,'val'=>$d->detalle_valor])->all(),
+                    ];
+                })->all();
+            \App\Models\Auditoria::registrar(
+                'EDICION_NOTAS_ADMIN',
+                'NOTAS',
+                'Edición de notas fuera de tiempo/aprobadas por admin — ' .
+                    $asignacion->materia->mat_nombre . ' / ' . $asignacion->curso->cur_nombre .
+                    ' / ' . $periodo->periodo_nombre .
+                    ($fueraDeTiempo ? ' (FUERA DE PERIODO)' : '') .
+                    ($estadoPrevio == 2 ? ' (sobre notas APROBADAS)' : ''),
+                $curmatdocId,
+                $snapshotAnterior,
+                $snapshotNuevo
+            );
+        }
+
         $msg = $accion === 'enviar' ? 'Notas enviadas para aprobación' : 'Notas guardadas como borrador';
+        if ($requiereAuditoria) {
+            $msg .= ' (cambio admin registrado en auditoría)';
+        }
         return redirect()->route('notas.calificar', [$curmatdocId, $periodoId])->with('success', $msg);
     }
 
@@ -502,6 +592,16 @@ class NotaController extends Controller
         if ($user->us_entidad_tipo === 'docente' && $user->us_entidad_id && $user->us_entidad_id !== $asignacion->doc_codigo) {
             return back()->with('error', 'No tiene permisos para importar en esta asignación.');
         }
+        $esAdmin = $user->rol_id == 1;
+
+        // Si las notas están aprobadas o fuera de rango, sólo admin puede importar.
+        $hoyImp = now()->toDateString();
+        $fueraDeTiempoImp = ($hoyImp < $periodo->periodo_fecha_inicio->toDateString() || $hoyImp > $periodo->periodo_fecha_fin->toDateString());
+        $estadoActual = Nota::where('curmatdoc_id', $asignacion->curmatdoc_id)->where('periodo_id', $periodo->periodo_id)->value('nota_estado');
+        if (!$esAdmin && ($estadoActual == 2 || $fueraDeTiempoImp)) {
+            return back()->with('error', 'No puede importar: las notas están aprobadas o fuera del periodo.');
+        }
+        $requiereAuditoriaImp = $esAdmin && ($estadoActual == 2 || $estadoActual == 3 || $fueraDeTiempoImp);
 
         // Guardar archivo temporal
         $archivo = $request->file('archivo');
@@ -597,11 +697,31 @@ class NotaController extends Controller
             abort(403);
         }
 
-        $asignacion = CursoMateriaDocente::findOrFail($importacion->curmatdoc_id);
+        $asignacion = CursoMateriaDocente::with(['curso','materia'])->findOrFail($importacion->curmatdoc_id);
         $periodo = NotaPeriodo::findOrFail($importacion->periodo_id);
         $gestion = $periodo->periodo_gestion;
         $data = $importacion->import_data;
         $tipo = $importacion->import_tipo;
+
+        // Detectar si se requiere auditoría (admin importando fuera de tiempo o sobre aprobadas/rechazadas)
+        $userConf = auth()->user();
+        $esAdminConf = $userConf->rol_id == 1;
+        $hoyConf = now()->toDateString();
+        $fueraConf = ($hoyConf < $periodo->periodo_fecha_inicio->toDateString() || $hoyConf > $periodo->periodo_fecha_fin->toDateString());
+        $estadoPrevConf = Nota::where('curmatdoc_id', $asignacion->curmatdoc_id)->where('periodo_id', $periodo->periodo_id)->value('nota_estado');
+        $requiereAuditoriaConf = $esAdminConf && ($fueraConf || in_array($estadoPrevConf, [2, 3]));
+        $snapshotAntesConf = null;
+        if ($requiereAuditoriaConf) {
+            $snapshotAntesConf = Nota::with('detalles')->where('curmatdoc_id', $asignacion->curmatdoc_id)->where('periodo_id', $periodo->periodo_id)
+                ->get()->map(function($n) {
+                    return [
+                        'est_codigo' => $n->est_codigo,
+                        'promedio'   => $n->nota_promedio_trimestral,
+                        'estado'     => $n->nota_estado,
+                        'detalles'   => $n->detalles->map(fn($d) => ['dim'=>$d->dimension_id,'col'=>$d->columna_num,'val'=>$d->detalle_valor])->all(),
+                    ];
+                })->all();
+        }
 
         DB::beginTransaction();
         try {
@@ -677,9 +797,35 @@ class NotaController extends Controller
             $rutaArchivo = storage_path('app/imports/' . $importacion->import_archivo);
             @unlink($rutaArchivo);
 
+            // Auditar import admin sobre aprobadas/rechazadas o fuera de tiempo
+            if ($requiereAuditoriaConf) {
+                $snapshotDespuesConf = Nota::with('detalles')->where('curmatdoc_id', $asignacion->curmatdoc_id)->where('periodo_id', $periodo->periodo_id)
+                    ->get()->map(function($n) {
+                        return [
+                            'est_codigo' => $n->est_codigo,
+                            'promedio'   => $n->nota_promedio_trimestral,
+                            'estado'     => $n->nota_estado,
+                            'detalles'   => $n->detalles->map(fn($d) => ['dim'=>$d->dimension_id,'col'=>$d->columna_num,'val'=>$d->detalle_valor])->all(),
+                        ];
+                    })->all();
+                \App\Models\Auditoria::registrar(
+                    'IMPORT_EXCEL_NOTAS_ADMIN',
+                    'NOTAS',
+                    'Importación Excel admin — ' . ($asignacion->materia->mat_nombre ?? '') . ' / ' . ($asignacion->curso->cur_nombre ?? '') .
+                        ' / ' . $periodo->periodo_nombre .
+                        ($fueraConf ? ' (FUERA DE PERIODO)' : '') .
+                        ($estadoPrevConf == 2 ? ' (sobre notas APROBADAS)' : '') .
+                        ($estadoPrevConf == 3 ? ' (sobre notas RECHAZADAS)' : ''),
+                    $importacion->import_id,
+                    $snapshotAntesConf,
+                    $snapshotDespuesConf
+                );
+            }
+
             $msg = 'Importación completada exitosamente.';
             if (in_array($tipo, ['notas', 'ambos'])) $msg .= ' Notas guardadas como BORRADOR.';
             if (in_array($tipo, ['asistencia', 'ambos'])) $msg .= ' Asistencia registrada.';
+            if ($requiereAuditoriaConf) $msg .= ' (Cambio admin registrado en auditoría)';
 
             return redirect()->route('notas.calificar', [$asignacion->curmatdoc_id, $periodo->periodo_id])
                 ->with('success', $msg);
@@ -733,10 +879,16 @@ class NotaController extends Controller
 
     private function getMateriasDelCurso($curCodigo)
     {
+        // Orden por config POR CURSO (matc_orden); fallback al mat_orden global.
+        $orden = (new \App\Services\MateriaCursoService())->ordenMinisterial($curCodigo);
         return CursoMateriaDocente::with('materia')
             ->where('cur_codigo', $curCodigo)->where('curmatdoc_estado', 1)
-            ->get()->sortBy(fn($cmd) => $cmd->materia->mat_orden ?? 999)
-            ->unique('mat_codigo');
+            ->get()
+            ->sortBy(function($cmd) use ($orden) {
+                return $orden[$cmd->mat_codigo] ?? ($cmd->materia->mat_orden ?? 999);
+            })
+            ->unique('mat_codigo')
+            ->values();
     }
 
     private function getNotaPromedio($estCodigo, $curCodigo, $matCodigo, $periodoId)
@@ -776,34 +928,19 @@ class NotaController extends Controller
      */
     private function getAsistenciaTrimestreEst($estCodigo, $periodo, $year)
     {
-        $fechaInicio = $periodo->periodo_fecha_inicio->format('Y-m-d');
-        $fechaFin = $periodo->periodo_fecha_fin->format('Y-m-d');
-
-        $totalDiasHabiles = $this->diasHabilesRango($fechaInicio, $fechaFin, $year);
-
-        $asis = Asistencia::where('estud_codigo', $estCodigo)
-            ->whereBetween('asis_fecha', [$fechaInicio, $fechaFin])
-            ->whereRaw('DAYOFWEEK(asis_fecha) BETWEEN 2 AND 6')
-            ->distinct('asis_fecha')->count('asis_fecha');
-
-        $perm = Permiso::where('estud_codigo', $estCodigo)->where('permiso_estado', 1)
-            ->where('permiso_fecha_inicio', '>=', $fechaInicio)
-            ->where('permiso_fecha_inicio', '<=', $fechaFin)
-            ->count();
-
-        $atr = Atraso::where('estud_codigo', $estCodigo)
-            ->whereBetween('atraso_fecha', [$fechaInicio, $fechaFin])
-            ->whereRaw('DAYOFWEEK(atraso_fecha) BETWEEN 2 AND 6')
-            ->count();
-
-        $falt = max(0, $totalDiasHabiles - $asis - $perm);
+        $r = (new \App\Services\AsistenciaResumenService())->resumen(
+            $estCodigo,
+            $periodo->periodo_fecha_inicio->format('Y-m-d'),
+            $periodo->periodo_fecha_fin->format('Y-m-d')
+        );
 
         return [
-            'dt' => $asis,
-            'ta' => $atr,
-            'tl' => $perm,
-            'tf' => $falt,
-            'total' => $totalDiasHabiles,
+            'dt'    => $r['dias_trabajados_efectivos'],
+            'ta'    => $r['atrasos'],
+            'tl'    => $r['licencias_dias'],
+            'tf'    => $r['faltas'],
+            'pres'  => $r['presencias'],
+            'total' => $r['dias_trabajados_curso'],
         ];
     }
 
@@ -868,10 +1005,24 @@ class NotaController extends Controller
             $notasData[$mat]['promedio'] = $count > 0 ? round($suma / $count) : 0;
         }
 
-        // Promedios por campo — sólo materias con mat_promediable = 1
+        // Configuración por curso (campo, orden, promediable). Si la pivote está vacía
+        // para este curso cae al modo global automáticamente.
+        $configCurso = (new \App\Services\MateriaCursoService())->configPorCurso($curso->cur_codigo);
+
+        // Reagrupar materias usando el campo CONFIGURADO POR CURSO (no el global).
+        $materiasPorCampo = $asignaciones->groupBy(function($cmd) use ($configCurso) {
+            return $configCurso[$cmd->mat_codigo]->campo
+                ?? ($cmd->materia->mat_campo ?: 'SIN CAMPO');
+        });
+
+        // Promedios por campo — sólo materias con promediable=1 EN EL CURSO
         $promediosCampo = [];
         foreach ($materiasPorCampo as $campo => $cmds) {
-            $cmdsProm = $cmds->filter(fn($cmd) => (int) ($cmd->materia->mat_promediable ?? 1) === 1);
+            $cmdsProm = $cmds->filter(function($cmd) use ($configCurso) {
+                $cfg = $configCurso[$cmd->mat_codigo] ?? null;
+                if ($cfg) return $cfg->promediable === 1;
+                return (int) ($cmd->materia->mat_promediable ?? 0) === 1;
+            });
             $promediosCampo[$campo]['cnt_promediable'] = $cmdsProm->count();
             foreach ($periodos as $p) {
                 $s = 0; $c = 0;
@@ -898,15 +1049,84 @@ class NotaController extends Controller
         }
 
         // Grupos derivados de mat_campo: cada campo (área) es un grupo natural.
-        [$gruposActivos, $gruposMap] = $this->buildGruposPorCampo();
+        [$gruposActivos, $gruposMap] = $this->buildGruposPorCampo($curso->cur_codigo ?? null);
+
+        // ── Registro de descarga + QR de autenticación ───────────────────
+        $trimestreParam = $request->input('trimestre'); // null = anual
+        $token          = bin2hex(random_bytes(20)); // 40 chars
+        $copiasPrevias  = \App\Models\BoletinDescarga::where('est_codigo', $estudiante->est_codigo)
+            ->where('descarga_gestion', (int) $gestion)
+            ->where(function($q) use ($trimestreParam) {
+                if ($trimestreParam) $q->where('descarga_trimestre', $trimestreParam);
+                else                 $q->whereNull('descarga_trimestre');
+            })->count();
+        $numeroCopia = $copiasPrevias + 1;
+        $cobrable    = $numeroCopia > 1;
+        $user        = auth()->user();
+
+        \App\Models\BoletinDescarga::create([
+            'descarga_token'        => $token,
+            'est_codigo'            => $estudiante->est_codigo,
+            'descarga_gestion'      => (int) $gestion,
+            'descarga_trimestre'    => $trimestreParam ?: null,
+            'descargado_por'        => $user ? $user->us_id : null,
+            'descargado_por_nombre' => $user ? trim(($user->us_nombres ?? '') . ' ' . ($user->us_apellidos ?? '')) : null,
+            'descarga_fecha'        => now(),
+            'descarga_ip'           => request()->ip(),
+            'descarga_user_agent'   => substr(request()->userAgent() ?? '', 0, 255),
+            'descarga_numero_copia' => $numeroCopia,
+            'descarga_cobrable'     => $cobrable ? 1 : 0,
+        ]);
+
+        $qrUrl  = url('/boletin/validar/' . $token);
+        $qrData = null;
+        try {
+            $qrData = (new \chillerlan\QRCode\QRCode(
+                new \chillerlan\QRCode\QROptions([
+                    'outputType' => \chillerlan\QRCode\QRCode::OUTPUT_IMAGE_PNG,
+                    'eccLevel'   => \chillerlan\QRCode\QRCode::ECC_L,
+                    'scale'      => 3,
+                    'imageBase64'=> true,
+                ])
+            ))->render($qrUrl);
+        } catch (\Throwable $e) {
+            $qrData = null;
+        }
 
         $pdf = Pdf::loadView('notas.reporte-personal-pdf', compact(
             'estudiante', 'curso', 'periodos', 'materiasPorCampo', 'notasData',
             'promediosCampo', 'asistData', 'enfData', 'psicoData', 'nroLista', 'gestion',
-            'gruposMap', 'gruposActivos'
+            'gruposMap', 'gruposActivos',
+            'token', 'qrUrl', 'qrData', 'numeroCopia', 'cobrable'
         ))->setPaper('letter', 'portrait');
 
         return $pdf->stream('boletin-' . $estudiante->est_codigo . '.pdf');
+    }
+
+    /**
+     * Vista pública de validación de un boletín a partir del token del QR.
+     */
+    public function validarBoletin($token)
+    {
+        $descarga = \App\Models\BoletinDescarga::with('estudiante.curso')
+            ->where('descarga_token', $token)->first();
+
+        if (!$descarga) {
+            return response()->view('notas.boletin-validar', ['valido' => false], 404);
+        }
+
+        $totalCopias = \App\Models\BoletinDescarga::where('est_codigo', $descarga->est_codigo)
+            ->where('descarga_gestion', $descarga->descarga_gestion)
+            ->where(function($q) use ($descarga) {
+                if ($descarga->descarga_trimestre) $q->where('descarga_trimestre', $descarga->descarga_trimestre);
+                else                                $q->whereNull('descarga_trimestre');
+            })->count();
+
+        return view('notas.boletin-validar', [
+            'valido'     => true,
+            'descarga'   => $descarga,
+            'totalCopias'=> $totalCopias,
+        ]);
     }
 
     /**
@@ -976,7 +1196,7 @@ class NotaController extends Controller
         }
 
         // Grupos derivados de mat_campo: cada campo (área) es un grupo natural.
-        [$gruposActivos, $gruposMap] = $this->buildGruposPorCampo();
+        [$gruposActivos, $gruposMap] = $this->buildGruposPorCampo($curso->cur_codigo ?? null);
 
         $pdf = Pdf::loadView('notas.reporte-centralizador-pdf', compact(
             'curso', 'periodos', 'asignaciones', 'data', 'lista', 'gestion',
@@ -1044,7 +1264,7 @@ class NotaController extends Controller
         $periodoNombre = $periodoId ? $periodos->first()->periodo_nombre : 'AÑO ESCOLAR';
 
         // Grupos derivados de mat_campo: cada campo (área) es un grupo natural.
-        [$gruposActivos, $gruposMap] = $this->buildGruposPorCampo();
+        [$gruposActivos, $gruposMap] = $this->buildGruposPorCampo($curso->cur_codigo ?? null);
 
         $pdf = Pdf::loadView('notas.reporte-general-pdf', compact(
             'curso', 'periodos', 'asignaciones', 'data', 'lista', 'gestion',
@@ -1059,29 +1279,16 @@ class NotaController extends Controller
      * Devuelve [Collection $gruposActivos, array $gruposMap (mat_codigo => grupo)].
      * Cada "grupo" es un objeto sintético con grupo_id, grupo_nombre, materias y materiasPromediables.
      */
-    private function buildGruposPorCampo()
+    /**
+     * Construye los grupos por campo.
+     * Si se proporciona $curCodigo, usa la configuración por curso (colegio_materia_curso);
+     * en su defecto, cae al modo legacy global.
+     */
+    private function buildGruposPorCampo(?string $curCodigo = null)
     {
-        $materias = \App\Models\Materia::visible()
-            ->whereNotNull('mat_campo')->where('mat_campo', '!=', '')
-            ->orderBy('mat_orden')->get();
-
-        $porCampo = $materias->groupBy(fn($m) => trim((string) $m->mat_campo));
-
-        $grupos = collect();
-        $map = [];
-        foreach ($porCampo as $campo => $mats) {
-            if ($mats->count() < 2) continue; // sólo campos con 2+ materias se consideran grupo
-            $grupo = (object) [
-                'grupo_id'             => 'campo_' . md5($campo),
-                'grupo_nombre'         => $campo,
-                'materias'             => $mats->values(),
-                'materiasPromediables' => $mats->where('mat_promediable', 1)->values(),
-            ];
-            $grupos->push($grupo);
-            foreach ($mats as $m) {
-                $map[$m->mat_codigo] = $grupo;
-            }
+        if ($curCodigo) {
+            return (new \App\Services\MateriaCursoService())->gruposPorCampo($curCodigo);
         }
-        return [$grupos, $map];
+        return (new \App\Services\MateriaCursoService())->gruposPorCampo('__legacy__');
     }
 }

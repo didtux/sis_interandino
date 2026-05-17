@@ -5,40 +5,49 @@
     <title>Centralizador - {{ $curso->cur_nombre }}</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: Arial, sans-serif; font-size: 5.5px; padding: 4mm; }
+        body { font-family: Arial, sans-serif; font-size: 6px; padding: 4mm; }
         .header { display: table; width: 100%; margin-bottom: 3px; }
         .logo { display: table-cell; width: 45px; vertical-align: middle; }
-        .logo img { width: 38px; height: auto; }
+        .logo img { width: 40px; height: auto; }
         .header-info { display: table-cell; vertical-align: middle; text-align: center; }
-        .header-info h3 { font-size: 8px; margin: 0; line-height: 1.1; }
-        .header-info p { font-size: 5.5px; margin: 0; }
-        .fecha-box { position: absolute; top: 4mm; right: 4mm; background: #c0392b; color: #fff; padding: 2px 6px; border-radius: 6px; font-weight: bold; font-size: 5.5px; text-align: center; }
+        .header-info h3 { font-size: 9px; margin: 0; line-height: 1.1; font-weight:bold; }
+        .header-info p { font-size: 6px; margin: 0; }
+        .fecha-box { position: absolute; top: 4mm; right: 4mm; border: 1px solid #000; padding: 2px 6px; font-weight: bold; font-size: 6px; text-align: center; background:#fff; }
         .title-section { text-align: center; margin: 3px 0; border-bottom: 1.5px solid #000; padding-bottom: 2px; }
-        .title-section h2 { font-size: 9px; font-weight: bold; }
-        .title-section p { font-size: 6.5px; }
+        .title-section h2 { font-size: 10px; font-weight: bold; }
+        .title-section p { font-size: 7px; }
 
         table.main { width: 100%; border-collapse: collapse; }
         table.main th, table.main td { border: 0.5px solid #555; padding: 1px 2px; text-align: center; }
         table.main th { font-weight: bold; }
 
-        .mat-header { background: #f5deb3; color: #000; font-size: 5px; font-weight: bold; }
-        .trim-header { background: #ffeaa7; color: #000; font-size: 4.5px; }
-        .prom-header { background: #fdcb6e; color: #000; font-size: 4.5px; font-weight: bold; }
-        .grupo-header { background: #d2b4de; color: #000; font-size: 4.5px; font-weight: bold; }
-        .grupo-sub { background: #e8d5f5; font-size: 4.5px; font-weight: bold; }
-        .grupo-val { background: #f3e5f5; font-weight: bold; color: #6c3483; }
+        /* Cabeceras de materia: nombre completo con wrap (dompdf-friendly) */
+        .mat-header {
+            background: #e8e8e8; color: #000; font-size: 5.5px; font-weight: bold;
+            line-height: 1.1; padding: 2px 1px;
+            vertical-align: middle;
+            word-break: break-word;
+        }
+        .mat-header-anual { background:#e8e8e8; color:#000; font-size:6.5px; font-weight:bold; padding:2px 1px !important; }
+        .trim-header { background: #f5f5f5; color: #000; font-size: 5.5px; }
+        .prom-header { background: #d5d5d5; color: #000; font-size: 5.5px; font-weight: bold; }
+        /* Promedio por campo — bien diferenciado al lado de las materias */
+        .grupo-header { background: #2c3e50; color: #fff; font-size: 5.5px; font-weight: bold; }
+        .grupo-sub    { background: #34495e; color: #fff; font-size: 5.5px; font-weight: bold; }
+        .grupo-val    { background: #ecf0f1; font-weight: bold; color: #2c3e50; }
 
-        .est-name { text-align: left !important; white-space: nowrap; font-size: 5.5px; padding-left: 2px !important; }
+        .est-name { text-align: left !important; white-space: nowrap; font-size: 6px; padding-left: 3px !important; max-width: 110px; overflow: hidden; text-overflow: ellipsis; }
         .prom-col { background: #fff3cd; font-weight: bold; }
         .suma-col { background: #d4edda; font-weight: bold; }
-        .prom-final { background: #c3e6cb; font-weight: bold; font-size: 6px; }
-        .nota-baja { color: #c0392b; font-weight: bold; }
+        .prom-final { background: #c3e6cb; font-weight: bold; font-size: 7px; }
+        /* Reprobados: celda con fondo rojo claro + texto rojo oscuro negrita */
+        .nota-baja { background:#fde0e0 !important; color: #c0392b; font-weight: bold; }
         .nota-cero { color: #c0392b; font-weight: bold; background: #fce4ec; }
 
-        .asist-header { background: #aed6f1 !important; font-size: 4.5px; }
-        .psico-header { background: #d7bde2 !important; font-size: 4px; }
-        .enf-header { background: #f5b7b1 !important; font-size: 4.5px; }
-        .group-header-extra { font-size: 5px; font-weight: bold; }
+        .asist-header { background: #d6eaf8 !important; font-size: 5.5px; }
+        .psico-header { background: #ebd6f3 !important; font-size: 5.5px; }
+        .enf-header { background: #fadbd8 !important; font-size: 5.5px; }
+        .group-header-extra { font-size: 6px; font-weight: bold; }
 
         .footer { position: fixed; bottom: 4mm; left: 4mm; font-size: 5px; color: #888; }
     </style>
@@ -89,24 +98,24 @@
         <thead>
             @if($isAnual)
                 <tr>
-                    <th rowspan="2" style="width:12px;background:#ddd;">N°</th>
-                    <th rowspan="2" style="min-width:80px;background:#ddd;">APELLIDOS Y NOMBRES</th>
+                    <th rowspan="2" style="width:14px;background:#ddd;">N°</th>
+                    <th rowspan="2" style="min-width:100px;background:#ddd;">APELLIDOS Y NOMBRES</th>
                     @foreach($materiasList as $cmd)
-                        <th colspan="{{ $numPeriodos + 1 }}" class="mat-header">
-                            {{ mb_strtoupper(mb_substr($cmd->materia->mat_nombre, 0, 10, 'UTF-8'), 'UTF-8') }}
+                        <th colspan="{{ $numPeriodos + 1 }}" class="mat-header" title="{{ $cmd->materia->mat_nombre }}">
+                            {{ mb_strtoupper($cmd->materia->mat_nombre, 'UTF-8') }}
                         </th>
-                        {{-- Columna de grupo después de la última materia del grupo --}}
+                        {{-- Promedio campo inmediatamente al lado de la ÚLTIMA materia del grupo --}}
                         @php $grp = $gruposMap[$cmd->mat_codigo] ?? null; @endphp
                         @if($grp && ($ultimaMatGrupo[$grp->grupo_id] ?? '') === $cmd->mat_codigo)
-                            <th colspan="{{ $numPeriodos + 1 }}" class="grupo-header">
-                                {{ mb_strtoupper(mb_substr($grp->grupo_nombre, 0, 15, 'UTF-8'), 'UTF-8') }}
+                            <th colspan="{{ $numPeriodos + 1 }}" class="grupo-header" title="Promedio del campo">
+                                PROM.<br>{{ mb_strtoupper($grp->grupo_nombre, 'UTF-8') }}
                             </th>
                         @endif
                     @endforeach
                     <th rowspan="2" class="suma-col" style="width:16px;">SUMA<br>ANUAL</th>
                     <th rowspan="2" class="prom-final" style="width:18px;">PROM.<br>ANUAL</th>
-                    <th colspan="4" class="group-header-extra asist-header">FALTAS Y<br>ATRASOS</th>
-                    <th colspan="4" class="group-header-extra psico-header">CONTROL Y<br>SEGUIM.</th>
+                    <th colspan="4" class="group-header-extra asist-header" title="Días Trabajados / Atrasos / Licencias / Faltas (Anual)">ASISTENCIA<br>(ANUAL)</th>
+                    <th colspan="3" class="group-header-extra psico-header">CONTROL Y<br>SEGUIM.</th>
                     <th rowspan="2" class="group-header-extra enf-header" style="width:14px;">ENFER<br>MERÍA</th>
                 </tr>
                 <tr>
@@ -123,37 +132,39 @@
                             <th class="grupo-sub">PROM</th>
                         @endif
                     @endforeach
-                    <th class="asist-header">DT</th>
-                    <th class="asist-header">TA</th>
-                    <th class="asist-header">TL</th>
-                    <th class="asist-header">TF</th>
-                    <th class="psico-header">SI</th>
-                    <th class="psico-header">NO</th>
-                    <th class="psico-header">SI</th>
-                    <th class="psico-header">NO</th>
+                    <th class="asist-header" title="Días Trabajados">DT</th>
+                    <th class="asist-header" title="Total Atrasos">TA</th>
+                    <th class="asist-header" title="Total Licencias">TL</th>
+                    <th class="asist-header" title="Total Faltas">TF</th>
+                    <th class="psico-header">LLAMA<br>DAS</th>
+                    <th class="psico-header">COMPR<br>SÍ</th>
+                    <th class="psico-header">COMPR<br>NO</th>
                 </tr>
             @else
                 <tr>
-                    <th style="width:12px;background:#ddd;">N°</th>
-                    <th style="min-width:80px;background:#ddd;">APELLIDOS Y NOMBRES</th>
+                    <th style="width:14px;background:#ddd;">N°</th>
+                    <th style="min-width:100px;background:#ddd;">APELLIDOS Y NOMBRES</th>
                     @foreach($materiasList as $cmd)
-                        <th class="mat-header">{{ mb_strtoupper(mb_substr($cmd->materia->mat_nombre, 0, 10, 'UTF-8'), 'UTF-8') }}</th>
+                        <th class="mat-header" title="{{ $cmd->materia->mat_nombre }}">
+                            {{ mb_strtoupper($cmd->materia->mat_nombre, 'UTF-8') }}
+                        </th>
                         @php $grp = $gruposMap[$cmd->mat_codigo] ?? null; @endphp
                         @if($grp && ($ultimaMatGrupo[$grp->grupo_id] ?? '') === $cmd->mat_codigo)
-                            <th class="grupo-header">{{ mb_strtoupper(mb_substr($grp->grupo_nombre, 0, 12, 'UTF-8'), 'UTF-8') }}</th>
+                            <th class="grupo-header" title="Promedio del campo">
+                                PROM.<br>{{ mb_strtoupper($grp->grupo_nombre, 'UTF-8') }}
+                            </th>
                         @endif
                     @endforeach
                     <th class="prom-final" style="width:18px;">PROM.</th>
                     <th class="suma-col" style="width:16px;">SUMA</th>
                     <th class="prom-final" style="width:18px;">PROM.</th>
-                    <th class="asist-header">DT</th>
-                    <th class="asist-header">TA</th>
-                    <th class="asist-header">TL</th>
-                    <th class="asist-header">TF</th>
-                    <th class="psico-header">SI</th>
-                    <th class="psico-header">NO</th>
-                    <th class="psico-header">SI</th>
-                    <th class="psico-header">NO</th>
+                    <th class="asist-header" title="Días Trabajados">DT</th>
+                    <th class="asist-header" title="Atrasos">TA</th>
+                    <th class="asist-header" title="Licencias">TL</th>
+                    <th class="asist-header" title="Faltas">TF</th>
+                    <th class="psico-header">LLAMA<br>DAS</th>
+                    <th class="psico-header">COMPR<br>SÍ</th>
+                    <th class="psico-header">COMPR<br>NO</th>
                     <th class="enf-header">ENF</th>
                 </tr>
             @endif
@@ -253,15 +264,16 @@
                     <td>{{ $tlT }}</td>
                     <td>{{ $tfT }}</td>
 
-                    {{-- Psicopedagogía --}}
+                    {{-- Psicopedagogía: total llamadas, compromisos sí, compromisos no --}}
                     @php
                         $lsi = 0; $csi = 0; $cno = 0;
                         foreach ($fila['psico'] as $ps) {
-                            $lsi += $ps['llamadas_si']; $csi += $ps['compromisos_si']; $cno += $ps['compromisos_no'];
+                            $lsi += $ps['llamadas_si'] ?? 0;
+                            $csi += $ps['compromisos_si'] ?? 0;
+                            $cno += $ps['compromisos_no'] ?? 0;
                         }
                     @endphp
                     <td>{{ $lsi }}</td>
-                    <td>0</td>
                     <td>{{ $csi }}</td>
                     <td>{{ $cno }}</td>
 
