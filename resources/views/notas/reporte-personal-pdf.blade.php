@@ -261,7 +261,8 @@
                 @php
                     $a = $asistData[$p->periodo_numero] ?? ['ta'=>0,'tl'=>0,'tf'=>0,'dt'=>0,'pres'=>0,'total'=>0,'visible'=>true];
                     $visible = $a['visible'] ?? true;
-                    $totalCalc = $visible ? ($a['pres'] + $a['ta'] + $a['tl'] + $a['tf']) : 0;
+                    // Total = Presencias + Faltas + Licencias. Atrasos NO se suman (subset de Presencias).
+                    $totalCalc = $visible ? ($a['pres'] + $a['tl'] + $a['tf']) : 0;
                 @endphp
                 <td>{{ $visible ? $a['pres'] : '' }}</td>
                 <td>{{ $visible ? $a['ta'] : '' }}</td>

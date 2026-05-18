@@ -28,13 +28,69 @@ use Illuminate\Support\Facades\DB;
 class AsistenciaResumenService
 {
     /**
+     * Fallback si no hay configuración cargada para el curso del estudiante.
+     * Solo se usa cuando no hay ninguna config con turno=Mañana aplicable.
+     */
+    private const FALLBACK_DESDE = '07:00:00';
+    private const FALLBACK_HASTA = '13:00:00';
+
+    /** Cache en memoria por curso: cur_codigo => ['desde','hasta','tolerancia'] */
+    private array $configCache = [];
+
+    /**
+     * Devuelve el rango horario válido del TURNO MAÑANA y el límite de tolerancia
+     * para el curso del estudiante, leídos de `asistencia_configuracion`.
+     * Prioridad: config específica del curso > config global por categoría (cur_nivel).
+     * Solo considera configs con turno = 'Mañana'.
+     *
+     * @return array{desde:string,hasta:string,tolerancia:string|null}
+     */
+    private function configTurnoManana(string $estCodigo): array
+    {
+        $estudiante = DB::table('colegio_estudiantes')->where('est_codigo', $estCodigo)->first();
+        if (!$estudiante) {
+            return ['desde' => self::FALLBACK_DESDE, 'hasta' => self::FALLBACK_HASTA, 'tolerancia' => null];
+        }
+        $cur = $estudiante->cur_codigo;
+        if (isset($this->configCache[$cur])) return $this->configCache[$cur];
+
+        $curNivel = DB::table('colegio_cursos')->where('cur_codigo', $cur)->value('cur_nivel');
+
+        $cfg = DB::table('asistencia_configuracion')
+            ->where('config_estado', 1)
+            ->where('config_turno', 'Mañana')
+            ->where(function ($q) use ($cur, $curNivel) {
+                $q->where('cur_codigo', $cur);
+                if ($curNivel) $q->orWhere(function ($qq) use ($curNivel) {
+                    $qq->whereNull('cur_codigo')->where('config_categoria', $curNivel);
+                });
+            })
+            ->orderByRaw('CASE WHEN cur_codigo IS NULL THEN 1 ELSE 0 END')
+            ->first();
+
+        if ($cfg) {
+            // 'desde' es el FALLBACK (07:00) para captar llegadas tempranas (antes de hora_entrada).
+            // 'hasta' es hora_salida — corta los registros de turno tarde.
+            // 'tolerancia' marca a partir de qué hora se considera atraso (08:34 en INICIAL).
+            $resultado = [
+                'desde'      => self::FALLBACK_DESDE,
+                'hasta'      => substr($cfg->hora_salida, 0, 8),
+                'tolerancia' => $cfg->tolerancia_atraso ?: null,
+            ];
+        } else {
+            $resultado = ['desde' => self::FALLBACK_DESDE, 'hasta' => self::FALLBACK_HASTA, 'tolerancia' => null];
+        }
+        return $this->configCache[$cur] = $resultado;
+    }
+
+    /**
      * Resumen para un rango aislado (sin dedup con otros rangos).
      */
     public function resumen(string $estCodigo, string $inicio, string $fin): array
     {
         $diasHabilesCalendario = $this->diasHabilesCalendario($inicio, $fin);
 
-        $diasTrabajadosCurso = $this->fechasTrabajadasCurso($inicio, $fin);
+        $diasTrabajadosCurso = $this->fechasTrabajadasCurso($inicio, $fin, $estCodigo);
 
         $presFechas = $this->fechasPresencia($estCodigo, $inicio, $fin);
 
@@ -93,7 +149,7 @@ class AsistenciaResumenService
             $inicio = Carbon::parse($periodo->periodo_fecha_inicio)->format('Y-m-d');
             $fin    = Carbon::parse($periodo->periodo_fecha_fin)->format('Y-m-d');
 
-            $diasTrabajadosCurso = $this->fechasTrabajadasCurso($inicio, $fin);
+            $diasTrabajadosCurso = $this->fechasTrabajadasCurso($inicio, $fin, $estCodigo);
 
             // Presencias del estudiante (dedup global)
             $presFechas = $this->fechasPresencia($estCodigo, $inicio, $fin)
@@ -215,11 +271,16 @@ class AsistenciaResumenService
      * Días distintos L-V con al menos un registro en colegio_asistencia
      * (independientemente del estudiante) — refleja días donde el curso "trabajó".
      */
-    private function fechasTrabajadasCurso(string $inicio, string $fin)
+    private function fechasTrabajadasCurso(string $inicio, string $fin, ?string $estCodigo = null)
     {
+        $win = $estCodigo
+            ? $this->configTurnoManana($estCodigo)
+            : ['desde' => self::FALLBACK_DESDE, 'hasta' => self::FALLBACK_HASTA];
+
         return DB::table('colegio_asistencia')
             ->whereBetween('asis_fecha', [$inicio, $fin])
             ->whereRaw('DAYOFWEEK(asis_fecha) BETWEEN 2 AND 6')
+            ->whereRaw('TIME(asis_hora) BETWEEN ? AND ?', [$win['desde'], $win['hasta']])
             ->select('asis_fecha')->distinct()->orderBy('asis_fecha')
             ->pluck('asis_fecha')
             ->map(fn($f) => (string) $f);
@@ -232,24 +293,55 @@ class AsistenciaResumenService
      */
     private function fechasPresencia(string $estCodigo, string $inicio, string $fin)
     {
+        $win = $this->configTurnoManana($estCodigo);
         return DB::table('colegio_asistencia')
             ->where('estud_codigo', $estCodigo)
             ->whereBetween('asis_fecha', [$inicio, $fin])
             ->whereRaw('DAYOFWEEK(asis_fecha) BETWEEN 2 AND 6')
+            ->whereRaw('TIME(asis_hora) BETWEEN ? AND ?', [$win['desde'], $win['hasta']])
             ->select('asis_fecha')->distinct()->orderBy('asis_fecha')
             ->pluck('asis_fecha')
             ->map(fn($f) => (string) $f);
     }
 
+    /**
+     * Atrasos = unión de:
+     *   (a) registros manuales en `asistencia_atrasos`
+     *   (b) marcaciones en `colegio_asistencia` cuya hora supera el `tolerancia_atraso`
+     *       de la configuración del estudiante (curso > global).
+     * Dedup por fecha: un solo atraso por día por estudiante.
+     */
     private function atrasos(string $estCodigo, string $inicio, string $fin)
     {
-        return DB::table('asistencia_atrasos')
+        // (a) Atrasos manuales
+        $manuales = DB::table('asistencia_atrasos')
             ->where('estud_codigo', $estCodigo)
             ->whereBetween('atraso_fecha', [$inicio, $fin])
             ->whereRaw('DAYOFWEEK(atraso_fecha) BETWEEN 2 AND 6')
-            ->orderBy('atraso_fecha')
-            ->select('atraso_fecha', 'atraso_hora')
+            ->select(DB::raw('atraso_fecha AS fecha'), DB::raw('atraso_hora AS hora'))
             ->get();
+
+        // (b) Atrasos derivados — comparación absoluta contra tolerancia_atraso del
+        //     turno mañana configurado para el curso del estudiante.
+        $win = $this->configTurnoManana($estCodigo);
+        $derivados = collect();
+        if (!empty($win['tolerancia'])) {
+            $derivados = DB::table('colegio_asistencia')
+                ->where('estud_codigo', $estCodigo)
+                ->whereBetween('asis_fecha', [$inicio, $fin])
+                ->whereRaw('DAYOFWEEK(asis_fecha) BETWEEN 2 AND 6')
+                ->whereRaw('TIME(asis_hora) > ?', [$win['tolerancia']])
+                ->whereRaw('TIME(asis_hora) <= ?', [$win['hasta']])
+                ->select(DB::raw('asis_fecha AS fecha'), DB::raw('asis_hora AS hora'))
+                ->get();
+        }
+
+        // Unión + dedup por fecha (un atraso por día)
+        return $manuales->concat($derivados)
+            ->unique(fn($r) => (string) $r->fecha)
+            ->sortBy('fecha')
+            ->map(fn($r) => (object) ['atraso_fecha' => $r->fecha, 'atraso_hora' => $r->hora])
+            ->values();
     }
 
     private function permisosCantidadEnRango(string $estCodigo, string $inicio, string $fin): int

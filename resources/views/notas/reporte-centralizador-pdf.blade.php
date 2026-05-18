@@ -286,8 +286,8 @@
                             $tfT   += $a['tf'];
                             $presT += $a['pres'] ?? 0;
                         }
-                        // TOTAL = Asistencias + Atrasos + Licencias + Faltas (categorías independientes).
-                        $totT = $presT + $atrT + $tlT + $tfT;
+                        // TOTAL = Presencias + Faltas + Licencias. Atrasos NO se suman (son subconjunto de Presencias).
+                        $totT = $presT + $tlT + $tfT;
                     @endphp
                     <td><strong>{{ $totT }}</strong></td>
                     <td>{{ $presT }}</td>

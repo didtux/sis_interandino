@@ -211,6 +211,11 @@ class AsistenciaController extends Controller
                 $q->where('cur_codigo', $request->cur_codigo);
             });
         }
+        // Default: turno MAÑANA (07:00-13:00) si no se eligió un turno explícito.
+        // Mantiene consistencia con los reportes oficiales (concejo, boletín, centralizador).
+        if (!$request->filled('turno')) {
+            $cardsQuery->whereRaw('TIME(asis_hora) BETWEEN ? AND ?', ['07:00:00', '13:00:00']);
+        }
         if ($request->filled('turno')) {
             $configCards = ConfiguracionAsistencia::activo()->where('config_id', $request->turno)->first();
             if ($configCards) {
@@ -598,10 +603,11 @@ class AsistenciaController extends Controller
 
         $estCodigos = $estudiantes->pluck('est_codigo')->all();
 
-        // Presencias y permisos por (estudiante, fecha)
+        // Presencias por (estudiante, fecha) — solo turno mañana (07:00-13:00).
         $presSet = DB::table('colegio_asistencia')
             ->whereIn('estud_codigo', $estCodigos)
             ->whereBetween('asis_fecha', [$fechaInicio, $fechaFin])
+            ->whereRaw('TIME(asis_hora) BETWEEN ? AND ?', ['07:00:00', '13:00:00'])
             ->selectRaw("CONCAT(estud_codigo,'|',DATE_FORMAT(asis_fecha,'%Y-%m-%d')) AS k")
             ->pluck('k')->flip();
 
