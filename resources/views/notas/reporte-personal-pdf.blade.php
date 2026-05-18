@@ -5,7 +5,7 @@
     <title>Boletín - {{ $estudiante->est_apellidos }} {{ $estudiante->est_nombres }}</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: Arial, sans-serif; font-size: 8px; padding: 8mm 10mm; color:#000; }
+        body { font-family: "Times New Roman", Times, serif; font-size: 9px; padding: 8mm 10mm; color:#000; }
         /* Cabecera oficial (B/N con logo color) */
         .header-table { width:100%; border-collapse:collapse; margin-bottom:6px; }
         .header-table td { vertical-align:middle; padding:0; }
@@ -14,7 +14,7 @@
         .h-info-cell { text-align:center; }
         .h-info-cell .ue-nombre { font-weight:700; font-size:14px; letter-spacing:0.5px; }
         .h-info-cell .ue-dir    { font-size:8px; color:#333; line-height:1.3; }
-        .h-info-cell .titulo-banda { display:inline-block; margin-top:4px; padding:4px 14px; border:1.5px solid #000; font-weight:700; font-size:12px; letter-spacing:1px; }
+        .h-info-cell .titulo-banda { display:inline-block; margin-top:4px; padding:2px 0; font-weight:700; font-size:13px; letter-spacing:1px; }
         .h-qr-cell { width:90px; text-align:center; }
         .h-qr-cell img { width:75px; height:75px; }
         .h-qr-cell .qr-label { font-size:6px; color:#555; text-transform:uppercase; letter-spacing:0.5px; margin-top:2px; }
@@ -22,11 +22,11 @@
         .fecha-box { position: absolute; top: 8mm; right: 10mm; border:1.5px solid #000; padding: 3px 9px; font-weight: bold; font-size: 7px; text-align: center; background:#fff; color:#000; }
 
         /* Info estudiante */
-        .info-table { width: 100%; border: 2px solid #000; border-collapse: collapse; margin-bottom: 6px; }
+        .info-table { width: 100%; border: none; border-collapse: collapse; margin-bottom: 6px; }
         .info-table td { padding: 3px 8px; font-size: 9px; border: none; }
         .info-label { font-weight: bold; font-size: 8px; width: 18%; }
         .info-value { font-weight: bold; font-size: 11px; }
-        .nro-lista-cell { text-align: center; width: 15%; vertical-align: middle; border-left: 2px solid #000; }
+        .nro-lista-cell { text-align: center; width: 15%; vertical-align: middle; border: none; }
         .nro-lista-label { font-size: 7px; font-weight: bold; }
         .nro-lista-num { font-size: 32px; font-weight: bold; line-height: 1; }
 
@@ -53,6 +53,15 @@
         .rotated { font-size: 5.5px; }
 
         .footer { position: fixed; bottom: 8mm; left: 10mm; right: 10mm; font-size: 6px; color: #888; border-top: 0.5px solid #ccc; padding-top: 2px; }
+
+        /* Bloque QR al pie */
+        .qr-footer-table { width:100%; border-collapse:collapse; margin-top:8px; }
+        .qr-footer-table td { vertical-align:middle; border:1px solid #000; padding:6px 8px; }
+        .qr-footer-info { font-size:7px; line-height:1.4; }
+        .qr-footer-title { font-weight:bold; font-size:8px; letter-spacing:1px; margin-bottom:3px; }
+        .qr-footer-copia { display:inline-block; margin-top:3px; padding:1px 6px; border:1px solid #000; font-weight:bold; font-size:7px; }
+        .qr-footer-img { width:75px; text-align:center; }
+        .qr-footer-img img { width:65px; height:65px; }
     </style>
 </head>
 <body>
@@ -76,19 +85,25 @@
                 </div>
                 <div class="titulo-banda">BOLETÍN DE CALIFICACIONES</div>
             </td>
-            <td class="h-qr-cell">
-                @if(!empty($qrData))
-                    <img src="{{ $qrData }}" alt="QR validación">
-                @endif
-                <div class="qr-label">Validar autenticidad</div>
-                @if(!empty($numeroCopia))
-                    <div class="copia-tag">
-                        Copia N° {{ $numeroCopia }}@if(!empty($cobrable)) · Reimp.@endif
-                    </div>
-                @endif
-            </td>
         </tr>
     </table>
+
+    @php
+        // Detección "agrupada": forma parte de un grupo con ≥2 promediables.
+        $promediablesPorGrupo = [];
+        if (isset($gruposMap)) {
+            foreach ($gruposMap as $matCod => $grp) {
+                $proms = $grp->materiasPromediables->pluck('mat_codigo')->toArray();
+                if (count($proms) >= 2) $promediablesPorGrupo[$grp->grupo_id] = $proms;
+            }
+        }
+        $esAgrupada = function ($matCod) use ($gruposMap, $promediablesPorGrupo) {
+            $grp = $gruposMap[$matCod] ?? null;
+            if (!$grp) return false;
+            $proms = $promediablesPorGrupo[$grp->grupo_id] ?? [];
+            return in_array($matCod, $proms);
+        };
+    @endphp
 
     {{-- Info estudiante --}}
     <table class="info-table">
@@ -113,15 +128,21 @@
     <table class="notas">
         <thead>
             <tr>
-                <th rowspan="2" class="th-top" style="width:16%;">CAMPO</th>
-                <th rowspan="2" class="th-top" style="width:20%;">ÁREAS CURRICULARES</th>
-                <th colspan="{{ $periodos->count() + 1 }}" class="th-top">VALORACIÓN CUANTITATIVA</th>
+                <th rowspan="3" class="th-top" style="width:14%;">CAMPO</th>
+                <th rowspan="3" class="th-top" style="width:22%;">ÁREAS CURRICULARES</th>
+                <th colspan="{{ $periodos->count() * 2 + 1 }}" class="th-top">VALORACIÓN CUANTITATIVA</th>
             </tr>
             <tr>
                 @foreach($periodos as $p)
-                    <th>{{ $p->periodo_numero == 1 ? '1er.' : ($p->periodo_numero == 2 ? '2do.' : '3er') }}<br>TRIMESTRE</th>
+                    <th colspan="2">{{ $p->periodo_numero == 1 ? '1er.' : ($p->periodo_numero == 2 ? '2do.' : '3er') }}<br>TRIMESTRE</th>
                 @endforeach
-                <th class="prom-anual">PROMEDIO</th>
+                <th rowspan="2" class="prom-anual">PROMEDIO</th>
+            </tr>
+            <tr>
+                @foreach($periodos as $p)
+                    <th style="font-size:5.5px;line-height:1.05;">Nota<br>Boletín<br>Interno</th>
+                    <th style="font-size:5.5px;line-height:1.05;background:#fff8e1;">Nota<br>Ministerio<br>de Educación</th>
+                @endforeach
             </tr>
         </thead>
         <tbody>
@@ -130,10 +151,16 @@
             @endphp
             @foreach($materiasPorCampo as $campo => $cmds)
                 @php
-                    // Contar filas: materias + filas de grupo + fila promedio campo
+                    // REORDENAR: promediables primero (preserva matc_orden entre ellas), luego el resto.
+                    // Esto coloca la fila "PROMEDIO {GRUPO}" entre las promediables y el resto.
+                    $cmds = collect($cmds)->sortBy(function($cmd) use ($esAgrupada) {
+                        return $esAgrupada($cmd->mat_codigo) ? 0 : 1;
+                    })->values();
+
+                    // Filas extra: una por cada grupo promediable presente en este campo
                     $gruposEnCampo = [];
                     foreach($cmds as $cmd) {
-                        if(isset($gruposMap[$cmd->mat_codigo])) {
+                        if(isset($gruposMap[$cmd->mat_codigo]) && $esAgrupada($cmd->mat_codigo)) {
                             $g = $gruposMap[$cmd->mat_codigo];
                             $gruposEnCampo[$g->grupo_id] = $g;
                         }
@@ -146,31 +173,31 @@
                 @foreach($cmds as $cmd)
                     <tr>
                         @if($first)
-                            <td rowspan="{{ $materiaCount + $filasExtra + 1 }}" class="campo-cell">{{ mb_strtoupper($campo, 'UTF-8') }}</td>
+                            <td rowspan="{{ $materiaCount + $filasExtra }}" class="campo-cell">{{ mb_strtoupper($campo, 'UTF-8') }}</td>
                             @php $first = false; @endphp
                         @endif
                         <td class="materia-cell">{{ mb_strtoupper($cmd->materia->mat_nombre, 'UTF-8') }}</td>
+                        @php $agrupada = $esAgrupada($cmd->mat_codigo); @endphp
                         @foreach($periodos as $p)
                             @php $val = $notasData[$cmd->mat_codigo]['trimestres'][$p->periodo_numero] ?? 0; @endphp
                             <td class="{{ $val > 0 && $val < 51 ? 'nota-baja' : '' }}">{{ $val > 0 ? $val : '' }}</td>
+                            <td class="{{ $val > 0 && $val < 51 ? 'nota-baja' : '' }}" style="background:{{ $agrupada ? '#fafafa' : '#fffdf0' }};">{{ $agrupada ? '' : ($val > 0 ? $val : '') }}</td>
                         @endforeach
                         <td class="prom-anual">{{ $notasData[$cmd->mat_codigo]['promedio'] > 0 ? $notasData[$cmd->mat_codigo]['promedio'] : '' }}</td>
                     </tr>
-                    {{-- Si esta materia es la última de su grupo, mostrar fila promedio grupo --}}
-                    @if(isset($gruposMap[$cmd->mat_codigo]))
+                    {{-- Fila PROMEDIO del grupo: emite tras la ÚLTIMA materia PROMEDIABLE del grupo --}}
+                    @if(isset($gruposMap[$cmd->mat_codigo]) && $esAgrupada($cmd->mat_codigo))
                         @php
                             $grp = $gruposMap[$cmd->mat_codigo];
-                            $matCodsGrupo = $grp->materias->pluck('mat_codigo')->toArray();
-                            // Sólo las que suman al promedio del grupo
-                            $matCodsProm  = $grp->materiasPromediables->pluck('mat_codigo')->toArray();
-                            $esUltima = true;
+                            $matCodsProm = $grp->materiasPromediables->pluck('mat_codigo')->toArray();
+                            $esUltimaProm = true;
                             $found = false;
                             foreach($cmds as $c2) {
-                                if($found && in_array($c2->mat_codigo, $matCodsGrupo)) { $esUltima = false; break; }
+                                if($found && in_array($c2->mat_codigo, $matCodsProm)) { $esUltimaProm = false; break; }
                                 if($c2->mat_codigo === $cmd->mat_codigo) $found = true;
                             }
                         @endphp
-                        @if($esUltima && !in_array($grp->grupo_id, $gruposMostradosEnCampo))
+                        @if($esUltimaProm && !in_array($grp->grupo_id, $gruposMostradosEnCampo))
                             @php $gruposMostradosEnCampo[] = $grp->grupo_id; @endphp
                             <tr style="background:#e8d5f5;">
                                 <td style="text-align:left !important;padding-left:14px !important;font-weight:bold;font-size:6.5px;color:#6c3483;">
@@ -181,11 +208,13 @@
                                         $sumaG = 0; $cntG = 0;
                                         foreach($matCodsProm as $mc) {
                                             $v = $notasData[$mc]['trimestres'][$p->periodo_numero] ?? 0;
-                                            $sumaG += $v; $cntG++;
+                                            // Solo cuenta materias con nota (>0); ignora vacías para no diluir el promedio.
+                                            if ($v > 0) { $sumaG += $v; $cntG++; }
                                         }
                                         $promG = $cntG > 0 ? round($sumaG / $cntG, 0) : 0;
                                     @endphp
                                     <td style="font-weight:bold;color:#6c3483;">{{ $promG > 0 ? $promG : '' }}</td>
+                                    <td style="font-weight:bold;color:#6c3483;background:#f4e6fa;">{{ $promG > 0 ? $promG : '' }}</td>
                                 @endforeach
                                 @php
                                     $sumaAnualG = 0; $cntAnualG = 0;
@@ -193,7 +222,7 @@
                                         $sg = 0; $cg = 0;
                                         foreach($matCodsProm as $mc) {
                                             $v = $notasData[$mc]['trimestres'][$p2->periodo_numero] ?? 0;
-                                            $sg += $v; $cg++;
+                                            if ($v > 0) { $sg += $v; $cg++; }
                                         }
                                         $pg = $cg > 0 ? round($sg / $cg, 0) : 0;
                                         if($pg > 0) { $sumaAnualG += $pg; $cntAnualG++; }
@@ -205,25 +234,6 @@
                         @endif
                     @endif
                 @endforeach
-                {{-- Fila promedio del campo (sólo si hay materias promediables) --}}
-                @php $cntProm = $promediosCampo[$campo]['cnt_promediable'] ?? 0; @endphp
-                @if($cntProm > 0)
-                    @php $promAnualCampo = $promediosCampo[$campo]['anual'] ?? 0; @endphp
-                    <tr class="prom-campo-row">
-                        <td class="prom-campo-label">
-                            @php
-                                $palabras = explode(' ', $campo);
-                                $abrev = count($palabras) > 2 ? implode(' ', array_slice($palabras, 0, 2)) : $campo;
-                            @endphp
-                            PROMEDIO<br>{{ mb_strtoupper($abrev, 'UTF-8') }}
-                        </td>
-                        @foreach($periodos as $p)
-                            @php $v = $promediosCampo[$campo][$p->periodo_numero] ?? 0; @endphp
-                            <td style="font-weight:bold;{{ $v > 0 && $v < 51 ? 'color:#c0392b;' : '' }}">{{ $v > 0 ? $v : '' }}</td>
-                        @endforeach
-                        <td class="prom-anual" style="font-size:9px;{{ $promAnualCampo > 0 && $promAnualCampo < 51 ? 'color:#c0392b;' : '' }}">{{ $promAnualCampo > 0 ? $promAnualCampo : '' }}</td>
-                    </tr>
-                @endif
             @endforeach
         </tbody>
     </table>
@@ -238,22 +248,26 @@
         </tr>
         <tr>
             @foreach($periodos as $p)
+                <th class="rotated">ASIST.</th>
                 <th class="rotated">ATRASOS</th>
                 <th class="rotated">LICENCIAS</th>
                 <th class="rotated">FALTAS</th>
-                <th class="rotated">DÍAS<br>TRABAJADOS</th>
-                <th class="rotated">TOTAL<br>DÍAS HÁB.</th>
+                <th class="rotated">TOTAL</th>
             @endforeach
         </tr>
         <tr>
             <td></td>
             @foreach($periodos as $p)
-                @php $a = $asistData[$p->periodo_numero] ?? ['ta'=>0,'tl'=>0,'tf'=>0,'dt'=>0,'total'=>0]; @endphp
-                <td>{{ $a['ta'] }}</td>
-                <td>{{ $a['tl'] }}</td>
-                <td>{{ $a['tf'] }}</td>
-                <td>{{ $a['dt'] }}</td>
-                <td style="font-weight:bold;">{{ $a['total'] }}</td>
+                @php
+                    $a = $asistData[$p->periodo_numero] ?? ['ta'=>0,'tl'=>0,'tf'=>0,'dt'=>0,'pres'=>0,'total'=>0,'visible'=>true];
+                    $visible = $a['visible'] ?? true;
+                    $totalCalc = $visible ? ($a['pres'] + $a['ta'] + $a['tl'] + $a['tf']) : 0;
+                @endphp
+                <td>{{ $visible ? $a['pres'] : '' }}</td>
+                <td>{{ $visible ? $a['ta'] : '' }}</td>
+                <td>{{ $visible ? $a['tl'] : '' }}</td>
+                <td>{{ $visible ? $a['tf'] : '' }}</td>
+                <td style="font-weight:bold;">{{ $visible ? $totalCalc : '' }}</td>
             @endforeach
         </tr>
     </table>
@@ -304,13 +318,33 @@
         </tr>
     </table>
 
+    {{-- Bloque QR de verificación (esquina inferior derecha) --}}
+    @if(!empty($qrData) || !empty($token))
+    <table class="qr-footer-table">
+        <tr>
+            <td class="qr-footer-info">
+                <div class="qr-footer-title">VALIDACIÓN DE AUTENTICIDAD</div>
+                @if(!empty($token))
+                    <div>Código de verificación: <strong>{{ strtoupper(substr($token, 0, 12)) }}</strong></div>
+                @endif
+                @if(!empty($qrUrl))
+                    <div>Verificar en: {{ $qrUrl }}</div>
+                @endif
+                @if(!empty($numeroCopia))
+                    <div class="qr-footer-copia">Copia N° {{ $numeroCopia }}{!! !empty($cobrable) ? ' · Reimpresión' : '' !!}</div>
+                @endif
+            </td>
+            <td class="qr-footer-img">
+                @if(!empty($qrData))
+                    <img src="{{ $qrData }}" alt="QR validación">
+                @endif
+            </td>
+        </tr>
+    </table>
+    @endif
+
     <div class="footer">
         Impreso: {{ now()->format('d/m/Y H:i:s') }} | Gestión {{ $gestion }} | Boletín Individual
-        @if(!empty($token))
-            | Cód. verificación: <strong>{{ strtoupper(substr($token, 0, 12)) }}</strong>
-            @if(!empty($qrUrl))| Valida en: {{ $qrUrl }}@endif
-            @if(!empty($numeroCopia))| Copia N° {{ $numeroCopia }}@endif
-        @endif
     </div>
 </body>
 </html>

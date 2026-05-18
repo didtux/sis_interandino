@@ -222,6 +222,9 @@
         <li><a href="{{ route('notas.rendimiento') }}"><i class="fas fa-chart-line"></i> Rendimiento</a></li>
         @endif
         <li><a href="{{ route('asistencia-clases.index') }}"><i class="fas fa-clipboard-check"></i> Asistencia Clases</a></li>
+        @if($esAdmin || in_array(optional($user)->rol_id, [1,4]))
+        <li><a href="{{ route('reimpresiones.index') }}"><i class="fas fa-print"></i> Reimpresiones</a></li>
+        @endif
         @if($esAdmin)
         <li><a href="{{ route('notas.configuracion') }}"><i class="fas fa-cog"></i> Configuración</a></li>
         @endif

@@ -126,6 +126,11 @@ Route::middleware(['auth', 'permiso', 'auditoria', 'reportes:300,512M'])->group(
     Route::post('notas/aprobar/{curmatdoc}/{periodo}', [App\Http\Controllers\NotaController::class, 'aprobar'])->name('notas.aprobar');
     Route::post('notas/aprobar-masivo', [App\Http\Controllers\NotaController::class, 'aprobarMasivo'])->name('notas.aprobar-masivo');
 
+    // Reimpresiones de boletines (auditoría + cobro)
+    Route::get('notas/reimpresiones',                [App\Http\Controllers\BoletinDescargaController::class, 'index'])->name('reimpresiones.index');
+    Route::post('notas/reimpresiones/{id}/anular',   [App\Http\Controllers\BoletinDescargaController::class, 'anular'])->name('reimpresiones.anular');
+    Route::post('notas/reimpresiones/{id}/cobrar',   [App\Http\Controllers\BoletinDescargaController::class, 'cobrar'])->name('reimpresiones.cobrar');
+
     // ── Lista negra / Observados (solo director) ──
     Route::get('observados', [App\Http\Controllers\EstudianteObservadoController::class, 'index'])->name('observados.index');
     Route::post('observados', [App\Http\Controllers\EstudianteObservadoController::class, 'store'])->name('observados.store');

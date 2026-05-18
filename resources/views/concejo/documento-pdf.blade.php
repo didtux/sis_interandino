@@ -62,12 +62,50 @@ th{background:#1c4789;color:#fff;}
     <tr>
         <td><b>Atrasos:</b> {{ $atrasos }}</td>
         <td><b>Faltas:</b> {{ $faltas }}</td>
-        <td><b>Licencias:</b> {{ $licencias }}</td>
+        <td><b>Licencias:</b> {{ $licencias }} d. / {{ $permisosSolicitudes ?? 0 }} sol.</td>
         <td><b>Enfermería:</b> {{ $enfermeria }}</td>
         <td><b>Compromisos Verbales:</b> {{ $compromisosVerb }}</td>
         <td><b>Compromisos Escritos:</b> {{ $compromisosEscrit }}</td>
     </tr>
 </table>
+
+@if(!empty($resumenPorTrim))
+<table style="width:100%;border-collapse:collapse;margin-top:6px;font-size:9px;">
+    <thead>
+        <tr style="background:#000;color:#fff;">
+            <th style="border:1px solid #000;padding:3px;">TRIMESTRE</th>
+            <th style="border:1px solid #000;padding:3px;">RANGO</th>
+            <th style="border:1px solid #000;padding:3px;">DT</th>
+            <th style="border:1px solid #000;padding:3px;">PRES.</th>
+            <th style="border:1px solid #000;padding:3px;">FALTAS</th>
+            <th style="border:1px solid #000;padding:3px;">ATRASOS</th>
+            <th style="border:1px solid #000;padding:3px;">LIC. (d/sol)</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach($resumenPorTrim as $pn => $r)
+            <tr>
+                <td style="border:1px solid #000;padding:3px;text-align:center;font-weight:bold;">T{{ $pn }}</td>
+                <td style="border:1px solid #000;padding:3px;font-size:8px;">
+                    {{ \Carbon\Carbon::parse($r['rango']['inicio'])->format('d/m/Y') }} —
+                    {{ \Carbon\Carbon::parse($r['rango']['fin'])->format('d/m/Y') }}
+                </td>
+                @if(($r['visible'] ?? true))
+                    <td style="border:1px solid #000;padding:3px;text-align:center;">{{ $r['dias_trabajados_curso'] }}</td>
+                    <td style="border:1px solid #000;padding:3px;text-align:center;">{{ $r['presencias'] }}</td>
+                    <td style="border:1px solid #000;padding:3px;text-align:center;color:#c0392b;font-weight:bold;">{{ $r['faltas'] }}</td>
+                    <td style="border:1px solid #000;padding:3px;text-align:center;color:#d35400;font-weight:bold;">{{ $r['atrasos'] }}</td>
+                    <td style="border:1px solid #000;padding:3px;text-align:center;">{{ $r['licencias_dias'] }} / {{ $r['licencias_solicitudes'] }}</td>
+                @else
+                    <td colspan="5" style="border:1px solid #000;padding:3px;text-align:center;color:#888;font-style:italic;">
+                        Trimestre en curso — sin notas aprobadas
+                    </td>
+                @endif
+            </tr>
+        @endforeach
+    </tbody>
+</table>
+@endif
 
 <table>
     <thead>

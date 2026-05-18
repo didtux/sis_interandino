@@ -87,15 +87,29 @@
                             <div class="col-md-4">
                                 <h6 class="text-info"><i class="fas fa-file-signature"></i> Permisos / Licencias ({{ $d['permisos']->count() }})</h6>
                                 @if($d['permisos']->count())
-                                    <ul class="list-unstyled small" style="max-height:200px;overflow-y:auto;">
+                                    <ul class="list-unstyled small" style="max-height:340px;overflow-y:auto;">
                                         @foreach($d['permisos'] as $p2)
-                                            <li class="mb-1">
+                                            <li class="mb-2 pb-2 border-bottom">
                                                 <span class="badge badge-{{ $p2->permiso_tipo == 'LICENCIA' ? 'info' : 'secondary' }}">{{ $p2->permiso_tipo }}</span>
                                                 <strong>{{ \Carbon\Carbon::parse($p2->permiso_fecha_inicio)->format('d/m/Y') }}</strong>
                                                 @if($p2->permiso_fecha_inicio !== $p2->permiso_fecha_fin)
                                                     → <strong>{{ \Carbon\Carbon::parse($p2->permiso_fecha_fin)->format('d/m/Y') }}</strong>
                                                 @endif
                                                 <br><span class="text-muted">{{ $p2->permiso_motivo }} <em>({{ $p2->permiso_origen ?? 'PERSONAL' }})</em></span>
+                                                @if(!empty($p2->desglose))
+                                                    <div class="mt-1" style="font-size:11px;">
+                                                        @foreach($p2->desglose as $dg)
+                                                            @php
+                                                                $badgeCls = ['cuenta'=>'badge-success','asistio'=>'badge-success','fin_semana'=>'badge-light border','sin_clases'=>'badge-light border','no_cuenta'=>'badge-light border'][$dg['estado']] ?? 'badge-light border';
+                                                                $icon = ['cuenta'=>'fa-check','asistio'=>'fa-user-check','fin_semana'=>'fa-calendar-week','sin_clases'=>'fa-calendar-times','no_cuenta'=>'fa-minus'][$dg['estado']] ?? 'fa-minus';
+                                                            @endphp
+                                                            <div class="d-flex justify-content-between">
+                                                                <span><i class="fas {{ $icon }} mr-1"></i>{{ \Carbon\Carbon::parse($dg['fecha'])->format('d/m/Y') }} <small class="text-muted">({{ $dg['dow'] }})</small></span>
+                                                                <span class="badge {{ $badgeCls }}" title="{{ $dg['label'] }}">{{ $dg['label'] }}</span>
+                                                            </div>
+                                                        @endforeach
+                                                    </div>
+                                                @endif
                                             </li>
                                         @endforeach
                                     </ul>

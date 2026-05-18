@@ -42,9 +42,11 @@ class AsistenciaResumenService
 
         $licenciasSolicitudes = $this->permisosCantidadEnRango($estCodigo, $inicio, $fin);
 
-        $diasConPermiso = $this->diasConPermisoCubiertos($estCodigo, $inicio, $fin, $diasTrabajadosCurso);
+        $presSet = $presFechas->flip();
 
-        $presSet    = $presFechas->flip();
+        // Días con permiso EXCLUYENDO los días con presencia (si vino, no cuenta como licencia).
+        $diasConPermiso = $this->diasConPermisoCubiertos($estCodigo, $inicio, $fin, $diasTrabajadosCurso)
+            ->reject(fn($f) => $presSet->has((string) $f))->values();
         $permisoSet = $diasConPermiso->flip();
 
         $faltas = $diasTrabajadosCurso->filter(function ($f) use ($presSet, $permisoSet) {
@@ -126,10 +128,13 @@ class AsistenciaResumenService
                     return false;
                 })->values();
 
-            // Días con permiso dentro de este periodo (incluyendo permisos que iniciaron antes)
+            // Días con permiso dentro del periodo, EXCLUYENDO los que también son presencia
+            // (si el estudiante vino ese día no cuenta como licencia).
+            $presFechasSet = $this->fechasPresencia($estCodigo, $inicio, $fin)->flip();
             $diasConPermiso = $this->diasConPermisoCubiertos($estCodigo, $inicio, $fin, $diasTrabajadosCurso)
-                ->reject(function ($f) use (&$vistosDiasPerm) {
+                ->reject(function ($f) use (&$vistosDiasPerm, $presFechasSet) {
                     $f = (string) $f;
+                    if ($presFechasSet->has($f)) return true;
                     if (isset($vistosDiasPerm[$f])) return true;
                     $vistosDiasPerm[$f] = true;
                     return false;
@@ -146,26 +151,48 @@ class AsistenciaResumenService
                 return true;
             })->values();
 
+            $visible = $this->periodoVisible($periodo);
+
             $resultado[$periodo->periodo_numero] = [
                 'periodo'                    => $periodo,
+                'visible'                    => $visible,
                 'rango'                      => ['inicio' => $inicio, 'fin' => $fin],
-                'dias_habiles_calendario'    => $this->diasHabilesCalendario($inicio, $fin),
-                'dias_trabajados_curso'      => $diasTrabajadosCurso->count(),
-                'dias_trabajados_efectivos'  => max(0, $diasTrabajadosCurso->count() - $faltas->count()),
-                'presencias'                 => $presFechas->count(),
-                'faltas'                     => $faltas->count(),
-                'atrasos'                    => $atrasosRows->count(),
-                'licencias_dias'             => $diasConPermiso->count(),
-                'licencias_solicitudes'      => $permisosDelPeriodo->count(),
-                'fechas_presencia'           => $presFechas,
-                'fechas_faltas'              => $faltas,
-                'fechas_atrasos'             => $atrasosRows,
-                'fechas_dias_con_permiso'    => $diasConPermiso,
-                'permisos'                   => $permisosDelPeriodo,
+                'dias_habiles_calendario'    => $visible ? $this->diasHabilesCalendario($inicio, $fin) : 0,
+                'dias_trabajados_curso'      => $visible ? $diasTrabajadosCurso->count() : 0,
+                'dias_trabajados_efectivos'  => $visible ? max(0, $diasTrabajadosCurso->count() - $faltas->count()) : 0,
+                'presencias'                 => $visible ? $presFechas->count() : 0,
+                'faltas'                     => $visible ? $faltas->count() : 0,
+                'atrasos'                    => $visible ? $atrasosRows->count() : 0,
+                'licencias_dias'             => $visible ? $diasConPermiso->count() : 0,
+                'licencias_solicitudes'      => $visible ? $permisosDelPeriodo->count() : 0,
+                'fechas_presencia'           => $visible ? $presFechas : collect(),
+                'fechas_faltas'              => $visible ? $faltas : collect(),
+                'fechas_atrasos'             => $visible ? $atrasosRows : collect(),
+                'fechas_dias_con_permiso'    => $visible ? $diasConPermiso : collect(),
+                'permisos'                   => $visible ? $permisosDelPeriodo : collect(),
             ];
         }
 
         return $resultado;
+    }
+
+    /**
+     * Un periodo es "visible" (sus datos de asistencia/notas se muestran) si:
+     *   - su fecha_fin ya pasó (today >= fecha_fin), o
+     *   - tiene al menos una nota aprobada (nota_estado = 2) en ese periodo.
+     *
+     * Permite ocultar el 2°/3° trimestre mientras aún esté en curso y sin notas aprobadas.
+     */
+    public function periodoVisible($periodo): bool
+    {
+        $fin = Carbon::parse($periodo->periodo_fecha_fin);
+        if (Carbon::today()->greaterThanOrEqualTo($fin)) return true;
+
+        $hayAprobadas = DB::table('colegio_notas')
+            ->where('periodo_id', $periodo->periodo_id)
+            ->where('nota_estado', 2)
+            ->exists();
+        return $hayAprobadas;
     }
 
     // ────────────────────────────────────────────────────────────────────
@@ -199,13 +226,16 @@ class AsistenciaResumenService
     }
 
     /**
-     * Días distintos donde el estudiante tiene al menos un registro.
+     * Días distintos L-V donde el estudiante tiene al menos un registro.
+     * Filtrado a L-V para que la ecuación DT = Pres + Faltas + Licencias_dias se cumpla
+     * (registros de sábado/domingo no se cuentan como presencia escolar regular).
      */
     private function fechasPresencia(string $estCodigo, string $inicio, string $fin)
     {
         return DB::table('colegio_asistencia')
             ->where('estud_codigo', $estCodigo)
             ->whereBetween('asis_fecha', [$inicio, $fin])
+            ->whereRaw('DAYOFWEEK(asis_fecha) BETWEEN 2 AND 6')
             ->select('asis_fecha')->distinct()->orderBy('asis_fecha')
             ->pluck('asis_fecha')
             ->map(fn($f) => (string) $f);

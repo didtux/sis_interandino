@@ -928,19 +928,27 @@ class NotaController extends Controller
      */
     private function getAsistenciaTrimestreEst($estCodigo, $periodo, $year)
     {
-        $r = (new \App\Services\AsistenciaResumenService())->resumen(
+        $service = new \App\Services\AsistenciaResumenService();
+
+        // Si el periodo no terminó y no hay notas aprobadas → no mostrar nada.
+        if (!$service->periodoVisible($periodo)) {
+            return ['dt' => 0, 'ta' => 0, 'tl' => 0, 'tf' => 0, 'pres' => 0, 'total' => 0, 'visible' => false];
+        }
+
+        $r = $service->resumen(
             $estCodigo,
             $periodo->periodo_fecha_inicio->format('Y-m-d'),
             $periodo->periodo_fecha_fin->format('Y-m-d')
         );
 
         return [
-            'dt'    => $r['dias_trabajados_efectivos'],
-            'ta'    => $r['atrasos'],
-            'tl'    => $r['licencias_dias'],
-            'tf'    => $r['faltas'],
-            'pres'  => $r['presencias'],
-            'total' => $r['dias_trabajados_curso'],
+            'dt'      => $r['dias_trabajados_curso'],      // mismo significado que en el detalle
+            'ta'      => $r['atrasos'],
+            'tl'      => $r['licencias_dias'],
+            'tf'      => $r['faltas'],
+            'pres'    => $r['presencias'],
+            'total'   => $r['dias_habiles_calendario'],    // total días hábiles del calendario (L-V del rango)
+            'visible' => true,
         ];
     }
 
@@ -1056,6 +1064,7 @@ class NotaController extends Controller
         $token          = bin2hex(random_bytes(20)); // 40 chars
         $copiasPrevias  = \App\Models\BoletinDescarga::where('est_codigo', $estudiante->est_codigo)
             ->where('descarga_gestion', (int) $gestion)
+            ->where('descarga_anulada', 0)
             ->where(function($q) use ($trimestreParam) {
                 if ($trimestreParam) $q->where('descarga_trimestre', $trimestreParam);
                 else                 $q->whereNull('descarga_trimestre');

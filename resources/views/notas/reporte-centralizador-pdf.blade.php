@@ -5,7 +5,7 @@
     <title>Centralizador - {{ $curso->cur_nombre }}</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: Arial, sans-serif; font-size: 6px; padding: 4mm; }
+        body { font-family: "Times New Roman", Times, serif; font-size: 7px; padding: 4mm; }
         .header { display: table; width: 100%; margin-bottom: 3px; }
         .logo { display: table-cell; width: 45px; vertical-align: middle; }
         .logo img { width: 40px; height: auto; }
@@ -36,7 +36,7 @@
         .grupo-sub    { background: #34495e; color: #fff; font-size: 5.5px; font-weight: bold; }
         .grupo-val    { background: #ecf0f1; font-weight: bold; color: #2c3e50; }
 
-        .est-name { text-align: left !important; white-space: nowrap; font-size: 6px; padding-left: 3px !important; max-width: 110px; overflow: hidden; text-overflow: ellipsis; }
+        .est-name { text-align: left !important; white-space: normal; word-wrap: break-word; font-size: 6.5px; padding-left: 3px !important; line-height: 1.15; }
         .prom-col { background: #fff3cd; font-weight: bold; }
         .suma-col { background: #d4edda; font-weight: bold; }
         .prom-final { background: #c3e6cb; font-weight: bold; font-size: 7px; }
@@ -76,20 +76,46 @@
     </div>
 
     @php
-        $materiasList = $asignaciones->values();
+        $materiasListOrig = $asignaciones->values();
+
+        // ── Reordenar: dentro de cada campo, promediables primero, luego el resto.
+        // Preserva orden de campos por primera aparición; orden interno: promediables 0, resto 1; luego matc_orden.
+        $campoOrder = [];
+        $promPorGrupoTmp = [];
+        if (isset($gruposMap)) {
+            foreach ($gruposMap as $matCod => $grp) {
+                $proms = $grp->materiasPromediables->pluck('mat_codigo')->toArray();
+                if (count($proms) >= 2) $promPorGrupoTmp[$grp->grupo_id] = $proms;
+            }
+        }
+        $esAgrupadaFn = function ($matCod) use ($gruposMap, $promPorGrupoTmp) {
+            $grp = $gruposMap[$matCod] ?? null;
+            if (!$grp) return false;
+            $proms = $promPorGrupoTmp[$grp->grupo_id] ?? [];
+            return in_array($matCod, $proms);
+        };
+        foreach ($materiasListOrig as $cmd) {
+            $c = $cmd->materia->mat_campo ?? '__sc__';
+            if (!isset($campoOrder[$c])) $campoOrder[$c] = count($campoOrder);
+        }
+        $materiasList = $materiasListOrig->sortBy(function ($cmd) use ($campoOrder, $esAgrupadaFn) {
+            $c = $cmd->materia->mat_campo ?? '__sc__';
+            return sprintf('%03d_%d', $campoOrder[$c], $esAgrupadaFn($cmd->mat_codigo) ? 0 : 1);
+        })->values();
+
         $numPeriodos = $periodos->count();
         $isAnual = $numPeriodos > 1;
 
-        // Determinar qué grupos aplican y cuál es la última materia de cada grupo
-        $gruposOrden = [];
-        $ultimaMatGrupo = [];
-        if(isset($gruposMap)) {
-            foreach($materiasList as $idx => $cmd) {
-                $grp = $gruposMap[$cmd->mat_codigo] ?? null;
-                if($grp) {
-                    $gruposOrden[$grp->grupo_id] = $grp;
-                    $ultimaMatGrupo[$grp->grupo_id] = $cmd->mat_codigo;
-                }
+        // PROM va inmediatamente después de la ÚLTIMA materia PROMEDIABLE del grupo.
+        $ultimaMatPromGrupo   = [];
+        $promediablesPorGrupo = [];
+        foreach ($materiasList as $cmd) {
+            $grp = $gruposMap[$cmd->mat_codigo] ?? null;
+            if (!$grp) continue;
+            $proms = $grp->materiasPromediables->pluck('mat_codigo')->toArray();
+            if (count($proms) >= 2 && in_array($cmd->mat_codigo, $proms)) {
+                $promediablesPorGrupo[$grp->grupo_id] = $proms;
+                $ultimaMatPromGrupo[$grp->grupo_id]   = $cmd->mat_codigo;
             }
         }
     @endphp
@@ -104,9 +130,8 @@
                         <th colspan="{{ $numPeriodos + 1 }}" class="mat-header" title="{{ $cmd->materia->mat_nombre }}">
                             {{ mb_strtoupper($cmd->materia->mat_nombre, 'UTF-8') }}
                         </th>
-                        {{-- Promedio campo inmediatamente al lado de la ÚLTIMA materia del grupo --}}
                         @php $grp = $gruposMap[$cmd->mat_codigo] ?? null; @endphp
-                        @if($grp && ($ultimaMatGrupo[$grp->grupo_id] ?? '') === $cmd->mat_codigo)
+                        @if($grp && ($ultimaMatPromGrupo[$grp->grupo_id] ?? '') === $cmd->mat_codigo)
                             <th colspan="{{ $numPeriodos + 1 }}" class="grupo-header" title="Promedio del campo">
                                 PROM.<br>{{ mb_strtoupper($grp->grupo_nombre, 'UTF-8') }}
                             </th>
@@ -114,7 +139,7 @@
                     @endforeach
                     <th rowspan="2" class="suma-col" style="width:16px;">SUMA<br>ANUAL</th>
                     <th rowspan="2" class="prom-final" style="width:18px;">PROM.<br>ANUAL</th>
-                    <th colspan="4" class="group-header-extra asist-header" title="Días Trabajados / Atrasos / Licencias / Faltas (Anual)">ASISTENCIA<br>(ANUAL)</th>
+                    <th colspan="5" class="group-header-extra asist-header" title="Días Trab. / Total Asist. / Atrasos / Licencias / Faltas (Anual)">ASISTENCIA<br>(ANUAL)</th>
                     <th colspan="3" class="group-header-extra psico-header">CONTROL Y<br>SEGUIM.</th>
                     <th rowspan="2" class="group-header-extra enf-header" style="width:14px;">ENFER<br>MERÍA</th>
                 </tr>
@@ -125,16 +150,17 @@
                         @endforeach
                         <th class="prom-header">PROM</th>
                         @php $grp = $gruposMap[$cmd->mat_codigo] ?? null; @endphp
-                        @if($grp && ($ultimaMatGrupo[$grp->grupo_id] ?? '') === $cmd->mat_codigo)
+                        @if($grp && ($ultimaMatPromGrupo[$grp->grupo_id] ?? '') === $cmd->mat_codigo)
                             @foreach($periodos as $p)
                                 <th class="grupo-sub">{{ $p->periodo_numero }}°T</th>
                             @endforeach
                             <th class="grupo-sub">PROM</th>
                         @endif
                     @endforeach
-                    <th class="asist-header" title="Días Trabajados">DT</th>
-                    <th class="asist-header" title="Total Atrasos">TA</th>
-                    <th class="asist-header" title="Total Licencias">TL</th>
+                    <th class="asist-header" title="Total Días = Asist + Atr + Lic + Falt">TOT</th>
+                    <th class="asist-header" title="Asistencias (presencias)">ASIST</th>
+                    <th class="asist-header" title="Atrasos">ATR</th>
+                    <th class="asist-header" title="Total Licencias (días)">TL</th>
                     <th class="asist-header" title="Total Faltas">TF</th>
                     <th class="psico-header">LLAMA<br>DAS</th>
                     <th class="psico-header">COMPR<br>SÍ</th>
@@ -149,7 +175,7 @@
                             {{ mb_strtoupper($cmd->materia->mat_nombre, 'UTF-8') }}
                         </th>
                         @php $grp = $gruposMap[$cmd->mat_codigo] ?? null; @endphp
-                        @if($grp && ($ultimaMatGrupo[$grp->grupo_id] ?? '') === $cmd->mat_codigo)
+                        @if($grp && ($ultimaMatPromGrupo[$grp->grupo_id] ?? '') === $cmd->mat_codigo)
                             <th class="grupo-header" title="Promedio del campo">
                                 PROM.<br>{{ mb_strtoupper($grp->grupo_nombre, 'UTF-8') }}
                             </th>
@@ -158,9 +184,10 @@
                     <th class="prom-final" style="width:18px;">PROM.</th>
                     <th class="suma-col" style="width:16px;">SUMA</th>
                     <th class="prom-final" style="width:18px;">PROM.</th>
-                    <th class="asist-header" title="Días Trabajados">DT</th>
-                    <th class="asist-header" title="Atrasos">TA</th>
-                    <th class="asist-header" title="Licencias">TL</th>
+                    <th class="asist-header" title="Total Días = Asist + Atr + Lic + Falt">TOT</th>
+                    <th class="asist-header" title="Asistencias (presencias)">ASIST</th>
+                    <th class="asist-header" title="Atrasos">ATR</th>
+                    <th class="asist-header" title="Licencias (días)">TL</th>
                     <th class="asist-header" title="Faltas">TF</th>
                     <th class="psico-header">LLAMA<br>DAS</th>
                     <th class="psico-header">COMPR<br>SÍ</th>
@@ -187,36 +214,34 @@
                             @php $matData = $fila['materias'][$cmd->mat_codigo] ?? ['trimestres' => [], 'promedio' => 0]; @endphp
                             @foreach($periodos as $p)
                                 @php $val = $matData['trimestres'][$p->periodo_numero] ?? 0; @endphp
-                                <td class="{{ $val > 0 && $val < 51 ? 'nota-baja' : '' }}{{ $val == 0 ? ' nota-cero' : '' }}">{{ $val }}</td>
+                                <td class="{{ $val > 0 && $val < 51 ? 'nota-baja' : '' }}{{ $val == 0 ? ' nota-cero' : '' }}">{{ $val ?: '' }}</td>
                             @endforeach
                             <td class="prom-col">{{ $matData['promedio'] }}</td>
 
-                            {{-- Columnas de promedio de grupo --}}
+                            {{-- Promedio del grupo justo después de la última materia PROMEDIABLE --}}
                             @php $grp = $gruposMap[$cmd->mat_codigo] ?? null; @endphp
-                            @if($grp && ($ultimaMatGrupo[$grp->grupo_id] ?? '') === $cmd->mat_codigo)
-                                @php
-                                    $matCodsG = $grp->materiasPromediables->pluck('mat_codigo')->toArray();
-                                @endphp
+                            @if($grp && ($ultimaMatPromGrupo[$grp->grupo_id] ?? '') === $cmd->mat_codigo)
+                                @php $matCodsG = $promediablesPorGrupo[$grp->grupo_id]; @endphp
                                 @foreach($periodos as $p)
                                     @php
                                         $sg = 0; $cg = 0;
-                                        foreach($matCodsG as $mc) {
+                                        foreach ($matCodsG as $mc) {
                                             $v = $fila['materias'][$mc]['trimestres'][$p->periodo_numero] ?? 0;
-                                            $sg += $v; $cg++;
+                                            if ($v > 0) { $sg += $v; $cg++; }
                                         }
                                         $promGT = $cg > 0 ? round($sg / $cg, 0) : 0;
                                     @endphp
-                                    <td class="grupo-val">{{ $promGT > 0 ? $promGT : '' }}</td>
+                                    <td class="grupo-val">{{ $promGT ?: '' }}</td>
                                 @endforeach
                                 @php
-                                    $sumaPromG = 0; $cntPromG = 0;
-                                    foreach($matCodsG as $mc) {
+                                    $sp = 0; $cp = 0;
+                                    foreach ($matCodsG as $mc) {
                                         $pm = $fila['materias'][$mc]['promedio'] ?? 0;
-                                        $sumaPromG += $pm; $cntPromG++;
+                                        if ($pm > 0) { $sp += $pm; $cp++; }
                                     }
-                                    $promGAnual = $cntPromG > 0 ? round($sumaPromG / $cntPromG, 0) : 0;
+                                    $promGAnual = $cp > 0 ? round($sp / $cp, 0) : 0;
                                 @endphp
-                                <td class="grupo-val" style="font-size:6px;">{{ $promGAnual > 0 ? $promGAnual : '' }}</td>
+                                <td class="grupo-val" style="font-size:6px;">{{ $promGAnual ?: '' }}</td>
                             @endif
                         @endforeach
                         <td class="suma-col">{{ $fila['suma'] }}</td>
@@ -229,21 +254,20 @@
                                 $val = collect($matData['trimestres'])->first() ?? 0;
                                 if ($val > 0) { $sumaT += $val; $countT++; }
                             @endphp
-                            <td class="{{ $val > 0 && $val < 51 ? 'nota-baja' : '' }}{{ $val == 0 ? ' nota-cero' : '' }}">{{ $val }}</td>
+                            <td class="{{ $val > 0 && $val < 51 ? 'nota-baja' : '' }}{{ $val == 0 ? ' nota-cero' : '' }}">{{ $val ?: '' }}</td>
 
-                            {{-- Promedio grupo trimestre único --}}
                             @php $grp = $gruposMap[$cmd->mat_codigo] ?? null; @endphp
-                            @if($grp && ($ultimaMatGrupo[$grp->grupo_id] ?? '') === $cmd->mat_codigo)
+                            @if($grp && ($ultimaMatPromGrupo[$grp->grupo_id] ?? '') === $cmd->mat_codigo)
                                 @php
-                                    $matCodsG = $grp->materiasPromediables->pluck('mat_codigo')->toArray();
+                                    $matCodsG = $promediablesPorGrupo[$grp->grupo_id];
                                     $sg = 0; $cg = 0;
-                                    foreach($matCodsG as $mc) {
+                                    foreach ($matCodsG as $mc) {
                                         $v = collect($fila['materias'][$mc]['trimestres'] ?? [])->first() ?? 0;
-                                        $sg += $v; $cg++;
+                                        if ($v > 0) { $sg += $v; $cg++; }
                                     }
                                     $promGT = $cg > 0 ? round($sg / $cg, 0) : 0;
                                 @endphp
-                                <td class="grupo-val">{{ $promGT > 0 ? $promGT : '' }}</td>
+                                <td class="grupo-val">{{ $promGT ?: '' }}</td>
                             @endif
                         @endforeach
                         @php $promT = $countT > 0 ? round($sumaT / $countT, 1) : 0; @endphp
@@ -254,13 +278,20 @@
 
                     {{-- Asistencia --}}
                     @php
-                        $dtT = 0; $taT = 0; $tlT = 0; $tfT = 0;
+                        $atrT = 0; $tlT = 0; $tfT = 0; $presT = 0;
                         foreach ($fila['asistencia'] as $a) {
-                            $dtT += $a['dt']; $taT += $a['ta']; $tlT += $a['tl']; $tfT += $a['tf'];
+                            if (!($a['visible'] ?? true)) continue;
+                            $atrT  += $a['ta'];
+                            $tlT   += $a['tl'];
+                            $tfT   += $a['tf'];
+                            $presT += $a['pres'] ?? 0;
                         }
+                        // TOTAL = Asistencias + Atrasos + Licencias + Faltas (categorías independientes).
+                        $totT = $presT + $atrT + $tlT + $tfT;
                     @endphp
-                    <td>{{ $dtT }}</td>
-                    <td>{{ $taT }}</td>
+                    <td><strong>{{ $totT }}</strong></td>
+                    <td>{{ $presT }}</td>
+                    <td>{{ $atrT }}</td>
                     <td>{{ $tlT }}</td>
                     <td>{{ $tfT }}</td>
 
