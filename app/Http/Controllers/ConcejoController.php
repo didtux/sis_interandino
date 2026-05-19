@@ -183,7 +183,7 @@ class ConcejoController extends Controller
         $resumenPorTrim = $service->resumenPorTrimestre($estCodigo, $periodos);
 
         $detallePeriodos = [];
-        $totales = ['dias_trabajados'=>0,'presencias'=>0,'faltas'=>0,'permisos_dias'=>0,'permisos_solicitudes'=>0,'atrasos'=>0];
+        $totales = ['dias_trabajados'=>0,'presencias'=>0,'faltas'=>0,'permisos_dias'=>0,'permisos_solicitudes'=>0,'atrasos'=>0,'dias_habiles_calendario'=>0];
 
         foreach ($resumenPorTrim as $pn => $r) {
             // Enriquecer cada permiso con un desglose día por día indicando si cuenta o no como licencia.
@@ -221,20 +221,22 @@ class ConcejoController extends Controller
 
             $detallePeriodos[] = [
                 'periodo'           => $r['periodo'],
-                'dias_trabajados'   => $r['fechas_presencia']->concat($r['fechas_faltas'])->concat($r['fechas_dias_con_permiso'])->unique()->values(),
+                'dias_trabajados'   => $r['fechas_presencia']->concat($r['fechas_dias_con_permiso'])->unique()->values(),
                 'presencias'        => $r['fechas_presencia'],
                 'atrasos'           => $r['fechas_atrasos'],
                 'permisos'          => $permisosConDesglose,
                 'dias_con_permiso'  => $r['fechas_dias_con_permiso'],
                 'faltas'            => $r['fechas_faltas'],
+                'total_calendario'  => $r['dias_habiles_calendario'],
             ];
 
-            $totales['dias_trabajados']     += $r['dias_trabajados_curso'];
-            $totales['presencias']          += $r['presencias'];
-            $totales['faltas']              += $r['faltas'];
-            $totales['permisos_dias']       += $r['licencias_dias'];
-            $totales['permisos_solicitudes']+= $r['licencias_solicitudes'];
-            $totales['atrasos']             += $r['atrasos'];
+            $totales['dias_trabajados']        += $r['presencias'] + $r['licencias_dias'];
+            $totales['presencias']             += $r['presencias'];
+            $totales['faltas']                 += $r['faltas'];
+            $totales['permisos_dias']          += $r['licencias_dias'];
+            $totales['permisos_solicitudes']   += $r['licencias_solicitudes'];
+            $totales['atrasos']                += $r['atrasos'];
+            $totales['dias_habiles_calendario']+= $r['dias_habiles_calendario'];
         }
 
         return view('concejo.detalle', compact('estudiante','periodos','detallePeriodos','totales','gestion'));

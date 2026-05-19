@@ -28,29 +28,39 @@
                 </div>
             </div>
 
-            {{-- Totales --}}
+            {{-- Totales (mismo modelo que boletín/centralizador: DT = Pres+Lic, TOT = días hábiles calendario) --}}
+            @php
+                $totDT  = ($totales['presencias'] ?? 0) + ($totales['permisos_dias'] ?? 0);
+                $totTOT = $totales['dias_habiles_calendario'] ?? 0;
+            @endphp
             <div class="row text-center mb-3">
-                <div class="col"><div class="p-2 border rounded"><div class="text-muted small">Días trabajados</div><h4 class="mb-0">{{ $totales['dias_trabajados'] }}</h4></div></div>
-                <div class="col"><div class="p-2 border rounded bg-light"><div class="text-muted small">Presencias</div><h4 class="mb-0 text-success">{{ $totales['presencias'] }}</h4></div></div>
-                <div class="col"><div class="p-2 border rounded"><div class="text-muted small">Faltas</div><h4 class="mb-0 text-danger">{{ $totales['faltas'] }}</h4></div></div>
-                <div class="col"><div class="p-2 border rounded"><div class="text-muted small">Atrasos</div><h4 class="mb-0 text-warning">{{ $totales['atrasos'] }}</h4></div></div>
-                <div class="col"><div class="p-2 border rounded"><div class="text-muted small">Permisos (solicitudes)</div><h4 class="mb-0">{{ $totales['permisos_solicitudes'] }}</h4></div></div>
-                <div class="col"><div class="p-2 border rounded"><div class="text-muted small">Días con permiso</div><h4 class="mb-0 text-info">{{ $totales['permisos_dias'] }}</h4></div></div>
+                <div class="col"><div class="p-2 border rounded"><div class="text-muted small">ATR</div><h4 class="mb-0 text-warning">{{ $totales['atrasos'] }}</h4></div></div>
+                <div class="col"><div class="p-2 border rounded"><div class="text-muted small">TL (Licencias)</div><h4 class="mb-0 text-info">{{ $totales['permisos_dias'] }}</h4></div></div>
+                <div class="col"><div class="p-2 border rounded"><div class="text-muted small">TF (Faltas)</div><h4 class="mb-0 text-danger">{{ $totales['faltas'] }}</h4></div></div>
+                <div class="col"><div class="p-2 border rounded bg-light"><div class="text-muted small">DT (Pres+Lic)</div><h4 class="mb-0 text-success">{{ $totDT }}</h4></div></div>
+                <div class="col"><div class="p-2 border rounded"><div class="text-muted small">TOT Días Hábiles</div><h4 class="mb-0">{{ $totTOT }}</h4></div></div>
+                <div class="col"><div class="p-2 border rounded"><div class="text-muted small">Presencias</div><h4 class="mb-0 text-success">{{ $totales['presencias'] }}</h4></div></div>
+                <div class="col"><div class="p-2 border rounded"><div class="text-muted small">Solicitudes permiso</div><h4 class="mb-0">{{ $totales['permisos_solicitudes'] }}</h4></div></div>
             </div>
+            <p class="small text-muted mb-3"><i class="fas fa-info-circle"></i> <b>DT + TF = TOT</b>. Atrasos cuentan como asistencia (incluidos en DT).</p>
 
             {{-- Por periodo --}}
             @foreach($detallePeriodos as $d)
-                @php $p = $d['periodo']; @endphp
+                @php
+                    $p   = $d['periodo'];
+                    $dt  = $d['presencias']->count() + $d['dias_con_permiso']->count();
+                    $tot = $d['total_calendario'] ?? ($dt + $d['faltas']->count());
+                @endphp
                 <div class="card mb-3">
                     <div class="card-header bg-primary text-white">
                         <strong>{{ $p->periodo_nombre ?? 'Trimestre '.$p->periodo_numero }}</strong>
                         <small class="ml-2">{{ $p->periodo_fecha_inicio->format('d/m/Y') }} — {{ $p->periodo_fecha_fin->format('d/m/Y') }}</small>
                         <span class="float-right">
-                            <span class="badge badge-light">DT: {{ $d['dias_trabajados']->count() }}</span>
-                            <span class="badge badge-success">Pres: {{ $d['presencias']->count() }}</span>
-                            <span class="badge badge-danger">Faltas: {{ $d['faltas']->count() }}</span>
-                            <span class="badge badge-warning">Atrasos: {{ $d['atrasos']->count() }}</span>
-                            <span class="badge badge-info">Permisos: {{ $d['dias_con_permiso']->count() }}d / {{ $d['permisos']->count() }}sol.</span>
+                            <span class="badge badge-warning">ATR: {{ $d['atrasos']->count() }}</span>
+                            <span class="badge badge-info">TL: {{ $d['dias_con_permiso']->count() }}</span>
+                            <span class="badge badge-danger">TF: {{ $d['faltas']->count() }}</span>
+                            <span class="badge badge-success">DT: {{ $dt }}</span>
+                            <span class="badge badge-light">TOT: {{ $tot }}</span>
                         </span>
                     </div>
                     <div class="card-body">

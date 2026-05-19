@@ -58,14 +58,26 @@ th{background:#1c4789;color:#fff;}
     </tr>
 </table>
 
+@php
+    $totPres = 0; $totTL = 0; $totTF = 0; $totDT = 0; $totTOT = 0;
+    foreach (($resumenPorTrim ?? []) as $r) {
+        if (!($r['visible'] ?? true)) continue;
+        $totPres += $r['presencias'];
+        $totTL   += $r['licencias_dias'];
+        $totTF   += $r['faltas'];
+        $totDT   += $r['presencias'] + $r['licencias_dias'];
+        $totTOT  += $r['dias_habiles_calendario'];
+    }
+@endphp
 <table class="totales">
     <tr>
         <td><b>Atrasos:</b> {{ $atrasos }}</td>
-        <td><b>Faltas:</b> {{ $faltas }}</td>
-        <td><b>Licencias:</b> {{ $licencias }} d. / {{ $permisosSolicitudes ?? 0 }} sol.</td>
+        <td><b>Faltas:</b> {{ $totTF }}</td>
+        <td><b>Licencias:</b> {{ $totTL }} d. / {{ $permisosSolicitudes ?? 0 }} sol.</td>
+        <td><b>Días Trabajados:</b> {{ $totDT }}</td>
+        <td><b>Total Días Hábiles:</b> {{ $totTOT }}</td>
         <td><b>Enfermería:</b> {{ $enfermeria }}</td>
-        <td><b>Compromisos Verbales:</b> {{ $compromisosVerb }}</td>
-        <td><b>Compromisos Escritos:</b> {{ $compromisosEscrit }}</td>
+        <td><b>Comp. Verb./Escrit.:</b> {{ $compromisosVerb }} / {{ $compromisosEscrit }}</td>
     </tr>
 </table>
 
@@ -75,15 +87,18 @@ th{background:#1c4789;color:#fff;}
         <tr style="background:#000;color:#fff;">
             <th style="border:1px solid #000;padding:3px;">TRIMESTRE</th>
             <th style="border:1px solid #000;padding:3px;">RANGO</th>
+            <th style="border:1px solid #000;padding:3px;">ATR</th>
+            <th style="border:1px solid #000;padding:3px;">TL</th>
+            <th style="border:1px solid #000;padding:3px;">TF</th>
             <th style="border:1px solid #000;padding:3px;">DT</th>
-            <th style="border:1px solid #000;padding:3px;">PRES.</th>
-            <th style="border:1px solid #000;padding:3px;">FALTAS</th>
-            <th style="border:1px solid #000;padding:3px;">ATRASOS</th>
-            <th style="border:1px solid #000;padding:3px;">LIC. (d/sol)</th>
+            <th style="border:1px solid #000;padding:3px;">TOT</th>
         </tr>
     </thead>
     <tbody>
         @foreach($resumenPorTrim as $pn => $r)
+            @php
+                $dt = ($r['visible'] ?? true) ? ($r['presencias'] + $r['licencias_dias']) : 0;
+            @endphp
             <tr>
                 <td style="border:1px solid #000;padding:3px;text-align:center;font-weight:bold;">T{{ $pn }}</td>
                 <td style="border:1px solid #000;padding:3px;font-size:8px;">
@@ -91,11 +106,11 @@ th{background:#1c4789;color:#fff;}
                     {{ \Carbon\Carbon::parse($r['rango']['fin'])->format('d/m/Y') }}
                 </td>
                 @if(($r['visible'] ?? true))
-                    <td style="border:1px solid #000;padding:3px;text-align:center;">{{ $r['dias_trabajados_curso'] }}</td>
-                    <td style="border:1px solid #000;padding:3px;text-align:center;">{{ $r['presencias'] }}</td>
-                    <td style="border:1px solid #000;padding:3px;text-align:center;color:#c0392b;font-weight:bold;">{{ $r['faltas'] }}</td>
                     <td style="border:1px solid #000;padding:3px;text-align:center;color:#d35400;font-weight:bold;">{{ $r['atrasos'] }}</td>
-                    <td style="border:1px solid #000;padding:3px;text-align:center;">{{ $r['licencias_dias'] }} / {{ $r['licencias_solicitudes'] }}</td>
+                    <td style="border:1px solid #000;padding:3px;text-align:center;">{{ $r['licencias_dias'] }}</td>
+                    <td style="border:1px solid #000;padding:3px;text-align:center;color:#c0392b;font-weight:bold;">{{ $r['faltas'] }}</td>
+                    <td style="border:1px solid #000;padding:3px;text-align:center;font-weight:bold;">{{ $dt }}</td>
+                    <td style="border:1px solid #000;padding:3px;text-align:center;font-weight:bold;">{{ $r['dias_habiles_calendario'] }}</td>
                 @else
                     <td colspan="5" style="border:1px solid #000;padding:3px;text-align:center;color:#888;font-style:italic;">
                         Trimestre en curso — sin notas aprobadas
@@ -105,6 +120,9 @@ th{background:#1c4789;color:#fff;}
         @endforeach
     </tbody>
 </table>
+<div style="font-size:9px;color:#555;margin-top:3px;">
+    <b>ATR</b>=Atrasos · <b>TL</b>=Total Licencias · <b>TF</b>=Total Faltas · <b>DT</b>=Días Trabajados (Pres+Lic) · <b>TOT</b>=Total Días Hábiles. <i>DT + TF = TOT</i>.
+</div>
 @endif
 
 <table>
