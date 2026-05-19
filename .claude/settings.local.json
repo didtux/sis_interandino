@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(grep -nE \"^use App\\\\\\\\\\\\\\\\Models\\\\\\\\\\\\\\\\Atraso\" c:/xampp/htdocs/Sis_Intterandino/app/Http/Controllers/AsistenciaController.php)"
+      "Bash(grep -nE \"^use App\\\\\\\\\\\\\\\\Models\\\\\\\\\\\\\\\\Atraso\" c:/xampp/htdocs/Sis_Intterandino/app/Http/Controllers/AsistenciaController.php)",
+      "Bash(php artisan *)",
+      "Bash(php -r ' *)"
     ]
   }
 }

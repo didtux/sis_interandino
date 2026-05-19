@@ -248,11 +248,11 @@
         </tr>
         <tr>
             @foreach($periodos as $p)
-                <th class="rotated">ASIST.</th>
                 <th class="rotated">ATRASOS</th>
                 <th class="rotated">LICENCIAS</th>
                 <th class="rotated">FALTAS</th>
-                <th class="rotated">TOTAL</th>
+                <th class="rotated">DÍAS<br>TRABAJADOS</th>
+                <th class="rotated">TOTAL<br>DÍAS HÁB.</th>
             @endforeach
         </tr>
         <tr>
@@ -261,14 +261,16 @@
                 @php
                     $a = $asistData[$p->periodo_numero] ?? ['ta'=>0,'tl'=>0,'tf'=>0,'dt'=>0,'pres'=>0,'total'=>0,'visible'=>true];
                     $visible = $a['visible'] ?? true;
-                    // Total = Presencias + Faltas + Licencias. Atrasos NO se suman (subset de Presencias).
-                    $totalCalc = $visible ? ($a['pres'] + $a['tl'] + $a['tf']) : 0;
+                    // DÍAS TRABAJADOS = Asistencias + Licencias − Faltas (días "ganados").
+                    // TOTAL DÍAS HÁB. = días hábiles del calendario L-V en el rango del trimestre.
+                    $diasTrab     = $visible ? max(0, $a['pres'] + $a['tl'] - $a['tf']) : 0;
+                    $totalDiasHab = $visible ? $a['total'] : 0;
                 @endphp
-                <td>{{ $visible ? $a['pres'] : '' }}</td>
                 <td>{{ $visible ? $a['ta'] : '' }}</td>
                 <td>{{ $visible ? $a['tl'] : '' }}</td>
                 <td>{{ $visible ? $a['tf'] : '' }}</td>
-                <td style="font-weight:bold;">{{ $visible ? $totalCalc : '' }}</td>
+                <td>{{ $visible ? $diasTrab : '' }}</td>
+                <td style="font-weight:bold;">{{ $visible ? $totalDiasHab : '' }}</td>
             @endforeach
         </tr>
     </table>

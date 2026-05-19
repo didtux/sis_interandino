@@ -257,11 +257,18 @@ class AsistenciaResumenService
 
     private function diasHabilesCalendario(string $inicio, string $fin): int
     {
+        // Feriados L-V activos en el rango (oficiales tipo=1 + paros/virtuales tipo=2)
+        $feriados = DB::table('asistencia_fechas_festivas')
+            ->where('festivo_estado', 1)
+            ->whereBetween('festivo_fecha', [$inicio, $fin])
+            ->whereRaw('DAYOFWEEK(festivo_fecha) BETWEEN 2 AND 6')
+            ->pluck('festivo_fecha')->map(fn($f) => (string) $f)->flip();
+
         $cur = Carbon::parse($inicio)->copy();
         $end = Carbon::parse($fin);
         $dias = 0;
         while ($cur <= $end) {
-            if ($cur->isWeekday()) $dias++;
+            if ($cur->isWeekday() && !$feriados->has($cur->format('Y-m-d'))) $dias++;
             $cur->addDay();
         }
         return $dias;

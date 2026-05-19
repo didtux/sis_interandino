@@ -179,11 +179,11 @@
                     @endif
                 @endforeach
                 @foreach($periodos as $p)
-                    <th class="th-vert"><svg width="9" height="45" xmlns="http://www.w3.org/2000/svg"><text x="6" y="43" transform="rotate(-90,6,43)" font-family="Arial" font-size="4.5" font-weight="bold" fill="#27ae60">Presentes</text></svg></th>
                     <th class="th-vert"><svg width="9" height="45" xmlns="http://www.w3.org/2000/svg"><text x="6" y="43" transform="rotate(-90,6,43)" font-family="Arial" font-size="4.5" font-weight="bold" fill="#f39c12">Atrasos</text></svg></th>
                     <th class="th-vert"><svg width="9" height="45" xmlns="http://www.w3.org/2000/svg"><text x="6" y="43" transform="rotate(-90,6,43)" font-family="Arial" font-size="4.5" font-weight="bold" fill="#2980b9">Licencias</text></svg></th>
                     <th class="th-vert"><svg width="9" height="45" xmlns="http://www.w3.org/2000/svg"><text x="6" y="43" transform="rotate(-90,6,43)" font-family="Arial" font-size="4.5" font-weight="bold" fill="#e74c3c">Faltas</text></svg></th>
-                    <th class="th-vert" style="background:#eaf4fc;"><svg width="9" height="45" xmlns="http://www.w3.org/2000/svg"><text x="6" y="43" transform="rotate(-90,6,43)" font-family="Arial" font-size="4.5" font-weight="bold" fill="#1a5276">Total días</text></svg></th>
+                    <th class="th-vert"><svg width="9" height="45" xmlns="http://www.w3.org/2000/svg"><text x="6" y="43" transform="rotate(-90,6,43)" font-family="Arial" font-size="4.5" font-weight="bold" fill="#27ae60">Días Trabajados</text></svg></th>
+                    <th class="th-vert" style="background:#eaf4fc;"><svg width="9" height="45" xmlns="http://www.w3.org/2000/svg"><text x="6" y="43" transform="rotate(-90,6,43)" font-family="Arial" font-size="4.5" font-weight="bold" fill="#1a5276">Total Días Háb.</text></svg></th>
                 @endforeach
             </tr>
         @else
@@ -204,11 +204,11 @@
             </tr>
             <tr>
                 @foreach($periodos as $p)
-                    <th class="th-vert"><svg width="9" height="45" xmlns="http://www.w3.org/2000/svg"><text x="6" y="43" transform="rotate(-90,6,43)" font-family="Arial" font-size="4.5" font-weight="bold" fill="#27ae60">Presentes</text></svg></th>
                     <th class="th-vert"><svg width="9" height="45" xmlns="http://www.w3.org/2000/svg"><text x="6" y="43" transform="rotate(-90,6,43)" font-family="Arial" font-size="4.5" font-weight="bold" fill="#f39c12">Atrasos</text></svg></th>
                     <th class="th-vert"><svg width="9" height="45" xmlns="http://www.w3.org/2000/svg"><text x="6" y="43" transform="rotate(-90,6,43)" font-family="Arial" font-size="4.5" font-weight="bold" fill="#2980b9">Licencias</text></svg></th>
                     <th class="th-vert"><svg width="9" height="45" xmlns="http://www.w3.org/2000/svg"><text x="6" y="43" transform="rotate(-90,6,43)" font-family="Arial" font-size="4.5" font-weight="bold" fill="#e74c3c">Faltas</text></svg></th>
-                    <th class="th-vert" style="background:#eaf4fc;"><svg width="9" height="45" xmlns="http://www.w3.org/2000/svg"><text x="6" y="43" transform="rotate(-90,6,43)" font-family="Arial" font-size="4.5" font-weight="bold" fill="#1a5276">Total días</text></svg></th>
+                    <th class="th-vert"><svg width="9" height="45" xmlns="http://www.w3.org/2000/svg"><text x="6" y="43" transform="rotate(-90,6,43)" font-family="Arial" font-size="4.5" font-weight="bold" fill="#27ae60">Días Trabajados</text></svg></th>
+                    <th class="th-vert" style="background:#eaf4fc;"><svg width="9" height="45" xmlns="http://www.w3.org/2000/svg"><text x="6" y="43" transform="rotate(-90,6,43)" font-family="Arial" font-size="4.5" font-weight="bold" fill="#1a5276">Total Días Háb.</text></svg></th>
                 @endforeach
             </tr>
         @endif
@@ -261,14 +261,15 @@
                         @php
                             $a = $fila['asistencia'][$p->periodo_numero] ?? ['dt'=>0,'ta'=>0,'tl'=>0,'tf'=>0,'pres'=>0,'total'=>0,'visible'=>true];
                             $visible = $a['visible'] ?? true;
-                            // Total = Presencias + Faltas + Licencias. Atrasos NO se suman (subset de Presencias).
-                            $totalCalc = $visible ? ($a['pres'] + $a['tl'] + $a['tf']) : 0;
+                            // DÍAS TRABAJADOS = Asist + Lic − Faltas. TOTAL = días hábiles calendario L-V.
+                            $diasTrab     = $visible ? max(0, $a['pres'] + $a['tl'] - $a['tf']) : 0;
+                            $totalDiasHab = $visible ? $a['total'] : 0;
                         @endphp
-                        <td class="asist-dt">{{ $visible ? $a['pres'] : '' }}</td>
                         <td class="asist-ta">{{ $visible ? $a['ta'] : '' }}</td>
                         <td class="asist-tl">{{ $visible ? $a['tl'] : '' }}</td>
                         <td class="asist-tf">{{ $visible ? $a['tf'] : '' }}</td>
-                        <td class="asist-total"><strong>{{ $visible ? $totalCalc : '' }}</strong></td>
+                        <td class="asist-dt">{{ $visible ? $diasTrab : '' }}</td>
+                        <td class="asist-total"><strong>{{ $visible ? $totalDiasHab : '' }}</strong></td>
                     @endforeach
                 </tr>
             @endforeach

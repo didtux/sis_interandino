@@ -157,11 +157,11 @@
                             <th class="grupo-sub">PROM</th>
                         @endif
                     @endforeach
-                    <th class="asist-header" title="Total Días = Asist + Atr + Lic + Falt">TOT</th>
-                    <th class="asist-header" title="Asistencias (presencias)">ASIST</th>
                     <th class="asist-header" title="Atrasos">ATR</th>
                     <th class="asist-header" title="Total Licencias (días)">TL</th>
                     <th class="asist-header" title="Total Faltas">TF</th>
+                    <th class="asist-header" title="Días Trabajados (asistencias)">DT</th>
+                    <th class="asist-header" title="Total Días Hábiles = Asist + Lic">TOT</th>
                     <th class="psico-header">LLAMA<br>DAS</th>
                     <th class="psico-header">COMPR<br>SÍ</th>
                     <th class="psico-header">COMPR<br>NO</th>
@@ -184,11 +184,11 @@
                     <th class="prom-final" style="width:18px;">PROM.</th>
                     <th class="suma-col" style="width:16px;">SUMA</th>
                     <th class="prom-final" style="width:18px;">PROM.</th>
-                    <th class="asist-header" title="Total Días = Asist + Atr + Lic + Falt">TOT</th>
-                    <th class="asist-header" title="Asistencias (presencias)">ASIST</th>
                     <th class="asist-header" title="Atrasos">ATR</th>
                     <th class="asist-header" title="Licencias (días)">TL</th>
                     <th class="asist-header" title="Faltas">TF</th>
+                    <th class="asist-header" title="Días Trabajados (asistencias)">DT</th>
+                    <th class="asist-header" title="Total Días Hábiles = Asist + Lic">TOT</th>
                     <th class="psico-header">LLAMA<br>DAS</th>
                     <th class="psico-header">COMPR<br>SÍ</th>
                     <th class="psico-header">COMPR<br>NO</th>
@@ -278,22 +278,23 @@
 
                     {{-- Asistencia --}}
                     @php
-                        $atrT = 0; $tlT = 0; $tfT = 0; $presT = 0;
+                        $atrT = 0; $tlT = 0; $tfT = 0; $presT = 0; $totT = 0;
                         foreach ($fila['asistencia'] as $a) {
                             if (!($a['visible'] ?? true)) continue;
                             $atrT  += $a['ta'];
                             $tlT   += $a['tl'];
                             $tfT   += $a['tf'];
                             $presT += $a['pres'] ?? 0;
+                            $totT  += $a['total'] ?? 0;
                         }
-                        // TOTAL = Presencias + Faltas + Licencias. Atrasos NO se suman (son subconjunto de Presencias).
-                        $totT = $presT + $tlT + $tfT;
+                        // DT = Asist + Lic − Faltas. TOTAL = días hábiles del calendario L-V.
+                        $dtT = max(0, $presT + $tlT - $tfT);
                     @endphp
-                    <td><strong>{{ $totT }}</strong></td>
-                    <td>{{ $presT }}</td>
                     <td>{{ $atrT }}</td>
                     <td>{{ $tlT }}</td>
                     <td>{{ $tfT }}</td>
+                    <td>{{ $dtT }}</td>
+                    <td><strong>{{ $totT }}</strong></td>
 
                     {{-- Psicopedagogía: total llamadas, compromisos sí, compromisos no --}}
                     @php
