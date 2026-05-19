@@ -261,9 +261,9 @@
                 @php
                     $a = $asistData[$p->periodo_numero] ?? ['ta'=>0,'tl'=>0,'tf'=>0,'dt'=>0,'pres'=>0,'total'=>0,'visible'=>true];
                     $visible = $a['visible'] ?? true;
-                    // DÍAS TRABAJADOS = Asistencias + Licencias − Faltas (días "ganados").
-                    // TOTAL DÍAS HÁB. = días hábiles del calendario L-V en el rango del trimestre.
-                    $diasTrab     = $visible ? max(0, $a['pres'] + $a['tl'] - $a['tf']) : 0;
+                    // DÍAS TRABAJADOS = Asistencias + Licencias (atrasos cuentan como asistencia).
+                    // TOTAL DÍAS HÁB. = días hábiles calendario − feriados (= DT + Faltas).
+                    $diasTrab     = $visible ? ($a['pres'] + $a['tl']) : 0;
                     $totalDiasHab = $visible ? $a['total'] : 0;
                 @endphp
                 <td>{{ $visible ? $a['ta'] : '' }}</td>

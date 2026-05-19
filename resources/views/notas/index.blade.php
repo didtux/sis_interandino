@@ -291,18 +291,20 @@
                             @if(!$esDocenteVinculado)
                             <div class="col-md-3 mb-2">
                                 <label class="small text-muted mb-1">Docente</label>
-                                <select name="buscar" class="form-control select2-docente" style="width:100%;">
+                                <select name="buscar" id="filtro_docente" class="form-control select2-docente" style="width:100%;">
                                     <option value="">— Todos —</option>
                                     @foreach($docentesList as $d)
                                         @php $nombre = trim($d->doc_apellidos.' '.$d->doc_nombres); @endphp
-                                        <option value="{{ $nombre }}" {{ request('buscar') === $nombre ? 'selected' : '' }}>{{ $nombre }}</option>
+                                        <option value="{{ $nombre }}"
+                                                data-doc-codigo="{{ $d->doc_codigo }}"
+                                                {{ request('buscar') === $nombre ? 'selected' : '' }}>{{ $nombre }}</option>
                                     @endforeach
                                 </select>
                             </div>
                             @endif
                             <div class="{{ $esDocenteVinculado ? 'col-md-4' : 'col-md-3' }} mb-2">
                                 <label class="small text-muted mb-1">Curso</label>
-                                <select name="cur_codigo[]" class="form-control select2-multi" multiple style="width:100%">
+                                <select name="cur_codigo[]" id="filtro_curso" class="form-control select2-multi" multiple style="width:100%">
                                     @foreach($cursos as $c)
                                         <option value="{{ $c->cur_codigo }}" {{ in_array($c->cur_codigo, (array)request('cur_codigo', [])) ? 'selected' : '' }}>{{ $c->cur_nombre }}</option>
                                     @endforeach
@@ -310,7 +312,7 @@
                             </div>
                             <div class="{{ $esDocenteVinculado ? 'col-md-4' : 'col-md-3' }} mb-2">
                                 <label class="small text-muted mb-1">Materia</label>
-                                <select name="mat_codigo[]" class="form-control select2-multi" multiple style="width:100%">
+                                <select name="mat_codigo[]" id="filtro_materia" class="form-control select2-multi" multiple style="width:100%">
                                     @foreach($materias as $m)
                                         <option value="{{ $m->mat_codigo }}" {{ in_array($m->mat_codigo, (array)request('mat_codigo', [])) ? 'selected' : '' }}>{{ $m->mat_nombre }}</option>
                                     @endforeach
@@ -633,6 +635,45 @@ $(document).ready(function() {
         placeholder: 'Buscar docente por nombre o apellido...',
         allowClear: true
     });
+
+    // ── Filtro dependiente: docente → cursos y materias asignados ──
+    var DOCENTE_ASIG = @json($docenteAsignaciones ?? []);
+
+    // Cache de las opciones COMPLETAS al cargar la página, para restaurarlas luego.
+    var TODAS_CURSOS = $('#filtro_curso option').map(function(){
+        return { val: $(this).val(), txt: $(this).text(), sel: $(this).is(':selected') };
+    }).get();
+    var TODAS_MATERIAS = $('#filtro_materia option').map(function(){
+        return { val: $(this).val(), txt: $(this).text(), sel: $(this).is(':selected') };
+    }).get();
+
+    function rebuildSelect($select, allOptions, allowedValues) {
+        var permitirTodo = !allowedValues; // null/undefined => mostrar todas
+        $select.empty();
+        allOptions.forEach(function(o){
+            if (permitirTodo || allowedValues.indexOf(o.val) !== -1) {
+                var $opt = $('<option>').val(o.val).text(o.txt);
+                if (o.sel) $opt.prop('selected', true);
+                $select.append($opt);
+            }
+        });
+        $select.trigger('change.select2');
+    }
+
+    function aplicarFiltroPorDocente() {
+        var docCodigo = $('#filtro_docente').find('option:selected').attr('data-doc-codigo') || '';
+        var asig = docCodigo ? DOCENTE_ASIG[docCodigo] : null;
+        if (asig) {
+            rebuildSelect($('#filtro_curso'),   TODAS_CURSOS,   asig.cursos || []);
+            rebuildSelect($('#filtro_materia'), TODAS_MATERIAS, asig.materias || []);
+        } else {
+            rebuildSelect($('#filtro_curso'),   TODAS_CURSOS,   null);
+            rebuildSelect($('#filtro_materia'), TODAS_MATERIAS, null);
+        }
+    }
+
+    aplicarFiltroPorDocente();
+    $('#filtro_docente').on('change', aplicarFiltroPorDocente);
 
     // ── Select2 filtros de notas (tab notas) ──
     $('.select2-multi').select2({

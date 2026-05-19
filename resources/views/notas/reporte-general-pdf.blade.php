@@ -261,8 +261,8 @@
                         @php
                             $a = $fila['asistencia'][$p->periodo_numero] ?? ['dt'=>0,'ta'=>0,'tl'=>0,'tf'=>0,'pres'=>0,'total'=>0,'visible'=>true];
                             $visible = $a['visible'] ?? true;
-                            // DÍAS TRABAJADOS = Asist + Lic − Faltas. TOTAL = días hábiles calendario L-V.
-                            $diasTrab     = $visible ? max(0, $a['pres'] + $a['tl'] - $a['tf']) : 0;
+                            // DÍAS TRABAJADOS = Asist + Lic. TOTAL = calendario − feriados (= DT + Faltas).
+                            $diasTrab     = $visible ? ($a['pres'] + $a['tl']) : 0;
                             $totalDiasHab = $visible ? $a['total'] : 0;
                         @endphp
                         <td class="asist-ta">{{ $visible ? $a['ta'] : '' }}</td>

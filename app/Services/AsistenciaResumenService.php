@@ -88,11 +88,15 @@ class AsistenciaResumenService
      */
     public function resumen(string $estCodigo, string $inicio, string $fin): array
     {
-        $diasHabilesCalendario = $this->diasHabilesCalendario($inicio, $fin);
+        $fechasCalendario = $this->fechasHabilesCalendario($inicio, $fin);
+        $calSet = $fechasCalendario->flip();
+        $diasHabilesCalendario = $fechasCalendario->count();
 
         $diasTrabajadosCurso = $this->fechasTrabajadasCurso($inicio, $fin, $estCodigo);
 
-        $presFechas = $this->fechasPresencia($estCodigo, $inicio, $fin);
+        // pres y licencias se restringen al calendario para que DT+TF=TOT.
+        $presFechas = $this->fechasPresencia($estCodigo, $inicio, $fin)
+            ->filter(fn($f) => $calSet->has((string) $f))->values();
 
         $atrasosRows = $this->atrasos($estCodigo, $inicio, $fin);
 
@@ -100,22 +104,24 @@ class AsistenciaResumenService
 
         $presSet = $presFechas->flip();
 
-        // Días con permiso EXCLUYENDO los días con presencia (si vino, no cuenta como licencia).
-        $diasConPermiso = $this->diasConPermisoCubiertos($estCodigo, $inicio, $fin, $diasTrabajadosCurso)
-            ->reject(fn($f) => $presSet->has((string) $f))->values();
+        // Días con permiso EXCLUYENDO los días con presencia (si vino, no cuenta como licencia),
+        // y constreñidos al calendario hábil.
+        $diasConPermiso = $this->diasConPermisoCubiertos($estCodigo, $inicio, $fin, $fechasCalendario)
+            ->reject(fn($f) => $presSet->has((string) $f))
+            ->filter(fn($f) => $calSet->has((string) $f))
+            ->values();
         $permisoSet = $diasConPermiso->flip();
 
-        $faltas = $diasTrabajadosCurso->filter(function ($f) use ($presSet, $permisoSet) {
+        // Faltas = calendario − presencias − licencias  →  DT + TF = TOT por construcción.
+        $faltas = $fechasCalendario->filter(function ($f) use ($presSet, $permisoSet) {
             $f = (string) $f;
-            if ($presSet->has($f) || $permisoSet->has($f)) return false;
-            $dow = (int) date('w', strtotime($f));
-            return $dow !== 0 && $dow !== 6;
+            return !$presSet->has($f) && !$permisoSet->has($f);
         })->values();
 
         return [
             'dias_habiles_calendario'    => $diasHabilesCalendario,
             'dias_trabajados_curso'      => $diasTrabajadosCurso->count(),
-            'dias_trabajados_efectivos'  => max(0, $diasTrabajadosCurso->count() - $faltas->count()),
+            'dias_trabajados_efectivos'  => max(0, $diasHabilesCalendario - $faltas->count()),
             'presencias'                 => $presFechas->count(),
             'faltas'                     => $faltas->count(),
             'atrasos'                    => $atrasosRows->count(),
@@ -150,9 +156,12 @@ class AsistenciaResumenService
             $fin    = Carbon::parse($periodo->periodo_fecha_fin)->format('Y-m-d');
 
             $diasTrabajadosCurso = $this->fechasTrabajadasCurso($inicio, $fin, $estCodigo);
+            $fechasCalendario    = $this->fechasHabilesCalendario($inicio, $fin);
+            $calSet              = $fechasCalendario->flip();
 
-            // Presencias del estudiante (dedup global)
+            // Presencias del estudiante (constreñidas al calendario, dedup global)
             $presFechas = $this->fechasPresencia($estCodigo, $inicio, $fin)
+                ->filter(fn($f) => $calSet->has((string) $f))
                 ->reject(function ($f) use (&$vistosPres) {
                     $f = (string) $f;
                     if (isset($vistosPres[$f])) return true;
@@ -184,10 +193,11 @@ class AsistenciaResumenService
                     return false;
                 })->values();
 
-            // Días con permiso dentro del periodo, EXCLUYENDO los que también son presencia
-            // (si el estudiante vino ese día no cuenta como licencia).
+            // Días con permiso dentro del periodo (constreñidos al calendario),
+            // EXCLUYENDO los que también son presencia.
             $presFechasSet = $this->fechasPresencia($estCodigo, $inicio, $fin)->flip();
-            $diasConPermiso = $this->diasConPermisoCubiertos($estCodigo, $inicio, $fin, $diasTrabajadosCurso)
+            $diasConPermiso = $this->diasConPermisoCubiertos($estCodigo, $inicio, $fin, $fechasCalendario)
+                ->filter(fn($f) => $calSet->has((string) $f))
                 ->reject(function ($f) use (&$vistosDiasPerm, $presFechasSet) {
                     $f = (string) $f;
                     if ($presFechasSet->has($f)) return true;
@@ -196,26 +206,25 @@ class AsistenciaResumenService
                     return false;
                 })->values();
 
-            // Faltas = días trabajados del curso − presencias − días con permiso (global dedup)
-            $faltas = $diasTrabajadosCurso->filter(function ($f) use (&$vistosFaltas, $vistosPres, $vistosDiasPerm) {
+            // Faltas = calendario − presencias − días con permiso  →  DT + TF = TOT.
+            $faltas = $fechasCalendario->filter(function ($f) use (&$vistosFaltas, $vistosPres, $vistosDiasPerm) {
                 $f = (string) $f;
                 if (isset($vistosFaltas[$f])) return false;
                 if (isset($vistosPres[$f]) || isset($vistosDiasPerm[$f])) return false;
-                $dow = (int) date('w', strtotime($f));
-                if ($dow === 0 || $dow === 6) return false;
                 $vistosFaltas[$f] = true;
                 return true;
             })->values();
 
-            $visible = $this->periodoVisible($periodo);
+            $visible    = $this->periodoVisible($periodo);
+            $totCalDias = $fechasCalendario->count();
 
             $resultado[$periodo->periodo_numero] = [
                 'periodo'                    => $periodo,
                 'visible'                    => $visible,
                 'rango'                      => ['inicio' => $inicio, 'fin' => $fin],
-                'dias_habiles_calendario'    => $visible ? $this->diasHabilesCalendario($inicio, $fin) : 0,
+                'dias_habiles_calendario'    => $visible ? $totCalDias : 0,
                 'dias_trabajados_curso'      => $visible ? $diasTrabajadosCurso->count() : 0,
-                'dias_trabajados_efectivos'  => $visible ? max(0, $diasTrabajadosCurso->count() - $faltas->count()) : 0,
+                'dias_trabajados_efectivos'  => $visible ? max(0, $totCalDias - $faltas->count()) : 0,
                 'presencias'                 => $visible ? $presFechas->count() : 0,
                 'faltas'                     => $visible ? $faltas->count() : 0,
                 'atrasos'                    => $visible ? $atrasosRows->count() : 0,
@@ -257,21 +266,33 @@ class AsistenciaResumenService
 
     private function diasHabilesCalendario(string $inicio, string $fin): int
     {
-        // Feriados L-V activos en el rango (oficiales tipo=1 + paros/virtuales tipo=2)
+        return $this->fechasHabilesCalendario($inicio, $fin)->count();
+    }
+
+    /**
+     * Conjunto de fechas L-V del rango, descontando feriados oficiales (tipo=1).
+     * Es la "verdad" del calendario contra la que se calculan pres/licencias/faltas
+     * para que se cumpla DT + Faltas = TOT.
+     */
+    private function fechasHabilesCalendario(string $inicio, string $fin)
+    {
         $feriados = DB::table('asistencia_fechas_festivas')
             ->where('festivo_estado', 1)
+            ->where('festivo_tipo', 1)
             ->whereBetween('festivo_fecha', [$inicio, $fin])
             ->whereRaw('DAYOFWEEK(festivo_fecha) BETWEEN 2 AND 6')
             ->pluck('festivo_fecha')->map(fn($f) => (string) $f)->flip();
 
         $cur = Carbon::parse($inicio)->copy();
         $end = Carbon::parse($fin);
-        $dias = 0;
+        $fechas = collect();
         while ($cur <= $end) {
-            if ($cur->isWeekday() && !$feriados->has($cur->format('Y-m-d'))) $dias++;
+            if ($cur->isWeekday() && !$feriados->has($cur->format('Y-m-d'))) {
+                $fechas->push($cur->format('Y-m-d'));
+            }
             $cur->addDay();
         }
-        return $dias;
+        return $fechas;
     }
 
     /**

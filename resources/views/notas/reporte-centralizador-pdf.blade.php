@@ -287,8 +287,8 @@
                             $presT += $a['pres'] ?? 0;
                             $totT  += $a['total'] ?? 0;
                         }
-                        // DT = Asist + Lic − Faltas. TOTAL = días hábiles del calendario L-V.
-                        $dtT = max(0, $presT + $tlT - $tfT);
+                        // DT = Asist + Lic. TOTAL = días hábiles calendario − feriados (= DT + Faltas).
+                        $dtT = $presT + $tlT;
                     @endphp
                     <td>{{ $atrT }}</td>
                     <td>{{ $tlT }}</td>

@@ -49,16 +49,18 @@ class NotaController extends Controller
             $query->whereIn('mat_codigo', $matCodigos);
         }
         if ($request->filled('buscar')) {
-            $tokens = preg_split('/\s+/', trim($request->buscar));
-            $query->whereHas('docente', function($q) use ($tokens) {
-                foreach ($tokens as $t) {
-                    if ($t === '') continue;
-                    $q->where(function($qq) use ($t) {
-                        $qq->where('doc_nombres', 'like', "%$t%")
-                           ->orWhere('doc_apellidos', 'like', "%$t%");
-                    });
-                }
-            });
+            // Resolver doc_codigos en consulta separada para evitar colación mixta en JOIN.
+            $tokens = preg_split('/\s+/', trim($request->buscar), -1, PREG_SPLIT_NO_EMPTY);
+            $docQ = \DB::table('colegio_docentes');
+            foreach ($tokens as $t) {
+                $docQ->where(function($qq) use ($t) {
+                    $qq->where('doc_nombres', 'like', "%$t%")
+                       ->orWhere('doc_apellidos', 'like', "%$t%")
+                       ->orWhere('doc_codigo', 'like', "%$t%");
+                });
+            }
+            $docCodigos = $docQ->pluck('doc_codigo')->all();
+            $query->whereIn('doc_codigo', $docCodigos ?: ['__none__']);
         }
         if ($request->filled('estado')) {
             $estadoFiltro = intval($request->estado);
@@ -138,17 +140,39 @@ class NotaController extends Controller
                 ->orderBy('est_apellidos')->get();
         }
 
-        // Lista de docentes para el filtro (solo para roles no-docentes)
+        // Lista de docentes para el filtro (solo para roles no-docentes).
+        // Anexamos cursos y materias asignados para el dropdown dependiente.
         $docentesList = collect();
+        $docenteAsignaciones = [];
         if (!($user->us_entidad_tipo === 'docente' && $user->us_entidad_id)) {
             $docentesList = \App\Models\Docente::orderBy('doc_apellidos')->orderBy('doc_nombres')
                 ->get(['doc_codigo','doc_nombres','doc_apellidos']);
+
+            // Mapa doc_codigo => { cursos: [...], materias: [...] }
+            $asigs = CursoMateriaDocente::where('curmatdoc_estado', 1)
+                ->select('doc_codigo', 'cur_codigo', 'mat_codigo')->get();
+            foreach ($asigs as $a) {
+                $code = (string) $a->doc_codigo;
+                if (!isset($docenteAsignaciones[$code])) {
+                    $docenteAsignaciones[$code] = ['cursos' => [], 'materias' => []];
+                }
+                if ($a->cur_codigo && !in_array($a->cur_codigo, $docenteAsignaciones[$code]['cursos'])) {
+                    $docenteAsignaciones[$code]['cursos'][] = $a->cur_codigo;
+                }
+                if ($a->mat_codigo && !in_array($a->mat_codigo, $docenteAsignaciones[$code]['materias'])) {
+                    $docenteAsignaciones[$code]['materias'][] = $a->mat_codigo;
+                }
+            }
+
+            // Diccionario nombre completo => doc_codigo (para mapear desde el value del select).
+            // El filtro de búsqueda funciona por nombre completo (el value del option).
         }
 
         return view('notas.index', compact(
             'asignaciones', 'periodos', 'dimensiones', 'cursos', 'materias',
             'statAprobadas', 'statEnviadas', 'statBorradores', 'statRechazadas',
-            'ranking', 'enPeligro', 'todosEstudiantes', 'gestion', 'docentesList'
+            'ranking', 'enPeligro', 'todosEstudiantes', 'gestion', 'docentesList',
+            'docenteAsignaciones'
         ));
     }
 
