@@ -34,8 +34,16 @@ class AsistenciaResumenService
     private const FALLBACK_DESDE = '07:00:00';
     private const FALLBACK_HASTA = '13:00:00';
 
-    /** Cache en memoria por curso: cur_codigo => ['desde','hasta','tolerancia'] */
+    /** Cache en memoria por curso+turno: "cur|turno" => ['desde','hasta','tolerancia'] */
     private array $configCache = [];
+
+    /** Turno con el que trabaja esta instancia ('Mañana' por defecto, 'Tarde', etc.). */
+    private string $turno;
+
+    public function __construct(string $turno = 'Mañana')
+    {
+        $this->turno = $turno;
+    }
 
     /**
      * Devuelve el rango horario válido del TURNO MAÑANA y el límite de tolerancia
@@ -52,35 +60,68 @@ class AsistenciaResumenService
             return ['desde' => self::FALLBACK_DESDE, 'hasta' => self::FALLBACK_HASTA, 'tolerancia' => null];
         }
         $cur = $estudiante->cur_codigo;
-        if (isset($this->configCache[$cur])) return $this->configCache[$cur];
+        $cacheKey = $cur . '|' . $this->turno;
+        if (isset($this->configCache[$cacheKey])) return $this->configCache[$cacheKey];
 
         $curNivel = DB::table('colegio_cursos')->where('cur_codigo', $cur)->value('cur_nivel');
 
+        // Vínculo principal: pivot asistencia_configuracion_cursos (config ↔ cursos).
+        // Se resuelve aparte para evitar "Illegal mix of collations" en el join.
+        $pivotConfigIds = DB::table('asistencia_configuracion_cursos')
+            ->whereRaw('cur_codigo COLLATE utf8mb4_general_ci = ?', [$cur])
+            ->pluck('config_id')
+            ->map(fn($id) => (int) $id)
+            ->all();
+        $pivotList = empty($pivotConfigIds) ? '0' : implode(',', $pivotConfigIds);
+
         $cfg = DB::table('asistencia_configuracion')
             ->where('config_estado', 1)
-            ->where('config_turno', 'Mañana')
-            ->where(function ($q) use ($cur, $curNivel) {
-                $q->where('cur_codigo', $cur);
+            ->where('config_turno', $this->turno)
+            ->where(function ($q) use ($cur, $curNivel, $pivotConfigIds) {
+                // (1) vínculo explícito por pivot
+                if (!empty($pivotConfigIds)) $q->orWhereIn('config_id', $pivotConfigIds);
+                // (2) config de un solo curso (columna cur_codigo)
+                $q->orWhere('cur_codigo', $cur);
+                // (3) config "Todos" que aplica por categoría = nivel del curso
                 if ($curNivel) $q->orWhere(function ($qq) use ($curNivel) {
                     $qq->whereNull('cur_codigo')->where('config_categoria', $curNivel);
                 });
             })
-            ->orderByRaw('CASE WHEN cur_codigo IS NULL THEN 1 ELSE 0 END')
+            // Prioridad: pivot explícito > curso puntual > categoría/"Todos".
+            ->orderByRaw("CASE WHEN config_id IN ($pivotList) THEN 0 WHEN cur_codigo IS NOT NULL THEN 1 ELSE 2 END")
             ->first();
 
         if ($cfg) {
-            // 'desde' es el FALLBACK (07:00) para captar llegadas tempranas (antes de hora_entrada).
-            // 'hasta' es hora_salida — corta los registros de turno tarde.
-            // 'tolerancia' marca a partir de qué hora se considera atraso (08:34 en INICIAL).
+            // 'desde' capta llegadas tempranas antes de hora_entrada; para Mañana arranca 07:00,
+            // para otros turnos (Tarde) arranca 2h antes de la hora de entrada para no mezclar
+            // marcaciones del turno mañana. 'hasta' = hora_salida corta el otro turno.
+            $desde = ($this->turno === 'Mañana')
+                ? self::FALLBACK_DESDE
+                : date('H:i:s', strtotime(substr($cfg->hora_entrada, 0, 8)) - 2 * 3600);
             $resultado = [
-                'desde'      => self::FALLBACK_DESDE,
+                'desde'      => $desde,
                 'hasta'      => substr($cfg->hora_salida, 0, 8),
                 'tolerancia' => $cfg->tolerancia_atraso ?: null,
+                'aplica'     => true,
             ];
+        } elseif ($this->turno === 'Mañana') {
+            // Turno por defecto: si no hay config, se asume jornada de mañana (compatibilidad).
+            $resultado = ['desde' => self::FALLBACK_DESDE, 'hasta' => self::FALLBACK_HASTA, 'tolerancia' => null, 'aplica' => true];
         } else {
-            $resultado = ['desde' => self::FALLBACK_DESDE, 'hasta' => self::FALLBACK_HASTA, 'tolerancia' => null];
+            // El curso NO tiene configuración para este turno → no pertenece a él.
+            // Ventana imposible para que no capture marcaciones de otro turno.
+            $resultado = ['desde' => '23:59:59', 'hasta' => '00:00:00', 'tolerancia' => null, 'aplica' => false];
         }
-        return $this->configCache[$cur] = $resultado;
+        return $this->configCache[$cacheKey] = $resultado;
+    }
+
+    /**
+     * ¿El turno de esta instancia aplica al curso del estudiante?
+     * (false = el curso no tiene configuración de horario para este turno).
+     */
+    public function turnoAplica(string $estCodigo): bool
+    {
+        return $this->configTurnoManana($estCodigo)['aplica'];
     }
 
     /**
@@ -88,6 +129,11 @@ class AsistenciaResumenService
      */
     public function resumen(string $estCodigo, string $inicio, string $fin): array
     {
+        // Si el turno seleccionado no aplica al curso del estudiante, no hay datos en ese turno.
+        if (!$this->configTurnoManana($estCodigo)['aplica']) {
+            return $this->resumenVacio();
+        }
+
         $fechasCalendario = $this->fechasHabilesCalendario($inicio, $fin);
         $calSet = $fechasCalendario->flip();
         $diasHabilesCalendario = $fechasCalendario->count();
@@ -151,7 +197,14 @@ class AsistenciaResumenService
 
         $resultado = [];
 
+        // Si el turno no aplica al curso, todos los periodos salen en cero.
+        $turnoAplica = $this->configTurnoManana($estCodigo)['aplica'];
+
         foreach ($periodos as $periodo) {
+            if (!$turnoAplica) {
+                $resultado[$periodo->periodo_numero] = $this->periodoVacio($periodo);
+                continue;
+            }
             $inicio = Carbon::parse($periodo->periodo_fecha_inicio)->format('Y-m-d');
             $fin    = Carbon::parse($periodo->periodo_fecha_fin)->format('Y-m-d');
 
@@ -258,6 +311,56 @@ class AsistenciaResumenService
             ->where('nota_estado', 2)
             ->exists();
         return $hayAprobadas;
+    }
+
+    /**
+     * Resumen en cero — usado cuando el turno seleccionado no aplica al curso.
+     */
+    private function resumenVacio(): array
+    {
+        return [
+            'dias_habiles_calendario'    => 0,
+            'dias_trabajados_curso'      => 0,
+            'dias_trabajados_efectivos'  => 0,
+            'presencias'                 => 0,
+            'faltas'                     => 0,
+            'atrasos'                    => 0,
+            'licencias_dias'             => 0,
+            'licencias_solicitudes'      => 0,
+            'fechas_presencia'           => collect(),
+            'fechas_faltas'              => collect(),
+            'fechas_atrasos'             => collect(),
+            'fechas_dias_con_permiso'    => collect(),
+            'turno_no_aplica'            => true,
+        ];
+    }
+
+    /**
+     * Entrada de periodo en cero — usado cuando el turno no aplica al curso.
+     */
+    private function periodoVacio($periodo): array
+    {
+        $inicio = Carbon::parse($periodo->periodo_fecha_inicio)->format('Y-m-d');
+        $fin    = Carbon::parse($periodo->periodo_fecha_fin)->format('Y-m-d');
+        return [
+            'periodo'                    => $periodo,
+            'visible'                    => $this->periodoVisible($periodo),
+            'rango'                      => ['inicio' => $inicio, 'fin' => $fin],
+            'dias_habiles_calendario'    => 0,
+            'dias_trabajados_curso'      => 0,
+            'dias_trabajados_efectivos'  => 0,
+            'presencias'                 => 0,
+            'faltas'                     => 0,
+            'atrasos'                    => 0,
+            'licencias_dias'             => 0,
+            'licencias_solicitudes'      => 0,
+            'fechas_presencia'           => collect(),
+            'fechas_faltas'              => collect(),
+            'fechas_atrasos'             => collect(),
+            'fechas_dias_con_permiso'    => collect(),
+            'permisos'                   => collect(),
+            'turno_no_aplica'            => true,
+        ];
     }
 
     // ────────────────────────────────────────────────────────────────────

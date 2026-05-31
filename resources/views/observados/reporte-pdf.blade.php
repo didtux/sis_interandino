@@ -29,8 +29,8 @@ th{background:#000;color:#fff;text-align:left;}
         @forelse($observados as $i => $o)
             <tr>
                 <td>{{ $i + 1 }}</td>
-                <td><strong>{{ mb_strtoupper(($o->estudiante->est_apellidos ?? '').' '.($o->estudiante->est_nombres ?? ''), 'UTF-8') }}</strong></td>
-                <td>{{ optional($o->estudiante->curso)->cur_nombre ?? '-' }}</td>
+                <td><strong>{{ mb_strtoupper($o->estudiante ? (($o->estudiante->est_apellidos ?? '').' '.($o->estudiante->est_nombres ?? '')) : ($o->obs_estudiante_nombre.' (No inscrito - CI '.$o->obs_estudiante_ci.')'), 'UTF-8') }}</strong></td>
+                <td>{{ $o->estudiante ? (optional($o->estudiante->curso)->cur_nombre ?? '-') : ($o->obs_curso_texto ?? '-') }}</td>
                 <td><span class="tipo-tag">{{ $o->obs_motivo_tipo }}</span></td>
                 <td>{{ $o->obs_motivo }}</td>
                 <td>{{ $o->obs_fecha_registro ? $o->obs_fecha_registro->format('d/m/Y') : '-' }}<br><small>{{ $o->obs_registrado_por_nombre }}</small></td>

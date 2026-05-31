@@ -10,6 +10,26 @@
                 @csrf
                 <div class="modal-body">
                     <div id="perfilAlerta" class="alert d-none"></div>
+
+                    {{-- Foto de perfil --}}
+                    <div class="text-center mb-3">
+                        <img src="{{ $authUser->us_foto ? asset('storage/'.$authUser->us_foto) : asset('img/logo.png') }}"
+                             alt="Foto de perfil" class="rounded-circle"
+                             style="width:96px;height:96px;object-fit:cover;border:2px solid #e3e6f0;">
+                    </div>
+                    <form method="POST" action="{{ route('perfil.foto') }}" enctype="multipart/form-data" class="mb-3">
+                        @csrf
+                        <label>Cambiar foto de perfil:</label>
+                        <div class="input-group">
+                            <input type="file" name="us_foto" accept="image/*" class="form-control" required>
+                            <div class="input-group-append">
+                                <button type="submit" class="btn btn-primary"><i class="fas fa-upload mr-1"></i>Subir</button>
+                            </div>
+                        </div>
+                        <small class="text-muted">JPG, PNG o WEBP. Máx 4 MB.</small>
+                    </form>
+                    <hr>
+
                     <div class="row">
                         <div class="form-group col-sm-6">
                             <label>Nombres:</label>

@@ -120,15 +120,18 @@
                                     $esSoloRegistro = $i->insc_monto_pagado == 0;
                                     $totalPagadoEst = $i->insc_monto_pagado + $mensPagadas;
 
-                                    // Meses vencidos: usar primer_mes del estudiante
+                                    // Saldo: misma fórmula que el REPORTE DE INSCRIPCIONES (fuente de verdad):
+                                    //   monto a cobrar = monto_final anual ; saldo = monto_final − (inscripción + mensualidades).
+                                    $mensualidad = $i->insc_monto_final > 0 ? $i->insc_monto_final / 10 : 0;
+                                    $montoACobrar = $i->insc_monto_final ?? 0;
+                                    $saldoReal = max(0, $montoACobrar - $totalPagadoEst);
+
+                                    // Meses vencidos (solo informativo, para el badge de mora)
                                     $primerMesEst = $primerMesPorEst[$i->est_codigo] ?? $mesActualNum;
                                     $mesLimite = max($mesActualNum, $primerMesEst);
                                     $mesesVencidosEst = 0;
                                     for ($mv = 2; $mv < $mesLimite; $mv++) $mesesVencidosEst++;
                                     $mesesCobrables = 10 - $mesesVencidosEst;
-                                    $mensualidad = $i->insc_monto_final > 0 ? $i->insc_monto_final / 10 : 0;
-                                    $montoACobrar = $mensualidad * $mesesCobrables;
-                                    $saldoReal = max(0, $montoACobrar - $totalPagadoEst);
 
                                     if($i->insc_estado != 0) {
                                         $totalMonto += $montoACobrar;
@@ -146,9 +149,7 @@
                                     <td>{{ $i->insc_fecha ? $i->insc_fecha->format('d/m/Y') : 'N/A' }}</td>
                                     <td>
                                         {{ number_format($montoACobrar, 2) }}
-                                        @if($mesesVencidosEst > 0)
-                                            <br><small class="text-muted">{{ $mesesCobrables }} meses × {{ number_format($mensualidad, 0) }}</small>
-                                        @endif
+                                        <br><small class="text-muted">10 × {{ number_format($mensualidad, 0) }}</small>
                                     </td>
                                     <td>
                                         @if($i->descuentos->count() > 0)

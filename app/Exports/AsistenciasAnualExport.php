@@ -13,12 +13,14 @@ class AsistenciasAnualExport implements FromCollection, WithHeadings, WithStyles
     protected $data;
     protected $curso;
     protected $year;
+    protected $turno;
 
-    public function __construct($data, $curso, $year)
+    public function __construct($data, $curso, $year, $turno = 'Mañana')
     {
         $this->data = $data;
         $this->curso = $curso;
         $this->year = $year;
+        $this->turno = $turno;
     }
 
     public function collection()
@@ -46,6 +48,6 @@ class AsistenciasAnualExport implements FromCollection, WithHeadings, WithStyles
     
     public function title(): string
     {
-        return 'Asistencia ' . $this->year;
+        return mb_substr('Asist ' . $this->year . ' - ' . $this->turno, 0, 31);
     }
 }

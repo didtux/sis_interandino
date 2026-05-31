@@ -76,19 +76,11 @@ class PadrePortalController extends Controller
                 ->pluck('nota_promedio_trimestral');
             $info['promedio'] = $notas->count() > 0 ? round($notas->avg(), 1) : 0;
 
-            // Faltas totales
-            $periodos = NotaPeriodo::activo()->gestion($gestion)->get();
-            $totalFaltas = 0;
-            foreach ($periodos as $p) {
-                $inicio = $p->periodo_fecha_inicio->format('Y-m-d');
-                $fin = $p->periodo_fecha_fin->format('Y-m-d');
-                $diasTrab = Asistencia::whereBetween('asis_fecha', [$inicio, $fin])->select('asis_fecha')->distinct()->count();
-                $presencias = Asistencia::where('estud_codigo', $est->est_codigo)->whereBetween('asis_fecha', [$inicio, $fin])->count();
-                $licencias = Permiso::where('estud_codigo', $est->est_codigo)->where('permiso_estado', 1)
-                    ->where('permiso_fecha_inicio', '<=', $fin)->where('permiso_fecha_fin', '>=', $inicio)->count();
-                $totalFaltas += max(0, $diasTrab - $presencias - $licencias);
-            }
-            $info['faltas'] = $totalFaltas;
+            // Faltas totales — vía servicio unificado (mismo cálculo que boletín/concejo).
+            $periodos = NotaPeriodo::activo()->gestion($gestion)->orderBy('periodo_numero')->get();
+            $resumenTrim = (new \App\Services\AsistenciaResumenService())
+                ->resumenPorTrimestre($est->est_codigo, $periodos);
+            $info['faltas'] = collect($resumenTrim)->sum('faltas');
 
             $resumen[] = $info;
         }
@@ -145,17 +137,24 @@ class PadrePortalController extends Controller
 
         $asistData = [];
         if ($estSeleccionado) {
-            foreach ($periodos as $p) {
-                $inicio = $p->periodo_fecha_inicio->format('Y-m-d');
-                $fin = $p->periodo_fecha_fin->format('Y-m-d');
-                $diasTrab = Asistencia::whereBetween('asis_fecha', [$inicio, $fin])->select('asis_fecha')->distinct()->count();
-                $presencias = Asistencia::where('estud_codigo', $estSeleccionado->est_codigo)->whereBetween('asis_fecha', [$inicio, $fin])->count();
-                $atrasos = Atraso::where('estud_codigo', $estSeleccionado->est_codigo)->whereBetween('atraso_fecha', [$inicio, $fin])->count();
-                $licencias = Permiso::where('estud_codigo', $estSeleccionado->est_codigo)->where('permiso_estado', 1)
-                    ->where('permiso_fecha_inicio', '<=', $fin)->where('permiso_fecha_fin', '>=', $inicio)->count();
-                $faltas = max(0, $diasTrab - $presencias - $licencias);
+            // Servicio unificado: turno mañana, dedup por fecha, L-V sin feriados.
+            // DT = presencias + licencias (atrasos cuentan como asistencia); TOT = días hábiles calendario.
+            $resumenTrim = (new \App\Services\AsistenciaResumenService())
+                ->resumenPorTrimestre($estSeleccionado->est_codigo, $periodos);
 
-                $asistData[$p->periodo_numero] = compact('diasTrab', 'presencias', 'atrasos', 'licencias', 'faltas');
+            foreach ($periodos as $p) {
+                $r = $resumenTrim[$p->periodo_numero] ?? null;
+                if (!$r) continue;
+                $presencias = $r['presencias'];
+                $licencias  = $r['licencias_dias'];
+                $atrasos    = $r['atrasos'];
+                $faltas     = $r['faltas'];
+                $diasTrab   = $presencias + $licencias;          // Días trabajados (DT)
+                $totalDias  = $r['dias_habiles_calendario'];      // Total hábiles (TOT)
+
+                $asistData[$p->periodo_numero] = compact(
+                    'diasTrab', 'presencias', 'atrasos', 'licencias', 'faltas', 'totalDias'
+                );
             }
         }
 

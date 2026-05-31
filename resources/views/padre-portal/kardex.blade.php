@@ -28,6 +28,15 @@
                     {{ $estSeleccionado->est_apellido_paterno }} {{ $estSeleccionado->est_nombres }}
                 </h6>
 
+                @php $pendientes = $registros->where('ek_visto_padre', 0)->count(); @endphp
+                @if($pendientes > 0)
+                    <div class="alert alert-danger d-flex align-items-center" style="font-size:13px;">
+                        <i class="fas fa-exclamation-triangle mr-2"></i>
+                        Tiene <strong class="mx-1">{{ $pendientes }}</strong> reporte(s) pendiente(s).
+                        Debe confirmar <strong>"Asumo conocimiento del presente reporte"</strong> en cada uno.
+                    </div>
+                @endif
+
                 @forelse($registros as $r)
                     @php
                         $color = ['POSITIVO'=>'#27ae60','NEGATIVO'=>'#e74c3c','NEUTRO'=>'#7f8c8d'][$r->ek_categoria ?? ''] ?? '#34495e';
@@ -57,11 +66,14 @@
                                     {{ optional($r->docente)->doc_apellidos ?? 'Dirección' }} {{ optional($r->docente)->doc_nombres }}
                                 </span>
                                 @if($r->ek_visto_padre)
-                                    <span class="badge badge-success"><i class="fas fa-check mr-1"></i>Visto {{ $r->ek_visto_padre_at->format('d/m/Y H:i') }}</span>
+                                    <span class="badge badge-success"><i class="fas fa-check mr-1"></i>Conocimiento confirmado {{ $r->ek_visto_padre_at->format('d/m/Y H:i') }}</span>
                                 @else
-                                    <form action="{{ route('padre-portal.kardex.visto', $r->ek_id) }}" method="POST">
+                                    <form action="{{ route('padre-portal.kardex.visto', $r->ek_id) }}" method="POST"
+                                          onsubmit="return confirm('Al confirmar declara que ASUME CONOCIMIENTO del presente reporte. ¿Desea continuar?');">
                                         @csrf
-                                        <button type="submit" class="btn btn-outline-success btn-sm"><i class="fas fa-check mr-1"></i>Marcar como visto</button>
+                                        <button type="submit" class="btn btn-success btn-sm">
+                                            <i class="fas fa-check-double mr-1"></i>Asumo conocimiento del presente reporte
+                                        </button>
                                     </form>
                                 @endif
                             </div>

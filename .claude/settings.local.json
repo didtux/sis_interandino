@@ -3,7 +3,11 @@
     "allow": [
       "Bash(grep -nE \"^use App\\\\\\\\\\\\\\\\Models\\\\\\\\\\\\\\\\Atraso\" c:/xampp/htdocs/Sis_Intterandino/app/Http/Controllers/AsistenciaController.php)",
       "Bash(php artisan *)",
-      "Bash(php -r ' *)"
+      "Bash(php -r ' *)",
+      "Bash(grep -v \"Trust\\\\|Restricted\\\\|Trusting\\\\|local PsySH\\\\|^$\")",
+      "Bash(grep -v \"ftp\\\\|Unrecognized\\\\|Restricted\\\\|Trusting\\\\|local PsySH\\\\|Trust and\\\\|^$\")",
+      "Bash(php -l app/Http/Controllers/EscaneoAsistenciaController.php)",
+      "Bash(grep -v \"ftp\\\\|^$\")"
     ]
   }
 }

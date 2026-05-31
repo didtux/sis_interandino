@@ -16,6 +16,23 @@ class AgendaController extends Controller
         return 'AGE' . str_pad($num, 4, '0', STR_PAD_LEFT);
     }
 
+    /**
+     * Determina el curso_codigo de la agenda:
+     *  - usa el enviado explícitamente, o
+     *  - lo deriva del curso del estudiante seleccionado, o
+     *  - null (notificación/agenda general sin curso).
+     */
+    private function resolverCursoCodigo(Request $request)
+    {
+        if ($request->filled('curso_codigo')) {
+            return $request->curso_codigo;
+        }
+        if ($request->filled('est_codigo')) {
+            return Estudiante::where('est_codigo', $request->est_codigo)->value('cur_codigo');
+        }
+        return null;
+    }
+
     public function index(Request $request)
     {
         $query = Agenda::activo()->with('estudiante.curso');
@@ -66,7 +83,8 @@ class AgendaController extends Controller
             'age_codigo' => $this->generarCodigo(),
             'age_tipo' => $request->age_tipo,
             'est_codigo' => $request->est_codigo,
-            'curso_codigo' => $request->curso_codigo,
+            // El formulario no pide curso: se deriva del estudiante seleccionado (si hay).
+            'curso_codigo' => $this->resolverCursoCodigo($request),
             'prof_codigo' => $request->prof_codigo,
             'age_titulo' => $request->age_titulo,
             'age_detalles' => $request->age_detalles,
@@ -103,7 +121,7 @@ class AgendaController extends Controller
         $agenda->update([
             'age_tipo' => $request->age_tipo,
             'est_codigo' => $request->est_codigo,
-            'curso_codigo' => $request->curso_codigo,
+            'curso_codigo' => $this->resolverCursoCodigo($request),
             'prof_codigo' => $request->prof_codigo,
             'age_titulo' => $request->age_titulo,
             'age_detalles' => $request->age_detalles,

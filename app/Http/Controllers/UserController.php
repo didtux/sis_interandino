@@ -9,10 +9,34 @@ use Illuminate\Support\Facades\Hash;
 
 class UserController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        $usuarios = User::with('rol')->orderBy('us_id', 'desc')->paginate(15);
-        return view('usuarios.index', compact('usuarios'));
+        $query = User::with('rol');
+
+        if ($request->filled('buscar')) {
+            $tokens = preg_split('/\s+/', trim($request->buscar), -1, PREG_SPLIT_NO_EMPTY);
+            foreach ($tokens as $t) {
+                $query->where(function ($q) use ($t) {
+                    $q->where('us_nombres', 'like', "%$t%")
+                      ->orWhere('us_apellidos', 'like', "%$t%")
+                      ->orWhere('us_user', 'like', "%$t%")
+                      ->orWhere('us_ci', 'like', "%$t%")
+                      ->orWhere('us_codigo', 'like', "%$t%");
+                });
+            }
+        }
+
+        if ($request->filled('rol_id')) {
+            $query->where('rol_id', $request->rol_id);
+        }
+
+        if ($request->filled('estado') && $request->estado !== 'todos') {
+            $query->where('us_visible', $request->estado);
+        }
+
+        $usuarios = $query->orderBy('us_id', 'desc')->paginate(15)->appends($request->query());
+        $roles = Rol::activo()->get();
+        return view('usuarios.index', compact('usuarios', 'roles'));
     }
 
     public function create()

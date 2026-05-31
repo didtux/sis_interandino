@@ -664,9 +664,9 @@ class AsistenciaController extends Controller
         return $dias;
     }
 
-    private function getAsistenciaTrimestreEst($estCodigo, $periodo, $year)
+    private function getAsistenciaTrimestreEst($estCodigo, $periodo, $year, $turno = 'Mañana')
     {
-        $service = new \App\Services\AsistenciaResumenService();
+        $service = new \App\Services\AsistenciaResumenService($turno);
         $r = $service->resumen(
             $estCodigo,
             $periodo->periodo_fecha_inicio->format('Y-m-d'),
@@ -697,6 +697,13 @@ class AsistenciaController extends Controller
 
         $trimestre = $request->trimestre;
         $year = date('Y');
+        // Turno del reporte: por config_id o por nombre; default Mañana.
+        $turnoNombre = 'Mañana';
+        if ($request->filled('turno')) {
+            $turnoNombre = ConfiguracionAsistencia::where('config_id', $request->turno)->value('config_turno') ?: $request->turno;
+        } elseif ($request->filled('turno_nombre')) {
+            $turnoNombre = $request->turno_nombre;
+        }
         $periodo = NotaPeriodo::activo()->gestion($year)->where('periodo_numero', $trimestre)->first();
 
         $estudiantes = $curso->estudiantes()->orderBy('est_apellidos')->orderBy('est_nombres')->get();
@@ -706,6 +713,9 @@ class AsistenciaController extends Controller
         if ($lista->isNotEmpty()) {
             $estudiantes = $estudiantes->sortBy(fn($e) => $lista[$e->est_codigo] ?? 9999)->values();
         }
+
+        // ¿El curso pertenece al turno seleccionado? (avisa en el PDF si no)
+        $turnoNoAplica = !(new \App\Services\AsistenciaResumenService($turnoNombre))->turnoAplica($estudiantes->first()->est_codigo);
 
         // Construir meses dentro del rango del periodo
         $mesesConfig = [];
@@ -732,14 +742,14 @@ class AsistenciaController extends Controller
         $datosMensuales   = [];
         if ($periodo) {
             foreach ($estudiantes as $est) {
-                $datosEstudiantes[$est->est_codigo] = $this->getAsistenciaTrimestreEst($est->est_codigo, $periodo, $year);
+                $datosEstudiantes[$est->est_codigo] = $this->getAsistenciaTrimestreEst($est->est_codigo, $periodo, $year, $turnoNombre);
                 $datosMensuales[$est->est_codigo] = [];
                 foreach ($mesesConfig as $key => $m) {
                     $pseudo = (object)[
                         'periodo_fecha_inicio' => Carbon::parse($m['fechaInicio']),
                         'periodo_fecha_fin'    => Carbon::parse($m['fechaFin']),
                     ];
-                    $datosMensuales[$est->est_codigo][$key] = $this->getAsistenciaTrimestreEst($est->est_codigo, $pseudo, $year);
+                    $datosMensuales[$est->est_codigo][$key] = $this->getAsistenciaTrimestreEst($est->est_codigo, $pseudo, $year, $turnoNombre);
                 }
             }
         }
@@ -782,7 +792,7 @@ class AsistenciaController extends Controller
         ];
 
         $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('asistencias.reporte-trimestral-pdf',
-            compact('curso', 'estudiantes', 'trimestre', 'lista', 'year', 'periodo', 'datosEstudiantes', 'mesesConfig', 'datosMensuales', 'stats'))
+            compact('curso', 'estudiantes', 'trimestre', 'lista', 'year', 'periodo', 'datosEstudiantes', 'mesesConfig', 'datosMensuales', 'stats', 'turnoNombre', 'turnoNoAplica'))
             ->setPaper('legal', 'landscape');
         return $pdf->stream('asistencia-trimestre-' . $trimestre . '-' . date('Y-m-d') . '.pdf');
     }
@@ -795,6 +805,12 @@ class AsistenciaController extends Controller
         if (!$curso) return back()->with('error', 'Curso no encontrado');
 
         $year = date('Y');
+        $turnoNombre = 'Mañana';
+        if ($request->filled('turno')) {
+            $turnoNombre = ConfiguracionAsistencia::where('config_id', $request->turno)->value('config_turno') ?: $request->turno;
+        } elseif ($request->filled('turno_nombre')) {
+            $turnoNombre = $request->turno_nombre;
+        }
         $periodos = NotaPeriodo::activo()->gestion($year)->orderBy('periodo_numero')->get();
 
         $trimestresConfig = [];
@@ -817,17 +833,20 @@ class AsistenciaController extends Controller
             $estudiantes = $estudiantes->sortBy(fn($e) => $lista[$e->est_codigo] ?? 9999)->values();
         }
 
+        // ¿El curso pertenece al turno seleccionado? (avisa en el PDF si no)
+        $turnoNoAplica = !(new \App\Services\AsistenciaResumenService($turnoNombre))->turnoAplica($estudiantes->first()->est_codigo);
+
         // Pre-compute data per student per trimestre
         $datosEstudiantes = [];
         foreach ($estudiantes as $est) {
             $datosEstudiantes[$est->est_codigo] = [];
             foreach ($periodos as $p) {
-                $datosEstudiantes[$est->est_codigo][$p->periodo_numero] = $this->getAsistenciaTrimestreEst($est->est_codigo, $p, $year);
+                $datosEstudiantes[$est->est_codigo][$p->periodo_numero] = $this->getAsistenciaTrimestreEst($est->est_codigo, $p, $year, $turnoNombre);
             }
         }
 
         $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('asistencias.reporte-anual-pdf',
-            compact('curso', 'estudiantes', 'year', 'lista', 'trimestresConfig', 'datosEstudiantes'))
+            compact('curso', 'estudiantes', 'year', 'lista', 'trimestresConfig', 'datosEstudiantes', 'turnoNombre', 'turnoNoAplica'))
             ->setPaper('legal', 'landscape');
         return $pdf->stream('asistencia-anual-' . date('Y-m-d') . '.pdf');
     }
@@ -851,6 +870,10 @@ class AsistenciaController extends Controller
             $estudiantes = $estudiantes->sortBy(fn($e) => $listaExcel[$e->est_codigo] ?? 9999)->values();
         }
 
+        $turnoNombre = $request->filled('turno')
+            ? (ConfiguracionAsistencia::where('config_id', $request->turno)->value('config_turno') ?: 'Mañana')
+            : ($request->turno_nombre ?? 'Mañana');
+
         $periodo = NotaPeriodo::activo()->gestion($year)->where('periodo_numero', $request->trimestre)->first();
         $periodoNombre = $periodo ? $periodo->periodo_nombre : 'Trimestre ' . $request->trimestre;
 
@@ -858,7 +881,7 @@ class AsistenciaController extends Controller
         foreach ($estudiantes as $index => $est) {
             $fila = [$listaExcel[$est->est_codigo] ?? ($index + 1), $est->est_apellidos . ' ' . $est->est_nombres];
             if ($periodo) {
-                $d = $this->getAsistenciaTrimestreEst($est->est_codigo, $periodo, $year);
+                $d = $this->getAsistenciaTrimestreEst($est->est_codigo, $periodo, $year, $turnoNombre);
                 $fila = array_merge($fila, [$d['dt'], $d['tl'], $d['tf'], $d['ta'], $d['total']]);
             } else {
                 $fila = array_merge($fila, [0, 0, 0, 0, 0]);
@@ -866,8 +889,8 @@ class AsistenciaController extends Controller
             $data->push($fila);
         }
 
-        return Excel::download(new AsistenciasTrimestralExport($data, $curso, $request->trimestre, [$periodoNombre]),
-            'asistencia-trimestre-' . $request->trimestre . '-' . date('Y-m-d') . '.xlsx');
+        return Excel::download(new AsistenciasTrimestralExport($data, $curso, $request->trimestre, [$periodoNombre], $turnoNombre),
+            'asistencia-trimestre-' . $request->trimestre . '-' . $turnoNombre . '-' . date('Y-m-d') . '.xlsx');
     }
 
     public function reporteAnualExcel(Request $request)
@@ -886,6 +909,10 @@ class AsistenciaController extends Controller
             $estudiantes = $estudiantes->sortBy(fn($e) => $listaExcelAnual[$e->est_codigo] ?? 9999)->values();
         }
 
+        $turnoNombre = $request->filled('turno')
+            ? (ConfiguracionAsistencia::where('config_id', $request->turno)->value('config_turno') ?: 'Mañana')
+            : ($request->turno_nombre ?? 'Mañana');
+
         $periodos = NotaPeriodo::activo()->gestion($year)->orderBy('periodo_numero')->get();
 
         $data = collect();
@@ -894,7 +921,7 @@ class AsistenciaController extends Controller
             $totalAnual = ['dt' => 0, 'tl' => 0, 'tf' => 0, 'ta' => 0, 'total' => 0];
 
             foreach ($periodos as $p) {
-                $d = $this->getAsistenciaTrimestreEst($est->est_codigo, $p, $year);
+                $d = $this->getAsistenciaTrimestreEst($est->est_codigo, $p, $year, $turnoNombre);
                 $fila = array_merge($fila, [$d['dt'], $d['tl'], $d['tf'], $d['ta'], $d['total']]);
                 $totalAnual['dt'] += $d['dt']; $totalAnual['tl'] += $d['tl'];
                 $totalAnual['tf'] += $d['tf']; $totalAnual['ta'] += $d['ta']; $totalAnual['total'] += $d['total'];
@@ -903,8 +930,8 @@ class AsistenciaController extends Controller
             $data->push($fila);
         }
 
-        return Excel::download(new AsistenciasAnualExport($data, $curso, $year),
-            'asistencia-anual-' . date('Y-m-d') . '.xlsx');
+        return Excel::download(new AsistenciasAnualExport($data, $curso, $year, $turnoNombre),
+            'asistencia-anual-' . $turnoNombre . '-' . date('Y-m-d') . '.xlsx');
     }
 
     public function reporteAtrasos(Request $request)

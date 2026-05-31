@@ -14,13 +14,15 @@ class AsistenciasTrimestralExport implements FromCollection, WithHeadings, WithS
     protected $curso;
     protected $trimestre;
     protected $meses;
+    protected $turno;
 
-    public function __construct($data, $curso, $trimestre, $meses)
+    public function __construct($data, $curso, $trimestre, $meses, $turno = 'Mañana')
     {
         $this->data = $data;
         $this->curso = $curso;
         $this->trimestre = $trimestre;
         $this->meses = $meses;
+        $this->turno = $turno;
     }
 
     public function collection()
@@ -58,6 +60,6 @@ class AsistenciasTrimestralExport implements FromCollection, WithHeadings, WithS
     
     public function title(): string
     {
-        return 'Trimestre ' . $this->trimestre;
+        return mb_substr('Trim ' . $this->trimestre . ' - ' . $this->turno, 0, 31);
     }
 }

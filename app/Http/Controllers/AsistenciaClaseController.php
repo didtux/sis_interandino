@@ -32,7 +32,19 @@ class AsistenciaClaseController extends Controller
             $query->whereIn('mat_codigo', $matCodigos);
         }
         if ($request->filled('buscar')) {
-            $query->whereHas('docente', fn($q) => $q->where('doc_nombres', 'like', '%'.$request->buscar.'%')->orWhere('doc_apellidos', 'like', '%'.$request->buscar.'%'));
+            // Búsqueda por tokens resolviendo doc_codigos en query separada para evitar
+            // "Illegal mix of collations" al cruzar colegio_curso_materia_docente con colegio_docentes.
+            $tokens = preg_split('/\s+/', trim($request->buscar), -1, PREG_SPLIT_NO_EMPTY);
+            $docQ = \DB::table('colegio_docentes');
+            foreach ($tokens as $t) {
+                $docQ->where(function ($qq) use ($t) {
+                    $qq->where('doc_nombres', 'like', "%$t%")
+                       ->orWhere('doc_apellidos', 'like', "%$t%")
+                       ->orWhere('doc_codigo', 'like', "%$t%");
+                });
+            }
+            $docCodigos = $docQ->pluck('doc_codigo')->all();
+            $query->whereIn('doc_codigo', $docCodigos ?: ['__none__']);
         }
 
         $asignaciones = $query->get();

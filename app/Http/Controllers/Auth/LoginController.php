@@ -42,6 +42,8 @@ class LoginController extends Controller
                     return redirect('/mi-transporte');
                 } elseif ($user->us_entidad_tipo === 'padre') {
                     return redirect('/mi-portal');
+                } elseif ($user->us_entidad_tipo === 'escaneo') {
+                    return redirect('/escaneo');
                 }
 
                 return redirect()->intended('/home');

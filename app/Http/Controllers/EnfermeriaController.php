@@ -16,7 +16,11 @@ class EnfermeriaController extends Controller
         if ($request->filled('tipo_persona')) {
             $query->where('enf_tipo_persona', $request->tipo_persona);
         }
-        
+
+        if ($request->filled('dx_detalle')) {
+            $query->where('enf_dx_detalle', $request->dx_detalle);
+        }
+
         if ($request->filled('cur_codigo')) {
             $query->where('enf_tipo_persona', 'ESTUDIANTE')->whereHas('estudiante', function($q) use ($request) {
                 $q->where('cur_codigo', $request->cur_codigo);
@@ -43,8 +47,12 @@ class EnfermeriaController extends Controller
         $estudiantes = Estudiante::visible()->orderBy('est_nombres')->get();
         $docentes = \App\Models\Docente::visible()->orderBy('doc_nombres')->get();
         $cursos = \App\Models\Curso::visible()->orderBy('cur_nombre')->get();
-        
-        return view('enfermeria.index', compact('registros', 'estudiantes', 'docentes', 'cursos'));
+        // Tipos de atención existentes (para el filtro) — incluye los nuevos que se vayan registrando.
+        $tiposDx = RegistroEnfermeria::activo()
+            ->whereNotNull('enf_dx_detalle')->where('enf_dx_detalle', '!=', '')
+            ->distinct()->orderBy('enf_dx_detalle')->pluck('enf_dx_detalle');
+
+        return view('enfermeria.index', compact('registros', 'estudiantes', 'docentes', 'cursos', 'tiposDx'));
     }
 
     public function create()
@@ -167,15 +175,19 @@ class EnfermeriaController extends Controller
             $totalHigiene = 0;
             $totalAtencion = 0;
             $totalMedicamentos = 0;
-            
+            $totalUniforme = 0;
+
             foreach($regs as $reg) {
                 $mes = $reg->enf_fecha->format('Y-m');
                 if (!isset($porMes[$mes])) {
-                    $porMes[$mes] = ['HIGIENE PERSONAL' => 0, 'ATENCIÓN MÉDICA' => 0, 'DOTACIÓN DE MEDICAMENTOS' => 0];
+                    $porMes[$mes] = ['HIGIENE PERSONAL' => 0, 'ATENCIÓN MÉDICA' => 0, 'DOTACIÓN DE MEDICAMENTOS' => 0, 'UNIFORME' => 0];
                 }
                 if ($reg->enf_dx_detalle == 'HIGIENE PERSONAL') {
                     $porMes[$mes]['HIGIENE PERSONAL']++;
                     $totalHigiene++;
+                } else if ($reg->enf_dx_detalle == 'UNIFORME') {
+                    $porMes[$mes]['UNIFORME']++;
+                    $totalUniforme++;
                 } else if ($reg->enf_dx_detalle == 'ATENCIÓN MÉDICA') {
                     $porMes[$mes]['ATENCIÓN MÉDICA']++;
                     $totalAtencion++;
@@ -190,7 +202,8 @@ class EnfermeriaController extends Controller
                 'meses' => $porMes,
                 'total_higiene' => $totalHigiene,
                 'total_atencion' => $totalAtencion,
-                'total_medicamentos' => $totalMedicamentos
+                'total_medicamentos' => $totalMedicamentos,
+                'total_uniforme' => $totalUniforme
             ];
         })->filter();
         

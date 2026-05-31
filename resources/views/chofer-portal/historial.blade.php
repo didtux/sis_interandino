@@ -7,6 +7,17 @@
             <div class="card modern-card">
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <h4><i class="fas fa-history mr-2"></i>Historial de Asistencia</h4>
+                    <form method="GET" action="{{ route('chofer-portal.reporte-mensual') }}" target="_blank" class="form-inline" style="gap:6px;">
+                        <input type="hidden" name="ruta_codigo" value="{{ $rutaSeleccionada }}">
+                        <select name="mes" class="form-control form-control-sm">
+                            @php $mesesN = [1=>'Enero',2=>'Febrero',3=>'Marzo',4=>'Abril',5=>'Mayo',6=>'Junio',7=>'Julio',8=>'Agosto',9=>'Septiembre',10=>'Octubre',11=>'Noviembre',12=>'Diciembre']; @endphp
+                            @foreach($mesesN as $n => $mn)
+                                <option value="{{ $n }}" {{ (int)date('n')==$n ? 'selected' : '' }}>{{ $mn }}</option>
+                            @endforeach
+                        </select>
+                        <input type="number" name="anio" value="{{ date('Y') }}" class="form-control form-control-sm" style="width:90px;">
+                        <button class="btn btn-danger btn-sm"><i class="fas fa-file-pdf mr-1"></i>Reporte mensual (descargo)</button>
+                    </form>
                 </div>
                 <div class="card-body">
                     @include('chofer-portal._selector-ruta')

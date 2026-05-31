@@ -51,6 +51,57 @@
                         </div>
                     </form>
 
+                    {{-- ====== Reportes Excel de Licencias ====== --}}
+                    <div class="card mb-3" style="border-left:4px solid #1c4789;">
+                        <div class="card-body py-2">
+                            <h6 class="mb-2"><i class="fas fa-file-excel text-success mr-1"></i>Reportes Excel de Licencias</h6>
+                            <div class="row align-items-end">
+                                <div class="col-md-2">
+                                    <label class="small mb-1">Gestión</label>
+                                    <input type="number" id="lic_gestion" class="form-control form-control-sm" value="{{ date('Y') }}">
+                                </div>
+                                <div class="col-md-2">
+                                    <label class="small mb-1">Mes</label>
+                                    <select id="lic_mes" class="form-control form-control-sm">
+                                        @php $meses = [2=>'Febrero',3=>'Marzo',4=>'Abril',5=>'Mayo',6=>'Junio',7=>'Julio',8=>'Agosto',9=>'Septiembre',10=>'Octubre',11=>'Noviembre',12=>'Diciembre']; @endphp
+                                        @foreach($meses as $n => $m)
+                                            <option value="{{ $n }}" {{ (int)date('n') == $n ? 'selected' : '' }}>{{ $m }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="small mb-1">Turno (opcional)</label>
+                                    <select id="lic_turno" class="form-control form-control-sm">
+                                        <option value="">Todos</option>
+                                        @foreach(($horarios ?? []) as $h)
+                                            <option value="{{ $h->config_id }}">{{ $h->config_turno }} — {{ $h->config_categoria }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="small mb-1">Curso (para anual×estudiante)</label>
+                                    <select id="lic_curso" class="form-control form-control-sm select2-curso">
+                                        <option value="">— Seleccione —</option>
+                                        @foreach($cursos as $curso)
+                                            <option value="{{ $curso->cur_codigo }}">{{ $curso->cur_nombre }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="mt-2">
+                                <button type="button" class="btn btn-success btn-sm" onclick="excelLic('mensual')">
+                                    <i class="fas fa-calendar-alt mr-1"></i>Mensual (días × curso)
+                                </button>
+                                <button type="button" class="btn btn-success btn-sm" onclick="excelLic('anual-est')">
+                                    <i class="fas fa-user-graduate mr-1"></i>Anual × estudiante
+                                </button>
+                                <button type="button" class="btn btn-outline-success btn-sm" onclick="excelLic('anual-curso')">
+                                    <i class="fas fa-layer-group mr-1"></i>Anual × curso
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
                     <table class="table table-striped" id="tablaPermisos">
                         <thead>
                             <tr>
@@ -467,6 +518,29 @@ function generarReportePermisos() {
     if (curCodigo) params.append('cur_codigo', curCodigo);
 
     window.open('{{ route("asistencia-config.permisos.reporte-pdf") }}?' + params.toString(), '_blank');
+}
+
+function excelLic(tipo) {
+    var gestion = document.getElementById('lic_gestion').value || {{ date('Y') }};
+    var mes     = document.getElementById('lic_mes').value;
+    var turno   = document.getElementById('lic_turno').value;
+    var curso   = document.getElementById('lic_curso').value;
+    var p = new URLSearchParams();
+    p.append('gestion', gestion);
+    if (turno) p.append('turno', turno);
+
+    var url;
+    if (tipo === 'mensual') {
+        p.append('mes', mes);
+        url = '{{ route("asistencia-config.licencias.excel-mensual") }}';
+    } else if (tipo === 'anual-est') {
+        if (!curso) { alert('Seleccione un curso para el reporte anual por estudiante.'); return; }
+        p.append('cur_codigo', curso);
+        url = '{{ route("asistencia-config.licencias.excel-anual-est") }}';
+    } else {
+        url = '{{ route("asistencia-config.licencias.excel-anual-curso") }}';
+    }
+    window.open(url + '?' + p.toString(), '_blank');
 }
 </script>
 @endsection

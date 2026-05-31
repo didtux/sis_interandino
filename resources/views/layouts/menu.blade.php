@@ -165,7 +165,19 @@
         @if($esAdmin || in_array(optional($user)->rol_id, [1,4]))
         <li><a href="{{ route('kardex-docente.index') }}"><i class="fas fa-folder-open"></i> Kardex Docente</a></li>
         @endif
+        @if($esAdmin || in_array(optional($user)->rol_id, [1,9,10,11]))
+        <li><a href="{{ route('comunicados.index') }}"><i class="fas fa-bullhorn"></i> Comunicados</a></li>
+        @endif
     </ul>
+</li>
+@endif
+
+{{-- Mis Comunicados — para el docente --}}
+@if($user && $user->us_entidad_tipo === 'docente')
+<li class="side-menus {{ Request::is('mis-comunicados*') ? 'active' : '' }}">
+    <a class="nav-link" href="{{ route('comunicados.docente') }}">
+        <i class="fas fa-inbox"></i><span>Mis Comunicados</span>
+    </a>
 </li>
 @endif
 

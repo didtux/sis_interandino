@@ -28,10 +28,10 @@
             @endif
 
             {{-- Filtros --}}
-            <form method="GET" class="row mb-3" style="font-size:13px;">
+            <form method="GET" class="row mb-3" id="filtrosKardex" style="font-size:13px;">
                 <div class="col-md-3">
                     <label class="small font-weight-bold">Curso</label>
-                    <select name="cur_codigo" class="form-control form-control-sm" onchange="this.form.submit()">
+                    <select name="cur_codigo" id="filtro_curso" class="form-control select2-filtro">
                         <option value="">— Todos —</option>
                         @foreach($cursos as $c)
                             <option value="{{ $c->cur_codigo }}" {{ $curCodigo == $c->cur_codigo ? 'selected' : '' }}>{{ $c->cur_nombre }}</option>
@@ -40,17 +40,17 @@
                 </div>
                 <div class="col-md-3">
                     <label class="small font-weight-bold">Estudiante</label>
-                    <select name="est_codigo" class="form-control form-control-sm">
+                    <select name="est_codigo" id="filtro_estudiante" class="form-control select2-filtro">
                         <option value="">— Todos —</option>
                         @foreach($estudiantes as $e)
-                            <option value="{{ $e->est_codigo }}" {{ $estCodigo == $e->est_codigo ? 'selected' : '' }}>{{ $e->est_apellido_paterno }} {{ $e->est_nombres }}</option>
+                            <option value="{{ $e->est_codigo }}" data-cur="{{ $e->cur_codigo }}" {{ $estCodigo == $e->est_codigo ? 'selected' : '' }}>{{ $e->est_apellidos }} {{ $e->est_nombres }}</option>
                         @endforeach
                     </select>
                 </div>
                 <div class="col-md-2">
                     <label class="small font-weight-bold">Tipo</label>
-                    <select name="tipo" class="form-control form-control-sm">
-                        <option value="">—</option>
+                    <select name="tipo" class="form-control select2-filtro">
+                        <option value="">— Todos —</option>
                         @foreach(['ACADEMICO','CONDUCTUAL','FELICITACION','OBSERVACION','COMPROMISO'] as $t)
                             <option value="{{ $t }}" {{ $tipo == $t ? 'selected' : '' }}>{{ $t }}</option>
                         @endforeach
@@ -93,7 +93,7 @@
                             @endphp
                             <tr style="border-left:4px solid {{ $color }};">
                                 <td>{{ $r->ek_fecha->format('d/m/Y') }}</td>
-                                <td><strong>{{ optional($r->estudiante)->est_apellido_paterno }} {{ optional($r->estudiante)->est_nombres }}</strong></td>
+                                <td><strong>{{ optional($r->estudiante)->est_apellidos }} {{ optional($r->estudiante)->est_nombres }}</strong></td>
                                 <td><small>{{ optional($r->curso)->cur_nombre }}</small></td>
                                 <td><span class="badge {{ $tipoBadge }}">{{ $r->ek_tipo }}</span></td>
                                 <td><strong>{{ $r->ek_titulo }}</strong></td>
@@ -208,11 +208,8 @@
                             <label class="small font-weight-bold">Estudiante <span class="text-danger">*</span></label>
                             <select name="est_codigo" class="form-control select2-nuevo" required>
                                 <option value="">— Seleccione —</option>
-                                @php
-                                    $estsNuevo = $estudiantes->isNotEmpty() ? $estudiantes : \App\Models\Inscripcion::where('insc_gestion', date('Y'))->where('insc_estado',1)->with('estudiante')->get()->pluck('estudiante')->filter()->unique('est_codigo')->values();
-                                @endphp
-                                @foreach($estsNuevo as $e)
-                                    <option value="{{ $e->est_codigo }}">{{ $e->est_apellido_paterno }} {{ $e->est_nombres }}</option>
+                                @foreach($estudiantes as $e)
+                                    <option value="{{ $e->est_codigo }}">{{ $e->est_apellidos }} {{ $e->est_nombres }}</option>
                                 @endforeach
                             </select>
                         </div>
@@ -277,9 +274,37 @@
 @section('scripts')
 <script>
 $(function(){
+    // Select2 en filtros (búsqueda dinámica)
+    $('.select2-filtro').select2({ theme: 'bootstrap4', width: '100%', allowClear: true, placeholder: '— Todos —' });
+
+    // Select2 del modal "Nueva anotación"
     if ($('.select2-nuevo').length) {
         $('.select2-nuevo').select2({ theme: 'bootstrap4', width: '100%', dropdownParent: $('#modalNueva') });
     }
+
+    // Cache de todas las opciones de estudiante para filtrar por curso sin recargar
+    var TODAS_OPC_EST = $('#filtro_estudiante option').map(function(){
+        return { val: $(this).val(), txt: $(this).text(), cur: $(this).attr('data-cur') || '', sel: $(this).is(':selected') };
+    }).get();
+
+    function filtrarEstudiantesPorCurso() {
+        var cur = $('#filtro_curso').val();
+        var $est = $('#filtro_estudiante');
+        var seleccionActual = $est.val();
+        $est.empty();
+        TODAS_OPC_EST.forEach(function(o){
+            if (o.val === '' || !cur || o.cur === cur) {
+                var $opt = $('<option>').val(o.val).text(o.txt).attr('data-cur', o.cur);
+                // mantener selección si sigue siendo válida
+                if (o.val === seleccionActual) $opt.prop('selected', true);
+                $est.append($opt);
+            }
+        });
+        $est.trigger('change.select2');
+    }
+
+    $('#filtro_curso').on('change', filtrarEstudiantesPorCurso);
+    filtrarEstudiantesPorCurso();
 });
 </script>
 @endsection

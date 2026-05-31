@@ -20,10 +20,41 @@
                         </div>
                     @endif
 
+                    {{-- Filtros / búsqueda --}}
+                    <form method="GET" class="mb-3">
+                        <div class="row">
+                            <div class="col-md-5 mb-2">
+                                <input type="text" name="buscar" class="form-control" placeholder="Buscar por nombre, apellido, usuario, CI o código…" value="{{ request('buscar') }}">
+                            </div>
+                            <div class="col-md-3 mb-2">
+                                <select name="rol_id" class="form-control">
+                                    <option value="">Todos los roles</option>
+                                    @foreach($roles as $rol)
+                                        <option value="{{ $rol->rol_id }}" {{ request('rol_id') == $rol->rol_id ? 'selected' : '' }}>{{ $rol->rol_nombre }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div class="col-md-2 mb-2">
+                                <select name="estado" class="form-control">
+                                    <option value="">Todos los estados</option>
+                                    <option value="1" {{ request('estado') === '1' ? 'selected' : '' }}>Activos</option>
+                                    <option value="0" {{ request('estado') === '0' ? 'selected' : '' }}>Inactivos</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2 mb-2">
+                                <button type="submit" class="btn btn-primary btn-block"><i class="fas fa-search mr-1"></i>Buscar</button>
+                            </div>
+                        </div>
+                        @if(request('buscar') || request('rol_id') || request('estado') !== null && request('estado') !== '')
+                            <a href="{{ route('usuarios.index') }}" class="btn btn-sm btn-link">Limpiar filtros</a>
+                        @endif
+                    </form>
+
                     <div class="table-responsive-modern">
                         <table class="modern-table">
                             <thead>
                                 <tr>
+                                    <th>Foto</th>
                                     <th>Código</th>
                                     <th>CI</th>
                                     <th>Nombres</th>
@@ -37,6 +68,11 @@
                             <tbody>
                                 @forelse($usuarios as $usuario)
                                     <tr>
+                                        <td data-label="Foto">
+                                            <img src="{{ $usuario->us_foto ? asset('storage/'.$usuario->us_foto) : asset('img/logo.png') }}"
+                                                 alt="foto" class="rounded-circle"
+                                                 style="width:38px;height:38px;object-fit:cover;border:1px solid #e3e6f0;">
+                                        </td>
                                         <td data-label="Código">
                                             <span class="modern-badge badge-primary-modern">{{ $usuario->us_codigo }}</span>
                                         </td>
@@ -90,7 +126,7 @@
                                     </tr>
                                 @empty
                                     <tr>
-                                        <td colspan="8">
+                                        <td colspan="9">
                                             <div class="empty-state">
                                                 <i class="fas fa-users-cog"></i>
                                                 <h5>No hay usuarios registrados</h5>

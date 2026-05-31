@@ -86,6 +86,10 @@
                                     <div class="dropdown-menu">
                                         <a class="dropdown-item" href="{{ route('pagos.reporte-pdf', request()->all()) }}" target="_blank"><i class="fas fa-list"></i> Listado de Pagos</a>
                                         <a class="dropdown-item" href="{{ route('pagos.resumen-anual-pdf', request()->all()) }}" target="_blank"><i class="fas fa-calendar-alt"></i> Resumen Anual</a>
+                                        <div class="dropdown-divider"></div>
+                                        <a class="dropdown-item" href="#" onclick="cajaDiario('carta'); return false;"><i class="fas fa-cash-register"></i> Caja diario (carta)</a>
+                                        <a class="dropdown-item" href="#" onclick="cajaDiario('termico'); return false;"><i class="fas fa-receipt"></i> Caja diario (térmico)</a>
+                                        <a class="dropdown-item" href="#" onclick="cajaPeriodo(); return false;"><i class="fas fa-calendar-week"></i> Caja por período</a>
                                     </div>
                                 </div>
                                 <div class="btn-group" role="group">
@@ -251,6 +255,17 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script>
 var pagosRecibo = @json($pagosRecibo);
+
+function cajaDiario(formato) {
+    var f = $('input[name="fecha_inicio"]').val() || new Date().toISOString().slice(0,10);
+    window.open('{{ route("caja.diario") }}?fecha=' + f + '&formato=' + formato, '_blank');
+}
+function cajaPeriodo() {
+    var desde = $('input[name="fecha_inicio"]').val();
+    var hasta = $('input[name="fecha_fin"]').val();
+    if (!desde || !hasta) { alert('Seleccione "Fecha inicio" y "Fecha fin" en los filtros para el reporte por período.'); return; }
+    window.open('{{ route("caja.periodo") }}?desde=' + desde + '&hasta=' + hasta, '_blank');
+}
 
 $(document).ready(function() {
     $('.select2').select2({ placeholder: 'Seleccione una opción', allowClear: true, width: '100%' });

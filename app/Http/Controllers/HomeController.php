@@ -30,6 +30,11 @@ class HomeController extends Controller
     {
         $user = auth()->user();
 
+        // Encargado de escaneo: solo la app de escaneo
+        if ($user->us_entidad_tipo === 'escaneo') {
+            return redirect()->route('escaneo.index');
+        }
+
         // Admin (rol_id=1): dashboard completo
         if ($user->rol_id == 1) {
             return $this->dashboardAdmin();
@@ -73,34 +78,76 @@ class HomeController extends Controller
         // Notas pendientes de aprobación
         $notasPendientes = Nota::where('nota_estado', 1)->distinct('curmatdoc_id', 'periodo_id')->count();
 
-        // Gráficos
-        $inscripcionesPorMes = Inscripcion::select(
-                DB::raw('MONTH(insc_fecha) as mes'), DB::raw('COUNT(*) as total')
-            )->where('insc_fecha', '>=', Carbon::now()->subMonths(6))
-            ->groupBy('mes')->orderBy('mes')->get();
-
-        $estudiantesPorCurso = Curso::visible()
-            ->withCount(['estudiantes' => fn($q) => $q->visible()])->get();
-
-        $ventasPorCategoria = DB::table('ventas_ventas')
-            ->join('ventas_productos', 'ventas_ventas.prod_codigo', '=', 'ventas_productos.prod_codigo')
-            ->join('ventas_categorias', 'ventas_productos.categ_codigo', '=', 'ventas_categorias.categ_codigo')
-            ->select('ventas_categorias.categ_nombre', DB::raw('SUM(ventas_ventas.venta_preciototal) as total'))
-            ->where('ventas_ventas.venta_fecha', '>=', Carbon::now()->subDays(30))
-            ->where('ventas_ventas.venta_estado', 'completado')
-            ->groupBy('ventas_categorias.categ_nombre')->get();
-
         $estadoInscripciones = [
             'pendientes' => Inscripcion::where('insc_estado', 1)->where('insc_gestion', $year)->count(),
             'pagadas' => Inscripcion::where('insc_estado', 2)->where('insc_gestion', $year)->count(),
             'anuladas' => Inscripcion::where('insc_estado', 0)->where('insc_gestion', $year)->count()
         ];
 
+        // ── Periodos de la gestión (para acotar el ranking) ──
+        $periodoIds = NotaPeriodo::where('periodo_gestion', $year)->pluck('periodo_id')->all() ?: [0];
+
+        // ── Ranking: mejores 10 estudiantes (promedio anual de notas aprobadas) ──
+        $mejoresEstudiantes = DB::table('colegio_estudiantes as e')
+            ->join('colegio_notas as n', DB::raw('n.est_codigo COLLATE utf8mb4_unicode_ci'), '=', DB::raw('e.est_codigo COLLATE utf8mb4_unicode_ci'))
+            ->leftJoin('colegio_cursos as c', 'c.cur_codigo', '=', 'e.cur_codigo')
+            ->where('n.nota_estado', 2)
+            ->whereIn('n.periodo_id', $periodoIds)
+            ->where('e.est_visible', 1)
+            ->select(
+                'e.est_codigo',
+                DB::raw("CONCAT(e.est_apellidos,' ',e.est_nombres) as nombre"),
+                'c.cur_nombre',
+                DB::raw('ROUND(AVG(n.nota_promedio_trimestral),1) as promedio')
+            )
+            ->groupBy('e.est_codigo', 'e.est_apellidos', 'e.est_nombres', 'c.cur_nombre')
+            ->orderByDesc('promedio')
+            ->limit(10)->get();
+
+        // ── Estudiantes en riesgo: promedio anual < 51 ──
+        $estudiantesEnRiesgo = DB::table('colegio_estudiantes as e')
+            ->join('colegio_notas as n', DB::raw('n.est_codigo COLLATE utf8mb4_unicode_ci'), '=', DB::raw('e.est_codigo COLLATE utf8mb4_unicode_ci'))
+            ->leftJoin('colegio_cursos as c', 'c.cur_codigo', '=', 'e.cur_codigo')
+            ->where('n.nota_estado', 2)
+            ->whereIn('n.periodo_id', $periodoIds)
+            ->where('e.est_visible', 1)
+            ->select(
+                'e.est_codigo',
+                DB::raw("CONCAT(e.est_apellidos,' ',e.est_nombres) as nombre"),
+                'c.cur_nombre',
+                DB::raw('ROUND(AVG(n.nota_promedio_trimestral),1) as promedio')
+            )
+            ->groupBy('e.est_codigo', 'e.est_apellidos', 'e.est_nombres', 'c.cur_nombre')
+            ->havingRaw('AVG(n.nota_promedio_trimestral) < 51')
+            ->orderBy('promedio')
+            ->limit(10)->get();
+
+        // ── Recaudación acumulada del año ──
+        $recaudacionAnual = [
+            'mensualidades' => (float) Pago::whereYear('pagos_fecha', $year)->where('pagos_estado', 1)->sum('pagos_precio'),
+            'inscripciones' => (float) Inscripcion::where('insc_gestion', $year)->where('insc_estado', '!=', 0)->sum('insc_monto_pagado'),
+            'ventas'        => (float) Venta::whereYear('venta_fecha', $year)->where('venta_estado', 'completado')->sum('venta_preciototal'),
+        ];
+        $recaudacionAnual['total'] = $recaudacionAnual['mensualidades'] + $recaudacionAnual['inscripciones'] + $recaudacionAnual['ventas'];
+
+        // ── Indicadores operativos ──
+        $observadosActivos = \App\Models\EstudianteObservado::where('obs_gestion', $year)->where('obs_activo', 1)->count();
+        $permisosHoy = \App\Models\Permiso::where('permiso_estado', 1)
+            ->whereDate('permiso_fecha_inicio', '<=', Carbon::today())
+            ->whereDate('permiso_fecha_fin', '>=', Carbon::today())->count();
+
+        // ── Próximos eventos de agenda (próximos 30 días) ──
+        $proximosEventos = \App\Models\Agenda::where('age_estado', 1)
+            ->whereBetween('age_fechahora', [Carbon::now(), Carbon::now()->addDays(30)])
+            ->orderBy('age_fechahora')->limit(6)
+            ->get(['age_titulo', 'age_tipo', 'age_fechahora']);
+
         return view('home', compact(
             'totalEstudiantes', 'totalCursos', 'totalDocentes', 'totalPadres',
             'totalInscripciones', 'inscripcionesMes', 'mensualidadesMes', 'ventasMes',
-            'asistenciasHoy', 'atrasosHoy', 'notasPendientes',
-            'inscripcionesPorMes', 'estudiantesPorCurso', 'ventasPorCategoria', 'estadoInscripciones'
+            'asistenciasHoy', 'atrasosHoy', 'notasPendientes', 'estadoInscripciones',
+            'mejoresEstudiantes', 'estudiantesEnRiesgo', 'recaudacionAnual',
+            'observadosActivos', 'permisosHoy', 'proximosEventos'
         ));
     }
 

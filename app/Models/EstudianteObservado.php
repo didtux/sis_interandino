@@ -11,7 +11,8 @@ class EstudianteObservado extends Model
     public $timestamps = false;
 
     protected $fillable = [
-        'est_codigo', 'obs_gestion',
+        'est_codigo', 'obs_estudiante_nombre', 'obs_estudiante_ci', 'obs_curso_texto',
+        'obs_gestion',
         'obs_motivo_tipo', 'obs_motivo',
         'obs_registrado_por', 'obs_registrado_por_nombre',
         'obs_fecha_registro',
@@ -44,6 +45,19 @@ class EstudianteObservado extends Model
     public static function vigentePara(string $estCodigo, int $gestion)
     {
         return self::where('est_codigo', $estCodigo)
+            ->where('obs_gestion', $gestion)
+            ->where('obs_activo', 1)->first();
+    }
+
+    /**
+     * ¿Existe un observado activo que coincida por CI? (para estudiantes que aún
+     * no estaban en el sistema cuando se los agregó a la lista).
+     */
+    public static function vigentePorCi(?string $ci, int $gestion)
+    {
+        $ci = trim((string) $ci);
+        if ($ci === '') return null;
+        return self::where('obs_estudiante_ci', $ci)
             ->where('obs_gestion', $gestion)
             ->where('obs_activo', 1)->first();
     }

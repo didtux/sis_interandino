@@ -79,6 +79,7 @@
                                         <option value="">Seleccione...</option>
                                         <option value="ATENCIÓN MÉDICA">ATENCIÓN MÉDICA</option>
                                         <option value="HIGIENE PERSONAL">HIGIENE PERSONAL</option>
+                                        <option value="UNIFORME">UNIFORME</option>
                                     </select>
                                 </div>
                             </div>
@@ -187,7 +188,7 @@ $(document).ready(function() {
             $('#enf_medicamentos').prop('required', true);
             $('#enf_observaciones').prop('required', false);
             $('#obs_required').hide();
-        } else if (valor == 'HIGIENE PERSONAL') {
+        } else if (valor == 'HIGIENE PERSONAL' || valor == 'UNIFORME') {
             $('#tipo_atencion_row').hide();
             $('#enf_tipo_atencion').val('');
             $('#medicamentos_row').hide();

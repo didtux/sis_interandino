@@ -319,6 +319,17 @@
                         <option value="3">3er Trimestre (Octubre - Diciembre)</option>
                     </select>
                 </div>
+                <div class="form-group">
+                    <label>Turno</label>
+                    <select id="turno_trim" class="form-control">
+                        @forelse($turnos->pluck('nombre')->unique() as $tn)
+                            <option value="{{ $tn }}">{{ $tn }}</option>
+                        @empty
+                            <option value="Mañana">Mañana</option>
+                        @endforelse
+                    </select>
+                    <small class="text-muted">Tomado de la configuración de horarios. Los datos (puntual/atraso/falta/licencia) se calculan según el turno.</small>
+                </div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
@@ -346,6 +357,17 @@
                             <option value="{{ $curso->cur_codigo }}">{{ $curso->cur_nombre }}</option>
                         @endforeach
                     </select>
+                </div>
+                <div class="form-group">
+                    <label>Turno</label>
+                    <select id="turno_anual" class="form-control">
+                        @forelse($turnos->pluck('nombre')->unique() as $tn)
+                            <option value="{{ $tn }}">{{ $tn }}</option>
+                        @empty
+                            <option value="Mañana">Mañana</option>
+                        @endforelse
+                    </select>
+                    <small class="text-muted">Tomado de la configuración de horarios.</small>
                 </div>
                 <p class="text-muted">Este reporte incluye los 3 trimestres completos del año {{ date('Y') }}</p>
             </div>
@@ -519,25 +541,27 @@ function generarReporteTrimestral(tipo) {
         return;
     }
     
-    const url = tipo === 'pdf' 
-        ? '{{ route("asistencias.reporte-trimestral") }}?cur_codigo=' + curso + '&trimestre=' + trimestre
-        : '{{ route("asistencias.reporte-trimestral-excel") }}?cur_codigo=' + curso + '&trimestre=' + trimestre;
-    
+    const turno = encodeURIComponent($('#turno_trim').val() || 'Mañana');
+    const url = tipo === 'pdf'
+        ? '{{ route("asistencias.reporte-trimestral") }}?cur_codigo=' + curso + '&trimestre=' + trimestre + '&turno_nombre=' + turno
+        : '{{ route("asistencias.reporte-trimestral-excel") }}?cur_codigo=' + curso + '&trimestre=' + trimestre + '&turno_nombre=' + turno;
+
     window.open(url, '_blank');
 }
 
 function generarReporteAnual(tipo) {
     const curso = $('#cur_codigo_anual').val();
-    
+
     if (!curso) {
         alert('Seleccione un curso');
         return;
     }
-    
+
+    const turno = encodeURIComponent($('#turno_anual').val() || 'Mañana');
     const url = tipo === 'pdf'
-        ? '{{ route("asistencias.reporte-anual") }}?cur_codigo=' + curso
-        : '{{ route("asistencias.reporte-anual-excel") }}?cur_codigo=' + curso;
-    
+        ? '{{ route("asistencias.reporte-anual") }}?cur_codigo=' + curso + '&turno_nombre=' + turno
+        : '{{ route("asistencias.reporte-anual-excel") }}?cur_codigo=' + curso + '&turno_nombre=' + turno;
+
     window.open(url, '_blank');
 }
 

@@ -172,12 +172,19 @@ class PagoController extends Controller
                 if (!in_array($mv, $mesesPagados)) $mesesVencidos++;
             }
             $mesesCobrables = 10 - $mesesVencidos;
-            $montoACobrar = $montoMensualidad * $mesesCobrables;
-            $saldoPendiente = max(0, $montoACobrar - $saldoAcumulado - ($esSoloRegistro ? 0 : $montoInscripcion));
+            // SALDO: misma fórmula que el REPORTE DE INSCRIPCIONES (única fuente de verdad):
+            //   total pagado = inscripción + mensualidades ; saldo = monto_final − total pagado.
+            // No se reduce por "meses vencidos" (eso daba cifras distintas al reporte).
+            $totalPagadoReal = $saldoAcumulado + ($esSoloRegistro ? 0 : $montoInscripcion);
+            $montoACobrar = $montoFinal;
+            $saldoPendiente = max(0, $montoFinal - $totalPagadoReal);
 
             $estudiantesData[$est->est_codigo] = [
                 'est_codigo' => $est->est_codigo,
                 'nombre' => $est->est_nombres . ' ' . $est->est_apellidos,
+                'apellidos' => $est->est_apellidos ?? '',
+                'nombres' => $est->est_nombres ?? '',
+                'ci' => $est->est_ci ?? '',
                 'curso' => $est->curso->cur_nombre ?? 'N/A',
                 'mensualidad' => $montoMensualidad,
                 'cuota_febrero' => $cuotaFebrero,
@@ -190,7 +197,8 @@ class PagoController extends Controller
                 'monto_descuento' => $insc->insc_monto_descuento ?? 0,
                 'monto_final' => $montoFinal,
                 'monto_inscripcion' => $montoInscripcion,
-                'total_pagado' => $saldoAcumulado,
+                'total_mensualidades' => $saldoAcumulado,
+                'total_pagado' => $totalPagadoReal,
                 'saldo_pendiente' => $saldoPendiente,
                 'meses_cobrables' => $mesesCobrables,
                 'monto_a_cobrar' => $montoACobrar,
@@ -236,13 +244,25 @@ class PagoController extends Controller
             $codigoRecibo = 'REC' . str_pad(($ultimo ? intval(substr($ultimo, 3)) : 0) + 1, 5, '0', STR_PAD_LEFT);
         }
 
+        // ── Datos de método de pago (nivel transacción) ──
+        $metodo = in_array($request->pagos_metodo, ['EFECTIVO', 'QR', 'MIXTO']) ? $request->pagos_metodo : 'EFECTIVO';
+        $comprobantePath = null;
+        if ($request->hasFile('pagos_comprobante')) {
+            $comprobantePath = $request->file('pagos_comprobante')->store('pagos/comprobantes', 'public');
+        }
+        $transferenciaNro  = $request->input('pagos_transferencia_nro');
+        $transferenciaHora = $request->input('pagos_transferencia_hora');
+        $reciboNro         = $request->input('pagos_recibo_nro');
+        $viaWhatsapp       = $request->boolean('pagos_via_whatsapp') ? 1 : 0;
+
+        // 1ª pasada: armar la lista de cuotas a cobrar y el total general
+        $cuotas = [];
         foreach ($estudiantesInput as $estData) {
             $estCodigo = $estData['est_codigo'];
             $mesInicio = intval($estData['mes']);
             $cantidadCuotas = intval($estData['cantidad_cuotas']);
             $sinFactura = intval($estData['sin_factura'] ?? 0);
 
-            // Obtener inscripción para calcular montos correctos
             $insc = Inscripcion::where('est_codigo', $estCodigo)
                 ->where('insc_gestion', $year)->where('insc_estado', 1)->first();
             $montoFinal = $insc ? ($insc->insc_monto_final ?? 0) : 0;
@@ -251,43 +271,74 @@ class PagoController extends Controller
             $montoMensualidad = $montoFinal > 0 ? $montoFinal / 10 : 0;
             $cuotaFebrero = $esSoloRegistro ? $montoMensualidad : max(0, $montoMensualidad - $montoInscripcion);
 
-            // Recopilar meses a pagar (saltando solo los ya pagados)
+            // Meses a pagar: a partir del mes elegido (libre, aunque esté vencido), saltando pagados
             $mesesAPagar = [];
             for ($m = $mesInicio; $m <= 11 && count($mesesAPagar) < $cantidadCuotas; $m++) {
                 $existe = Pago::where('est_codigo', $estCodigo)
-                    ->whereYear('pagos_fecha', $year)
-                    ->where('pagos_estado', 1)
-                    ->where('concepto', 'like', '%' . $mesesNombres[$m] . '%')
-                    ->exists();
+                    ->whereYear('pagos_fecha', $year)->where('pagos_estado', 1)
+                    ->where('concepto', 'like', '%' . $mesesNombres[$m] . '%')->exists();
                 if ($existe) continue;
                 $mesesAPagar[] = $m;
             }
-
             if (empty($mesesAPagar)) {
                 $est = Estudiante::where('est_codigo', $estCodigo)->first();
                 return back()->withErrors(['error' => ($est->est_nombres ?? '') . ' no tiene meses disponibles para pagar.'])->withInput();
             }
-
-            // Registrar pagos con monto correcto por mes
             foreach ($mesesAPagar as $mes) {
-                $montoCuota = ($mes === 2) ? $cuotaFebrero : $montoMensualidad;
-
-                Pago::create([
-                    'pagos_codigo' => $codigoRecibo,
-                    'men_codigo' => 'PAGO' . str_pad(Pago::max('pagos_id') + 1, 5, '0', STR_PAD_LEFT),
-                    'est_codigo' => $estCodigo,
-                    'pfam_codigo' => $pfamCodigo,
-                    'prod_codigo' => 'MENSUALIDAD',
-                    'pagos_precio' => $montoCuota,
-                    'pagos_nombres' => 'Mensualidad ' . $mesesNombres[$mes],
-                    'pagos_usuario' => auth()->user()->us_codigo ?? 'ADMIN',
-                    'pagos_descuento' => 0,
-                    'concepto' => 'Mensualidad ' . $mesesNombres[$mes],
-                    'tipo' => 1,
-                    'pagos_fecha' => now(),
-                    'pagos_sin_factura' => $sinFactura ? 1 : 0
-                ]);
+                $cuotas[] = [
+                    'est'   => $estCodigo,
+                    'mes'   => $mes,
+                    'monto' => ($mes === 2) ? $cuotaFebrero : $montoMensualidad,
+                    'sf'    => $sinFactura ? 1 : 0,
+                ];
             }
+        }
+
+        $totalGeneral = array_sum(array_column($cuotas, 'monto'));
+
+        // Validar y preparar reparto efectivo/QR para MIXTO
+        $efRatio = 1.0;
+        if ($metodo === 'MIXTO') {
+            $montoEf = (float) $request->input('pagos_monto_efectivo', 0);
+            $montoQr = (float) $request->input('pagos_monto_qr', 0);
+            if (abs(($montoEf + $montoQr) - $totalGeneral) > 0.5) {
+                return back()->withErrors(['error' => 'En pago MIXTO, efectivo (' . $montoEf . ') + QR (' . $montoQr . ') debe igualar el total (' . $totalGeneral . ').'])->withInput();
+            }
+            $efRatio = $totalGeneral > 0 ? $montoEf / $totalGeneral : 0;
+        } elseif ($metodo === 'QR') {
+            $efRatio = 0.0;
+        }
+
+        // 2ª pasada: crear los pagos con los datos de método
+        foreach ($cuotas as $c) {
+            $montoCuota = $c['monto'];
+            if ($metodo === 'EFECTIVO') { $ef = $montoCuota; $qr = 0; }
+            elseif ($metodo === 'QR')   { $ef = 0; $qr = $montoCuota; }
+            else { $ef = round($montoCuota * $efRatio, 2); $qr = round($montoCuota - $ef, 2); }
+
+            Pago::create([
+                'pagos_codigo' => $codigoRecibo,
+                'men_codigo' => 'PAGO' . str_pad(Pago::max('pagos_id') + 1, 5, '0', STR_PAD_LEFT),
+                'est_codigo' => $c['est'],
+                'pfam_codigo' => $pfamCodigo,
+                'prod_codigo' => 'MENSUALIDAD',
+                'pagos_precio' => $montoCuota,
+                'pagos_nombres' => 'Mensualidad ' . $mesesNombres[$c['mes']],
+                'pagos_usuario' => auth()->user()->us_codigo ?? 'ADMIN',
+                'pagos_descuento' => 0,
+                'concepto' => 'Mensualidad ' . $mesesNombres[$c['mes']],
+                'tipo' => 1,
+                'pagos_fecha' => now(),
+                'pagos_sin_factura' => $c['sf'],
+                'pagos_metodo' => $metodo,
+                'pagos_monto_efectivo' => $ef,
+                'pagos_monto_qr' => $qr,
+                'pagos_comprobante' => $comprobantePath,
+                'pagos_transferencia_nro' => $transferenciaNro,
+                'pagos_transferencia_hora' => $transferenciaHora,
+                'pagos_recibo_nro' => $reciboNro,
+                'pagos_via_whatsapp' => $viaWhatsapp,
+            ]);
         }
 
         return redirect()->route('pagos.index')->with('success', 'Pago(s) registrado(s) exitosamente');

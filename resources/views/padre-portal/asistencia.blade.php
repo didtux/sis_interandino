@@ -37,7 +37,8 @@
                                             </div>
                                         </div>
                                         <hr class="my-2">
-                                        <small class="text-muted">Días trabajados: <strong>{{ $d['diasTrab'] }}</strong></small>
+                                        <small class="text-muted d-block">Días trabajados: <strong>{{ $d['diasTrab'] }}</strong></small>
+                                        <small class="text-muted">Total días hábiles: <strong>{{ $d['totalDias'] ?? ($d['diasTrab'] + $d['faltas']) }}</strong></small>
                                     </div>
                                 </div>
                             </div>

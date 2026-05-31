@@ -14,11 +14,15 @@ use Illuminate\Support\Facades\DB;
 
 class EstudianteKardexController extends Controller
 {
-    /** Roles que pueden ver TODO. */
+    /**
+     * Roles administrativos/staff que pueden ver y registrar anotaciones de TODO estudiante:
+     * Administrador(1), Director General(9), Directora Académica(10), Secretaría(11),
+     * Psicopedagogía(12) y Regencia(14).
+     */
     private function esDireccion()
     {
         $u = auth()->user();
-        return $u && in_array($u->rol_id, [1, 4]);
+        return $u && in_array($u->rol_id, [1, 9, 10, 11, 12, 14]);
     }
 
     private function esDocente()
@@ -78,14 +82,14 @@ class EstudianteKardexController extends Controller
                 ->pluck('cur_codigo')->unique())->orderBy('cur_nombre')->get()
             : Curso::orderBy('cur_nombre')->get();
 
-        $estudiantes = collect();
-        if ($curCodigo) {
-            $ids = Inscripcion::where('cur_codigo', $curCodigo)
-                ->where('insc_gestion', date('Y'))
-                ->where('insc_estado', 1)->pluck('est_codigo');
-            $estudiantes = Estudiante::whereIn('est_codigo', $ids)
-                ->orderBy('est_apellido_paterno')->get();
+        // Lista completa de estudiantes para el filtro (Select2 + filtrado dinámico por curso
+        // del lado cliente). Para docentes, solo sus estudiantes.
+        $estQuery = Estudiante::where('est_visible', 1);
+        if ($this->esDocente() && !$this->esDireccion()) {
+            $estQuery->whereIn('est_codigo', $this->estudiantesDelDocente($u->us_entidad_id));
         }
+        $estudiantes = $estQuery->orderBy('est_apellidos')->orderBy('est_nombres')
+            ->get(['est_codigo', 'est_apellidos', 'est_nombres', 'cur_codigo']);
 
         return view('kardex-estudiante.index', compact(
             'registros','cursos','estudiantes','curCodigo','estCodigo','tipo','fechaIni','fechaFin'

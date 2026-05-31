@@ -180,4 +180,60 @@ class ChoferPortalController extends Controller
 
         return view('chofer-portal.historial', compact('rutas', 'rutaSeleccionada', 'fechaDesde', 'fechaHasta', 'registros'));
     }
+
+    // ── Reporte mensual de asistencia (ida/vuelta) para descargo ──
+    public function reporteMensualPdf(Request $request)
+    {
+        $chofer = $this->getChofer();
+        $rutaCodigos = $this->getRutaCodigos();
+        $rutaSeleccionada = $request->ruta_codigo && $rutaCodigos->contains($request->ruta_codigo)
+            ? $request->ruta_codigo : $rutaCodigos->first();
+
+        $anio = (int) $request->input('anio', date('Y'));
+        $mes  = (int) $request->input('mes', date('n'));
+
+        $inicio = \Carbon\Carbon::create($anio, $mes, 1)->startOfMonth();
+        $fin    = (clone $inicio)->endOfMonth();
+
+        // Días del mes (todos, para que el chofer registre ida/vuelta)
+        $dias = [];
+        $cur = $inicio->copy();
+        while ($cur <= $fin) { $dias[] = (int) $cur->format('j'); $cur->addDay(); }
+
+        $ruta = \App\Models\EstudianteRuta::with('ruta')->where('ruta_codigo', $rutaSeleccionada)->first();
+        $rutaNombre = optional(optional($ruta)->ruta)->ruta_nombre ?? $rutaSeleccionada;
+
+        $estudiantes = EstudianteRuta::with('estudiante.curso')
+            ->where('ruta_codigo', $rutaSeleccionada)->activo()->get()
+            ->map(fn($r) => $r->estudiante)->filter()
+            ->sortBy(fn($e) => ($e->est_apellidos ?? '') . ($e->est_nombres ?? ''))->values();
+
+        $registros = AsistenciaTransporte::where('ruta_codigo', $rutaSeleccionada)
+            ->whereBetween('tasis_fecha', [$inicio->toDateString(), $fin->toDateString()])
+            ->get();
+
+        // matriz[est_codigo][dia] = ['ida'=>bool,'vuelta'=>bool]
+        $matriz = [];
+        $observaciones = [];
+        foreach ($registros as $r) {
+            $d = (int) \Carbon\Carbon::parse($r->tasis_fecha)->format('j');
+            $k = $r->tasis_tipo === 'VUELTA' ? 'vuelta' : 'ida';
+            $matriz[$r->est_codigo][$d][$k] = true;
+            if (!empty($r->tasis_observacion)) {
+                $observaciones[] = [
+                    'fecha' => \Carbon\Carbon::parse($r->tasis_fecha)->format('d/m'),
+                    'tipo'  => $r->tasis_tipo,
+                    'obs'   => $r->tasis_observacion,
+                ];
+            }
+        }
+
+        $mesesNombre = [1=>'ENERO',2=>'FEBRERO',3=>'MARZO',4=>'ABRIL',5=>'MAYO',6=>'JUNIO',7=>'JULIO',8=>'AGOSTO',9=>'SEPTIEMBRE',10=>'OCTUBRE',11=>'NOVIEMBRE',12=>'DICIEMBRE'];
+        $mesNombre = $mesesNombre[$mes] ?? '';
+
+        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('chofer-portal.reporte-mensual-pdf',
+            compact('chofer', 'rutaNombre', 'estudiantes', 'dias', 'matriz', 'observaciones', 'mesNombre', 'anio'))
+            ->setPaper('legal', 'landscape');
+        return $pdf->stream('transporte-mensual-' . $rutaSeleccionada . '-' . $anio . '-' . $mes . '.pdf');
+    }
 }

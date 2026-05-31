@@ -13,7 +13,10 @@ class Pago extends Model
     protected $fillable = [
         'pagos_codigo', 'men_codigo', 'est_codigo', 'pfam_codigo', 'prod_codigo',
         'pagos_precio', 'pagos_nombres', 'pagos_usuario',
-        'pagos_descuento', 'concepto', 'tipo', 'pagos_fecha', 'pagos_estado', 'pagos_sin_factura'
+        'pagos_descuento', 'concepto', 'tipo', 'pagos_fecha', 'pagos_estado', 'pagos_sin_factura',
+        // Método de pago / comprobante / transferencia
+        'pagos_metodo', 'pagos_monto_efectivo', 'pagos_monto_qr', 'pagos_comprobante',
+        'pagos_transferencia_nro', 'pagos_transferencia_hora', 'pagos_recibo_nro', 'pagos_via_whatsapp',
     ];
 
     protected $casts = [

@@ -56,11 +56,17 @@
 
     <div class="title-section">
         <h2>REPORTE DE ASISTENCIA - {{ $trimestre }}{{ $trimestre == 1 ? 'ER' : ($trimestre == 2 ? 'DO' : 'ER') }} TRIMESTRE</h2>
-        <p><strong>CURSO:</strong> {{ $curso->cur_nombre }} | <strong>GESTIÓN {{ $year ?? date('Y') }}</strong></p>
+        <p><strong>CURSO:</strong> {{ $curso->cur_nombre }} | <strong>TURNO:</strong> {{ strtoupper($turnoNombre ?? 'Mañana') }} | <strong>GESTIÓN {{ $year ?? date('Y') }}</strong></p>
         @if(isset($periodo) && $periodo)
             <p>{{ $periodo->periodo_fecha_inicio->format('d/m/Y') }} — {{ $periodo->periodo_fecha_fin->format('d/m/Y') }}</p>
         @endif
     </div>
+
+    @if(!empty($turnoNoAplica))
+        <div style="background:#fff3cd;border:1px solid #ffc107;color:#856404;padding:6px;text-align:center;font-size:9px;margin-top:6px;">
+            <strong>AVISO:</strong> El curso <strong>{{ $curso->cur_nombre }}</strong> no tiene configuración de horario para el turno <strong>{{ strtoupper($turnoNombre ?? '') }}</strong>. Los valores se muestran en cero.
+        </div>
+    @endif
 
     @php $numMeses = isset($mesesConfig) ? count($mesesConfig) : 0; @endphp
 

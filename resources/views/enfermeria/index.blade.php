@@ -35,6 +35,15 @@
                                 </select>
                             </div>
                             <div class="col-md-2">
+                                <label>Tipo de atención</label>
+                                <select name="dx_detalle" class="form-control">
+                                    <option value="">Todos</option>
+                                    @foreach($tiposDx as $tx)
+                                        <option value="{{ $tx }}" {{ request('dx_detalle') == $tx ? 'selected' : '' }}>{{ $tx }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div class="col-md-2">
                                 <label>Curso</label>
                                 <select name="cur_codigo" class="form-control select2">
                                     <option value="">Todos</option>

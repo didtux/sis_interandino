@@ -398,12 +398,26 @@
                                         </td>
                                         @foreach($periodos as $periodo)
                                             @php
-                                                $nota = \App\Models\Nota::where('curmatdoc_id', $asig->curmatdoc_id)
-                                                    ->where('periodo_id', $periodo->periodo_id)->first();
-                                                $estado = $nota->nota_estado ?? -1;
-                                                $btnClass = match($estado) { 2=>'btn-success', 1=>'btn-warning', 3=>'btn-danger', 0=>'btn-secondary', default=>'btn-outline-primary' };
-                                                $iconClass = match($estado) { 2=>'fa-check-circle', 1=>'fa-clock', 3=>'fa-times-circle', 0=>'fa-save', default=>'fa-edit' };
-                                                $label = match($estado) { 2=>'Aprobado', 1=>'Enviado', 3=>'Rechazado', 0=>'Borrador', default=>'Calificar' };
+                                                // Estado "agregado" del par (curmatdoc, periodo): se prioriza el peor estado
+                                                // — rechazado > borrador > enviado > aprobado — para reflejar la realidad de la
+                                                // calificación: si alguna nota fue rechazada o quedó en borrador, el botón lo muestra.
+                                                $estados = \App\Models\Nota::where('curmatdoc_id', $asig->curmatdoc_id)
+                                                    ->where('periodo_id', $periodo->periodo_id)
+                                                    ->pluck('nota_estado')->map(fn($e) => (int) $e);
+                                                if ($estados->isEmpty()) {
+                                                    $estado = -1;
+                                                } elseif ($estados->contains(3)) {
+                                                    $estado = 3;
+                                                } elseif ($estados->contains(0)) {
+                                                    $estado = 0;
+                                                } elseif ($estados->contains(1)) {
+                                                    $estado = 1;
+                                                } else {
+                                                    $estado = 2;
+                                                }
+                                                $btnClass  = match($estado) { 2=>'btn-success',      1=>'btn-warning',  3=>'btn-danger',     0=>'btn-secondary', default=>'btn-outline-primary' };
+                                                $iconClass = match($estado) { 2=>'fa-check-circle',  1=>'fa-clock',     3=>'fa-times-circle',0=>'fa-save',       default=>'fa-edit' };
+                                                $label     = match($estado) { 2=>'Aprobado',         1=>'Enviado',      3=>'Rechazado',      0=>'Borrador',      default=>'Calificar' };
                                             @endphp
                                             <td class="text-center" data-label="{{ $periodo->periodo_nombre }}">
                                                 @if($esAdmin && $estado === 1)

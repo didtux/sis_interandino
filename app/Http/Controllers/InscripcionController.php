@@ -244,11 +244,16 @@ class InscripcionController extends Controller
         }
 
         // ── Lista negra de observados (bloqueo) ──
+        // Por código de estudiante, o por CI (caso de observados agregados sin estar inscritos).
         $obs = \App\Models\EstudianteObservado::vigentePara($request->est_codigo, (int) $request->insc_gestion);
+        if (!$obs) {
+            $ciEst = \App\Models\Estudiante::where('est_codigo', $request->est_codigo)->value('est_ci');
+            $obs = \App\Models\EstudianteObservado::vigentePorCi($ciEst, (int) $request->insc_gestion);
+        }
         if ($obs) {
-            // Override solo para director (rol_id 1 o 4) si envía "override=1"
+            // Override solo para dirección (Admin/Director General/Directora Académica) si envía "override=1"
             $user = auth()->user();
-            $puedeOverride = in_array($user->rol_id, [1, 4]);
+            $puedeOverride = in_array($user->rol_id, [1, 9, 10]);
             if (!$puedeOverride || !$request->boolean('override_observado')) {
                 return back()->withErrors([
                     'error' => 'ESTUDIANTE BLOQUEADO. Motivo ('.$obs->obs_motivo_tipo.'): '.$obs->obs_motivo.'. Solo la dirección puede levantar el bloqueo.'

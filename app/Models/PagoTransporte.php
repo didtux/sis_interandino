@@ -12,10 +12,18 @@ class PagoTransporte extends Model
     public $timestamps = false;
 
     protected $fillable = [
-        'tpago_codigo', 'est_codigo', 'tpago_tipo', 'tpago_monto',
+        'tpago_codigo', 'est_codigo', 'tpago_tipo', 'tpago_cuota_nro', 'tpago_mes', 'tpago_monto',
         'tpago_fecha_pago', 'tpago_fecha_inicio', 'tpago_fecha_fin',
         'tpago_estado', 'tpago_usuario_registro', 'tpago_monto_modificado'
     ];
+
+    /** Etiqueta ordinal de cuota: 1 => "1ra cuota", 3 => "3ra cuota". */
+    public static function etiquetaCuota($n): string
+    {
+        $n = (int) $n;
+        $ord = [1=>'1ra',2=>'2da',3=>'3ra',4=>'4ta',5=>'5ta',6=>'6ta',7=>'7ma',8=>'8va',9=>'9na',10=>'10ma'];
+        return 'Transporte ' . ($ord[$n] ?? ($n.'ª')) . ' cuota';
+    }
 
     public function estudiante()
     {

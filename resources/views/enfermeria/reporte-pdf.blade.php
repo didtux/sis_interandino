@@ -90,19 +90,21 @@
                     @php
                         $mesNombre = \Carbon\Carbon::parse($mes.'-01')->locale('es')->translatedFormat('F');
                     @endphp
-                    <th colspan="3">{{ strtoupper($mesNombre) }}</th>
+                    <th colspan="4">{{ strtoupper($mesNombre) }}</th>
                 @endforeach
-                <th colspan="3">TOTAL</th>
+                <th colspan="4">TOTAL</th>
             </tr>
             <tr>
                 @foreach($meses as $mes)
                     <th class="rotate">HIGIENE PERSONAL</th>
                     <th class="rotate">ATENCION MEDICA</th>
                     <th class="rotate">DOTACION DE MEDICAMENTOS</th>
+                    <th class="rotate">UNIFORME</th>
                 @endforeach
                 <th class="rotate">HIGIENE PERSONAL</th>
                 <th class="rotate">ATENCION MEDICA</th>
                 <th class="rotate">DOTACION DE MEDICAMENTOS</th>
+                <th class="rotate">UNIFORME</th>
             </tr>
         </thead>
         <tbody>
@@ -116,14 +118,16 @@
                         <td>{{ $data['meses'][$mes]['HIGIENE PERSONAL'] ?? 0 }}</td>
                         <td>{{ $data['meses'][$mes]['ATENCIÓN MÉDICA'] ?? 0 }}</td>
                         <td>{{ $data['meses'][$mes]['DOTACIÓN DE MEDICAMENTOS'] ?? 0 }}</td>
+                        <td>{{ $data['meses'][$mes]['UNIFORME'] ?? 0 }}</td>
                     @endforeach
                     <td>{{ $data['total_higiene'] }}</td>
                     <td>{{ $data['total_atencion'] }}</td>
                     <td>{{ $data['total_medicamentos'] }}</td>
+                    <td>{{ $data['total_uniforme'] ?? 0 }}</td>
                 </tr>
             @empty
                 <tr>
-                    <td colspan="{{ 2 + (count($meses) * 3) + 3 }}">No hay registros</td>
+                    <td colspan="{{ 2 + (count($meses) * 4) + 4 }}">No hay registros</td>
                 </tr>
             @endforelse
         </tbody>

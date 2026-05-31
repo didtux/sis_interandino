@@ -60,10 +60,15 @@
                         @forelse($observados as $o)
                             <tr style="{{ $o->obs_activo ? 'background:#fff5f5;' : '' }}">
                                 <td>
-                                    <strong>{{ $o->estudiante->est_apellidos ?? '' }} {{ $o->estudiante->est_nombres ?? '' }}</strong>
-                                    <small class="text-muted d-block">{{ $o->est_codigo }}</small>
+                                    @if($o->estudiante)
+                                        <strong>{{ $o->estudiante->est_apellidos ?? '' }} {{ $o->estudiante->est_nombres ?? '' }}</strong>
+                                        <small class="text-muted d-block">{{ $o->est_codigo }}</small>
+                                    @else
+                                        <strong>{{ $o->obs_estudiante_nombre }}</strong>
+                                        <small class="text-muted d-block">CI: {{ $o->obs_estudiante_ci }} <span class="badge badge-warning">No inscrito</span></small>
+                                    @endif
                                 </td>
-                                <td>{{ optional($o->estudiante->curso)->cur_nombre ?? '-' }}</td>
+                                <td>{{ $o->estudiante ? (optional($o->estudiante->curso)->cur_nombre ?? '-') : ($o->obs_curso_texto ?? '-') }}</td>
                                 <td><span class="badge badge-dark">{{ $o->obs_motivo_tipo }}</span></td>
                                 <td>{{ $o->obs_motivo }}</td>
                                 <td>
@@ -146,14 +151,39 @@
                         <label>Gestión *</label>
                         <input type="number" name="obs_gestion" class="form-control" value="{{ $gestion }}" required>
                     </div>
-                    <div class="form-group">
+                    <div class="form-check mb-2">
+                        <input type="checkbox" name="no_registrado" value="1" id="chkNoReg" class="form-check-input">
+                        <label for="chkNoReg" class="form-check-label">El estudiante <strong>no está en el sistema</strong> (aún no inscrito)</label>
+                    </div>
+
+                    {{-- Estudiante registrado --}}
+                    <div class="form-group" id="grpRegistrado">
                         <label>Estudiante *</label>
-                        <select name="est_codigo" class="form-control select2-obs" required style="width:100%;">
+                        <select name="est_codigo" class="form-control select2-obs" style="width:100%;">
                             <option value="">— Seleccionar —</option>
                             @foreach($estudiantes as $e)
                                 <option value="{{ $e->est_codigo }}">{{ $e->est_codigo }} — {{ $e->est_apellidos }} {{ $e->est_nombres }}</option>
                             @endforeach
                         </select>
+                    </div>
+
+                    {{-- Estudiante NO registrado --}}
+                    <div id="grpNoReg" style="display:none;">
+                        <div class="form-group">
+                            <label>Nombre completo del estudiante *</label>
+                            <input type="text" name="obs_estudiante_nombre" class="form-control" maxlength="150" placeholder="Apellidos y nombres">
+                        </div>
+                        <div class="row">
+                            <div class="col-7 form-group">
+                                <label>CI *</label>
+                                <input type="text" name="obs_estudiante_ci" class="form-control" maxlength="30" placeholder="Carnet de identidad">
+                            </div>
+                            <div class="col-5 form-group">
+                                <label>Curso (ref.)</label>
+                                <input type="text" name="obs_curso_texto" class="form-control" maxlength="80" placeholder="Ej. 1ro Primaria">
+                            </div>
+                        </div>
+                        <small class="text-muted">Se bloqueará su inscripción comparando el CI.</small>
                     </div>
                     <div class="form-group">
                         <label>Tipo de motivo *</label>
@@ -184,6 +214,17 @@
 <script>
 $(document).ready(function(){
     $('.select2-obs').select2({ theme:'bootstrap4', width:'100%', dropdownParent: $('#modalNuevoObservado') });
+
+    $('#chkNoReg').on('change', function(){
+        if (this.checked) {
+            $('#grpRegistrado').hide();
+            $('#grpNoReg').show();
+            $('select[name="est_codigo"]').val('').trigger('change');
+        } else {
+            $('#grpRegistrado').show();
+            $('#grpNoReg').hide();
+        }
+    });
 });
 </script>
 @endsection

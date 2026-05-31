@@ -40,8 +40,28 @@
                         </div>
                     @endif
 
-                    <form action="{{ route('pagos.store') }}" method="POST" id="form-mensualidad">
+                    <form action="{{ route('pagos.store') }}" method="POST" id="form-mensualidad" enctype="multipart/form-data">
                         @csrf
+
+                        {{-- Búsqueda rápida por estudiante (nombre o CI) --}}
+                        <div class="row" id="divBuscarEst">
+                            <div class="col-md-10">
+                                <div class="form-group">
+                                    <label><i class="fas fa-search mr-1"></i>Búsqueda rápida por <strong>estudiante</strong> (apellido, nombre o CI)</label>
+                                    <select id="buscar-estudiante" class="form-control" style="width:100%;">
+                                        <option value="">Escriba apellido, nombre o CI del estudiante...</option>
+                                        @foreach($estudiantesData as $cod => $e)
+                                            <option value="{{ $cod }}"
+                                                data-padre="{{ $e['padres'][0] ?? '' }}"
+                                                data-ci="{{ $e['ci'] }}">
+                                                {{ strtoupper($e['apellidos']) }} {{ $e['nombres'] }} — {{ $e['curso'] }}@if(!empty($e['ci'])) — CI: {{ $e['ci'] }}@endif
+                                            </option>
+                                        @endforeach
+                                    </select>
+                                    <small class="text-muted">Al seleccionar carga automáticamente al padre y sus estudiantes.</small>
+                                </div>
+                            </div>
+                        </div>
 
                         {{-- PASO 1: Seleccionar padre --}}
                         <div class="row">
@@ -136,6 +156,53 @@
                                 </div>
                             </div>
 
+                            {{-- Método de pago --}}
+                            <div class="card mb-3" style="border-left:4px solid #28a745;">
+                                <div class="card-body py-2">
+                                    <h6 class="mb-2"><i class="fas fa-money-check-alt mr-1"></i>Forma de pago</h6>
+                                    <div class="row">
+                                        <div class="col-md-3 form-group">
+                                            <label class="small">Método</label>
+                                            <select name="pagos_metodo" id="pagos_metodo" class="form-control form-control-sm">
+                                                <option value="EFECTIVO">Efectivo</option>
+                                                <option value="QR">QR / Transferencia</option>
+                                                <option value="MIXTO">Mixto (efectivo + QR)</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-3 form-group mixto-only" style="display:none;">
+                                            <label class="small">Monto efectivo</label>
+                                            <input type="number" step="0.01" name="pagos_monto_efectivo" id="pagos_monto_efectivo" class="form-control form-control-sm" value="0">
+                                        </div>
+                                        <div class="col-md-3 form-group mixto-only" style="display:none;">
+                                            <label class="small">Monto QR</label>
+                                            <input type="number" step="0.01" name="pagos_monto_qr" id="pagos_monto_qr" class="form-control form-control-sm" value="0">
+                                        </div>
+                                        <div class="col-md-3 form-group">
+                                            <label class="small">N° recibo/factura (opcional)</label>
+                                            <input type="text" name="pagos_recibo_nro" class="form-control form-control-sm" placeholder="Ej. F-001">
+                                        </div>
+                                    </div>
+                                    <div class="row qr-only" style="display:none;">
+                                        <div class="col-md-4 form-group">
+                                            <label class="small">Comprobante (foto QR)</label>
+                                            <input type="file" name="pagos_comprobante" class="form-control-file" accept="image/*,.pdf">
+                                        </div>
+                                        <div class="col-md-3 form-group">
+                                            <label class="small">N° de transferencia</label>
+                                            <input type="text" name="pagos_transferencia_nro" class="form-control form-control-sm">
+                                        </div>
+                                        <div class="col-md-3 form-group">
+                                            <label class="small">Hora de transferencia</label>
+                                            <input type="text" name="pagos_transferencia_hora" class="form-control form-control-sm" placeholder="Ej. 14:35">
+                                        </div>
+                                        <div class="col-md-2 form-group">
+                                            <label class="small">Vía WhatsApp</label>
+                                            <div><label class="mt-1"><input type="checkbox" name="pagos_via_whatsapp" value="1"> Sí</label></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
                             <div class="form-group">
                                 <button type="submit" class="btn btn-primary btn-lg" id="btnGuardar" disabled>
                                     <i class="fas fa-save"></i> Registrar Pago
@@ -184,6 +251,39 @@ function getMontoCuota(est, mes) {
 
 $(document).ready(function() {
     $('#padre-select').select2({ placeholder: 'Buscar padre de familia...', allowClear: true, width: '100%', theme: 'bootstrap4' });
+    $('#buscar-estudiante').select2({ placeholder: 'Escriba apellido, nombre o CI...', allowClear: true, width: '100%', theme: 'bootstrap4' });
+
+    // Mostrar campos según método de pago
+    $('#pagos_metodo').on('change', function() {
+        var m = $(this).val();
+        $('.mixto-only').toggle(m === 'MIXTO');
+        $('.qr-only').toggle(m === 'QR' || m === 'MIXTO');
+    }).trigger('change');
+
+    // Búsqueda por estudiante → resuelve el padre y resalta al estudiante
+    $('#buscar-estudiante').on('change', function() {
+        var estCodigo = $(this).val();
+        if (!estCodigo) return;
+        var $opt = $(this).find('option:selected');
+        var padre = $opt.data('padre');
+        if (!padre) {
+            alert('Este estudiante no tiene un padre asociado. Use la opción "Otro".');
+            return;
+        }
+        // Seleccionar padre y cargar (dispara el change que llena la tabla)
+        $('#checkOtroPadre').prop('checked', false).trigger('change');
+        $('#padre-select').val(padre).trigger('change');
+        // Resaltar y marcar al estudiante buscado
+        setTimeout(function() {
+            var $row = $('#hijos-tbody tr[data-est="' + estCodigo + '"]');
+            if ($row.length) {
+                $row.find('.check-estudiante').prop('checked', true).trigger('change');
+                $row.addClass('table-warning');
+                $('html, body').animate({ scrollTop: $row.offset().top - 120 }, 300);
+                setTimeout(function(){ $row.removeClass('table-warning'); }, 2500);
+            }
+        }, 250);
+    });
 
     $('#checkOtroPadre').on('change', function() {
         var esOtro = $(this).is(':checked');
@@ -302,11 +402,12 @@ function agregarFilaEstudiante(est) {
 
     var row = '<tr data-est="' + est.est_codigo + '" data-idx="' + idx + '">' +
         '<td><input type="checkbox" class="check-estudiante" data-idx="' + idx + '" data-est="' + est.est_codigo + '"></td>' +
-        '<td><strong>' + est.nombre + '</strong>' +
+        '<td><strong style="text-transform:uppercase;">' + (est.apellidos || '') + '</strong> ' + (est.nombres || est.nombre) +
+            (est.ci ? '<small class="text-muted d-block">CI: ' + est.ci + '</small>' : '') +
             '<input type="hidden" name="estudiantes[' + idx + '][est_codigo]" value="' + est.est_codigo + '" disabled>' +
             '<input type="hidden" name="estudiantes[' + idx + '][sin_factura]" value="' + est.sin_factura + '" disabled>' +
         '</td>' +
-        '<td>' + est.curso + '</td>' +
+        '<td><span class="badge badge-info">' + est.curso + '</span></td>' +
         '<td>Bs. ' + est.mensualidad.toFixed(2) + '</td>' +
         '<td><select name="estudiantes[' + idx + '][mes]" class="form-control form-control-sm mes-select" data-idx="' + idx + '" disabled>' + mesesOpts + '</select>' +
             '<small class="text-muted">' + infoDisp + '</small></td>' +
@@ -398,8 +499,11 @@ function crearPanelDetalle(est, idx) {
                           '<div class="info-row"><span class="label">Cuota Feb (con desc. insc.):</span><span class="value text-info">Bs. ' + est.cuota_febrero.toFixed(2) + '</span></div>'
                     ) +
                     '<hr style="margin:5px 0">' +
-                    '<div class="info-row"><span class="label">Monto a cobrar (' + est.meses_cobrables + ' meses):</span><span class="value text-primary">Bs. ' + est.monto_a_cobrar.toFixed(2) + '</span></div>' +
-                    '<div class="info-row"><span class="label">Total Pagado (mens.):</span><span class="value text-success">Bs. ' + est.total_pagado.toFixed(2) + '</span></div>' +
+                    '<div class="info-row"><span class="label">Monto a cobrar (anual):</span><span class="value text-primary">Bs. ' + est.monto_a_cobrar.toFixed(2) + '</span></div>' +
+                    (est.solo_registro
+                        ? '<div class="info-row"><span class="label">Pagado (mens.):</span><span class="value text-success">Bs. ' + (est.total_mensualidades||0).toFixed(2) + '</span></div>'
+                        : '<div class="info-row"><span class="label">Pagado (insc. ' + est.monto_inscripcion.toFixed(0) + ' + mens. ' + (est.total_mensualidades||0).toFixed(0) + '):</span><span class="value text-success">Bs. ' + est.total_pagado.toFixed(2) + '</span></div>'
+                    ) +
                     '<div class="info-row"><span class="label">Saldo Pendiente:</span><span class="value text-danger">Bs. ' + est.saldo_pendiente.toFixed(2) + '</span></div>' +
                     (function(){
                         var mesLimite = Math.max(mesActual, est.primer_mes || mesActual);

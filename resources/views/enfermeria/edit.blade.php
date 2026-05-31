@@ -50,6 +50,7 @@
                                         <option value="">Seleccione...</option>
                                         <option value="ATENCIÓN MÉDICA" {{ $registro->enf_dx_detalle == 'ATENCIÓN MÉDICA' ? 'selected' : '' }}>ATENCIÓN MÉDICA</option>
                                         <option value="HIGIENE PERSONAL" {{ $registro->enf_dx_detalle == 'HIGIENE PERSONAL' ? 'selected' : '' }}>HIGIENE PERSONAL</option>
+                                        <option value="UNIFORME" {{ $registro->enf_dx_detalle == 'UNIFORME' ? 'selected' : '' }}>UNIFORME</option>
                                     </select>
                                 </div>
                             </div>
@@ -108,7 +109,7 @@ $(document).ready(function() {
             $('#enf_medicamentos').prop('required', true);
             $('#enf_observaciones').prop('required', false);
             $('#obs_required').hide();
-        } else if (valor == 'HIGIENE PERSONAL') {
+        } else if (valor == 'HIGIENE PERSONAL' || valor == 'UNIFORME') {
             $('#tipo_atencion_row').hide();
             $('#enf_tipo_atencion').val('');
             $('#medicamentos_row').hide();

@@ -395,7 +395,8 @@ function generarReciboGrupo(codigo) {
             doc.setFontSize(10);
             doc.setFont(undefined, 'bold');
             doc.text(item.estudiante, 20, yPos);
-            doc.text('TRANSPORTE ' + item.tipo.toUpperCase() + ' - ' + cantMeses + ' CUOTAS', 280, yPos);
+            // item.tipo ya es la etiqueta de cuota (ej. "Transporte 3ra cuota")
+            doc.text(item.tipo.toUpperCase(), 280, yPos);
             doc.setFont(undefined, 'normal');
             yPos += 14;
             yPos = dibujarMesesEnColumnas(doc, meses, montoPorMes, 20, yPos, 570);
@@ -423,8 +424,7 @@ function generarReciboGrupo(codigo) {
                 doc.setFontSize(9);
                 est.pagos.forEach(function(pago) {
                     var meses = getMeses(pago.fecha_inicio, pago.fecha_fin);
-                    var cantMeses = meses.length;
-                    doc.text('   Transporte ' + pago.tipo + ' - ' + cantMeses + ' cuota(s):', 30, yPos);
+                    doc.text('   ' + pago.tipo + (pago.mes ? ' (' + pago.mes + ')' : '') + ':', 30, yPos);
                     yPos += 12;
                     yPos = dibujarMesesEnColumnas(doc, meses, 0, 40, yPos, 540);
                 });

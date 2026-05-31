@@ -36,6 +36,15 @@ Route::get('/home', [App\Http\Controllers\HomeController::class, 'index'])->name
 Route::middleware(['auth'])->group(function () {
     Route::post('/perfil/cambiar-password', [App\Http\Controllers\PerfilController::class, 'cambiarPassword'])->name('perfil.cambiar-password');
     Route::post('/perfil/actualizar', [App\Http\Controllers\PerfilController::class, 'cambiarPassword'])->name('perfil.actualizar');
+    Route::post('/perfil/foto', [App\Http\Controllers\PerfilController::class, 'actualizarFoto'])->name('perfil.foto');
+});
+
+// App de escaneo de asistencia (rol "Encargado Escaneo" / admin).
+// Sin middleware 'permiso' (la autorización es por us_entidad_tipo en el controlador);
+// con 'auditoria' para registrar automáticamente cada escaneo.
+Route::middleware(['auth', 'auditoria'])->group(function () {
+    Route::get('/escaneo', [App\Http\Controllers\EscaneoAsistenciaController::class, 'index'])->name('escaneo.index');
+    Route::post('/escaneo/registrar', [App\Http\Controllers\EscaneoAsistenciaController::class, 'registrar'])->name('escaneo.registrar');
 });
 
 // Rutas del Sistema de Colegio
@@ -152,6 +161,15 @@ Route::middleware(['auth', 'permiso', 'auditoria', 'reportes:300,512M'])->group(
     Route::get('kardex-docente/{doc_codigo}/reporte',[App\Http\Controllers\KardexDocenteController::class, 'reporteDocentePdf'])->name('kardex-docente.reporte');
     Route::get('kardex-docente/reporte-general',     [App\Http\Controllers\KardexDocenteController::class, 'reporteGeneralPdf'])->name('kardex-docente.reporte-general');
 
+    // ── Comunicados / Documentación a docentes ──
+    Route::get('comunicados',                  [App\Http\Controllers\ComunicadoController::class, 'index'])->name('comunicados.index');
+    Route::post('comunicados',                 [App\Http\Controllers\ComunicadoController::class, 'store'])->name('comunicados.store');
+    Route::post('comunicados/{id}/anular',     [App\Http\Controllers\ComunicadoController::class, 'anular'])->name('comunicados.anular');
+    Route::post('comunicados/dest/{cdId}/observar', [App\Http\Controllers\ComunicadoController::class, 'observar'])->name('comunicados.observar');
+    Route::get('comunicados/{id}/reporte',     [App\Http\Controllers\ComunicadoController::class, 'reportePdf'])->name('comunicados.reporte');
+    Route::get('mis-comunicados',              [App\Http\Controllers\ComunicadoController::class, 'misComunicados'])->name('comunicados.docente');
+    Route::post('mis-comunicados/{cdId}/subir',[App\Http\Controllers\ComunicadoController::class, 'subirArchivo'])->name('comunicados.subir');
+
     // ── Kardex de Estudiantes (anotaciones del docente sobre alumnos) ──
     Route::get('kardex-estudiante',                    [App\Http\Controllers\EstudianteKardexController::class, 'index'])->name('kardex-estudiante.index');
     Route::post('kardex-estudiante',                   [App\Http\Controllers\EstudianteKardexController::class, 'store'])->name('kardex-estudiante.store');
@@ -220,6 +238,11 @@ Route::middleware(['auth', 'permiso', 'auditoria', 'reportes:300,512M'])->group(
         Route::get('/permisos/{id}/imprimir', [App\Http\Controllers\ConfiguracionAsistenciaController::class, 'imprimirPermiso'])->name('permisos.imprimir');
         Route::get('/permisos/reporte-pdf', [App\Http\Controllers\ConfiguracionAsistenciaController::class, 'reportePermisosPdf'])->name('permisos.reporte-pdf');
         Route::get('/permisos/verificar-duplicado', [App\Http\Controllers\ConfiguracionAsistenciaController::class, 'verificarDuplicadoPermiso'])->name('permisos.verificar-duplicado');
+
+        // Reportes Excel de Licencias
+        Route::get('/licencias/excel-mensual',    [App\Http\Controllers\ReporteLicenciaController::class, 'mensualExcel'])->name('licencias.excel-mensual');
+        Route::get('/licencias/excel-anual-est',  [App\Http\Controllers\ReporteLicenciaController::class, 'anualEstudianteExcel'])->name('licencias.excel-anual-est');
+        Route::get('/licencias/excel-anual-curso',[App\Http\Controllers\ReporteLicenciaController::class, 'anualCursoExcel'])->name('licencias.excel-anual-curso');
         
         // Fechas Festivas
         Route::get('/festivos', [App\Http\Controllers\ConfiguracionAsistenciaController::class, 'fechasFestivas'])->name('festivos');
@@ -288,6 +311,10 @@ Route::middleware(['auth', 'permiso', 'auditoria', 'reportes:300,512M'])->group(
     Route::resource('pagos-servicios', App\Http\Controllers\PagoServicioController::class);
     Route::get('pagos-servicios-reporte-pdf', [App\Http\Controllers\PagoServicioController::class, 'reportePdf'])->name('pagos-servicios.reporte-pdf');
     
+    // Reportes de caja (mensualidades)
+    Route::get('caja/diario',  [App\Http\Controllers\CajaReporteController::class, 'diario'])->name('caja.diario');
+    Route::get('caja/periodo', [App\Http\Controllers\CajaReporteController::class, 'periodo'])->name('caja.periodo');
+
     // Reportes de Pagos
     Route::get('pagos-reporte-pdf', [App\Http\Controllers\PagoController::class, 'reportePdf'])->name('pagos.reporte-pdf');
     Route::get('pagos-reporte-excel', [App\Http\Controllers\PagoController::class, 'reporteExcel'])->name('pagos.reporte-excel');
@@ -326,6 +353,7 @@ Route::middleware(['auth', 'permiso', 'auditoria', 'reportes:300,512M'])->group(
         Route::post('/asistencia/guardar', [App\Http\Controllers\ChoferPortalController::class, 'guardarAsistencia'])->name('asistencia.guardar');
         Route::delete('/asistencia/{id}', [App\Http\Controllers\ChoferPortalController::class, 'eliminarAsistencia'])->name('asistencia.eliminar');
         Route::get('/historial', [App\Http\Controllers\ChoferPortalController::class, 'historial'])->name('historial');
+        Route::get('/reporte-mensual', [App\Http\Controllers\ChoferPortalController::class, 'reporteMensualPdf'])->name('reporte-mensual');
     });
 
     // ── Portal de Padres de Familia ──

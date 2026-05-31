@@ -52,6 +52,7 @@ class PagoTransporteController extends Controller
                         'estudiante' => ($p->estudiante->est_nombres ?? '') . ' ' . ($p->estudiante->est_apellidos ?? ''),
                         'curso' => $p->estudiante->curso->cur_nombre ?? 'N/A',
                         'tipo' => $p->tpago_tipo,
+                        'mes' => $p->tpago_mes,
                         'monto' => $p->tpago_monto,
                         'fecha_inicio' => $p->tpago_fecha_inicio,
                         'fecha_fin' => $p->tpago_fecha_fin,
@@ -209,38 +210,44 @@ class PagoTransporteController extends Controller
         $numSiguiente = $ultimo ? intval(substr($ultimo, 5)) + 1 : 1;
         $codigoRecibo = 'TPAGO' . str_pad($numSiguiente, 5, '0', STR_PAD_LEFT);
 
-        $tipos = [
-            1 => 'mensual', 2 => 'bimestral', 3 => 'trimestral',
-            4 => 'cuatrimestral', 5 => 'quinquemestral', 6 => 'semestral',
-            7 => '7 meses', 8 => '8 meses', 9 => '9 meses', 10 => 'anual'
-        ];
+        $mesesNombre = ['', 'Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 
         foreach ($estudiantesInput as $estData) {
             $estCodigo = $estData['est_codigo'];
-            $mesesPagar = intval($estData['meses_pagar']);
+            $mesesPagar = intval($estData['meses_pagar']);   // cantidad de cuotas a pagar
             $montoMensual = floatval($estData['monto_mensual']);
-            $montoTotal = $montoMensual * $mesesPagar;
-            $tpagoTipo = $tipos[$mesesPagar] ?? $mesesPagar . ' meses';
+
+            // Cuotas ya pagadas (vigentes) → la numeración continúa desde ahí
+            // (así se cubren las cuotas en mora anteriores con su número correcto).
+            $cuotasPagadas = PagoTransporte::where('est_codigo', $estCodigo)
+                ->where('tpago_estado', '!=', 'cancelado')
+                ->whereNotNull('tpago_cuota_nro')->max('tpago_cuota_nro') ?? 0;
 
             $ultimaVigencia = $estData['ultima_vigencia'] ?? null;
-            if ($ultimaVigencia) {
-                $fechaInicio = Carbon::parse($ultimaVigencia)->addDay();
-            } else {
-                $fechaInicio = Carbon::parse($request->tpago_fecha_pago ?? now());
+            $fechaBase = $ultimaVigencia
+                ? Carbon::parse($ultimaVigencia)->addDay()
+                : Carbon::parse($request->tpago_fecha_pago ?? now());
+
+            // Una fila por CUOTA (mes), numerada secuencialmente.
+            for ($i = 0; $i < $mesesPagar; $i++) {
+                $cuotaNro   = $cuotasPagadas + $i + 1;
+                $iniCuota   = $fechaBase->copy()->addMonths($i);
+                $finCuota   = $this->calcularFechaFinHabil($iniCuota->copy(), 1);
+                $mesCubierto = $mesesNombre[(int) $iniCuota->format('n')] ?? '';
+
+                PagoTransporte::create([
+                    'tpago_codigo'           => $codigoRecibo,
+                    'est_codigo'             => $estCodigo,
+                    'tpago_tipo'             => PagoTransporte::etiquetaCuota($cuotaNro),
+                    'tpago_cuota_nro'        => $cuotaNro,
+                    'tpago_mes'              => $mesCubierto,
+                    'tpago_monto'            => $montoMensual,
+                    'tpago_fecha_pago'       => $request->tpago_fecha_pago ?? now()->toDateString(),
+                    'tpago_fecha_inicio'     => $iniCuota,
+                    'tpago_fecha_fin'        => $finCuota,
+                    'tpago_usuario_registro' => auth()->user()->us_codigo,
+                ]);
             }
-
-            $fechaFin = $this->calcularFechaFinHabil($fechaInicio, $mesesPagar);
-
-            PagoTransporte::create([
-                'tpago_codigo' => $codigoRecibo,
-                'est_codigo' => $estCodigo,
-                'tpago_tipo' => $tpagoTipo,
-                'tpago_monto' => $montoTotal,
-                'tpago_fecha_pago' => $request->tpago_fecha_pago ?? now()->toDateString(),
-                'tpago_fecha_inicio' => $fechaInicio,
-                'tpago_fecha_fin' => $fechaFin,
-                'tpago_usuario_registro' => auth()->user()->us_codigo
-            ]);
         }
 
         return redirect()->route('pagos-transporte.index')->with('success', 'Pago(s) registrado(s) exitosamente');

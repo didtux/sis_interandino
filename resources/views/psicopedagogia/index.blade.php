@@ -66,11 +66,12 @@
                                 <th>Fecha</th>
                                 <th>Estudiante</th>
                                 <th>Curso</th>
-                                <th>Kardex</th>
+                                <th>Caso</th>
                                 <th>Solución</th>
-                                <th>Acuerdo</th>
+                                <th>Kardex</th>
                                 <th>Observaciones</th>
-                                <th>Tipo Acuerdo</th>
+                                <th>Tipo</th>
+                                <th>Contacto</th>
                                 <th>Acciones</th>
                             </tr>
                         </thead>
@@ -85,6 +86,7 @@
                                     <td>{{ \Str::limit($caso->psico_acuerdo, 30) }}</td>
                                     <td>{{ \Str::limit($caso->psico_observaciones, 30) }}</td>
                                     <td><span class="badge badge-info">{{ $caso->psico_tipo_acuerdo }}</span></td>
+                                    <td>{{ optional($caso->estudiante->padres->first())->pfam_nombres ?? '-' }}</td>
                                     <td>
                                         @if(!empty($caso->psico_documento))
                                             <a href="{{ asset('storage/'.$caso->psico_documento) }}" target="_blank" class="btn btn-sm btn-secondary" title="Documento adjunto">
@@ -267,7 +269,7 @@
                                     </div>
                                 </div>
                             @empty
-                                <tr><td colspan="9" class="text-center">No hay casos registrados</td></tr>
+                                <tr><td colspan="10" class="text-center">No hay casos registrados</td></tr>
                             @endforelse
                         </tbody>
                     </table>

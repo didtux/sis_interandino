@@ -29,13 +29,19 @@
                 </div>
                 <div class="col-lg-3 col-md-6 col-12">
                     <div class="card card-statistic-1">
-                        <div class="card-icon bg-info"><i class="fas fa-user-plus"></i></div>
-                        <div class="card-wrap"><div class="card-header"><h4>Inscripciones {{ date('Y') }}</h4></div><div class="card-body">{{ $totalInscripciones }}</div></div>
+                        <div class="card-icon" style="background:#6f42c1;"><i class="fas fa-users"></i></div>
+                        <div class="card-wrap"><div class="card-header"><h4>Padres / Tutores</h4></div><div class="card-body">{{ $totalPadres }}</div></div>
                     </div>
                 </div>
             </div>
 
             <div class="row">
+                <div class="col-lg-3 col-md-6">
+                    <div class="card card-statistic-1">
+                        <div class="card-icon bg-info"><i class="fas fa-user-plus"></i></div>
+                        <div class="card-wrap"><div class="card-header"><h4>Inscripciones {{ date('Y') }}</h4></div><div class="card-body">{{ $totalInscripciones }}</div></div>
+                    </div>
+                </div>
                 <div class="col-lg-3 col-md-6">
                     <div class="card card-statistic-1">
                         <div class="card-icon bg-success"><i class="fas fa-file-invoice-dollar"></i></div>
@@ -52,12 +58,6 @@
                     <div class="card card-statistic-1">
                         <div class="card-icon bg-info"><i class="fas fa-shopping-cart"></i></div>
                         <div class="card-wrap"><div class="card-header"><h4>Ventas del Mes</h4></div><div class="card-body">Bs. {{ number_format($ventasMes, 2) }}</div></div>
-                    </div>
-                </div>
-                <div class="col-lg-3 col-md-6">
-                    <div class="card card-statistic-1">
-                        <div class="card-icon" style="background:#e74c3c;"><i class="fas fa-clipboard-list"></i></div>
-                        <div class="card-wrap"><div class="card-header"><h4>Notas por Aprobar</h4></div><div class="card-body">{{ $notasPendientes }}</div></div>
                     </div>
                 </div>
             </div>
@@ -79,6 +79,127 @@
                 </div>
             </div>
 
+            {{-- Indicadores operativos --}}
+            <div class="row">
+                <div class="col-lg-3 col-md-6">
+                    <div class="card card-statistic-1">
+                        <div class="card-icon" style="background:#e74c3c;"><i class="fas fa-clipboard-list"></i></div>
+                        <div class="card-wrap"><div class="card-header"><h4>Notas por Aprobar</h4></div><div class="card-body">{{ $notasPendientes }}</div></div>
+                    </div>
+                </div>
+                <div class="col-lg-3 col-md-6">
+                    <div class="card card-statistic-1">
+                        <div class="card-icon" style="background:#8e44ad;"><i class="fas fa-user-slash"></i></div>
+                        <div class="card-wrap"><div class="card-header"><h4>Observados Activos</h4></div><div class="card-body">{{ $observadosActivos }}</div></div>
+                    </div>
+                </div>
+                <div class="col-lg-3 col-md-6">
+                    <div class="card card-statistic-1">
+                        <div class="card-icon bg-info"><i class="fas fa-file-signature"></i></div>
+                        <div class="card-wrap"><div class="card-header"><h4>Permisos Hoy</h4></div><div class="card-body">{{ $permisosHoy }}</div></div>
+                    </div>
+                </div>
+                <div class="col-lg-3 col-md-6">
+                    <div class="card card-statistic-1">
+                        <div class="card-icon bg-warning"><i class="fas fa-clock"></i></div>
+                        <div class="card-wrap"><div class="card-header"><h4>Atrasos Hoy</h4></div><div class="card-body">{{ $atrasosHoy }}</div></div>
+                    </div>
+                </div>
+            </div>
+
+            {{-- Desglose de recaudación --}}
+            <div class="row">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header"><h4><i class="fas fa-hand-holding-usd mr-2"></i>Recaudación Acumulada {{ date('Y') }}</h4></div>
+                        <div class="card-body">
+                            <div class="row text-center">
+                                <div class="col-md-3 col-6 mb-2"><div class="text-muted small">Mensualidades</div><h4 class="text-primary">Bs. {{ number_format($recaudacionAnual['mensualidades'], 2) }}</h4></div>
+                                <div class="col-md-3 col-6 mb-2"><div class="text-muted small">Inscripciones</div><h4 class="text-success">Bs. {{ number_format($recaudacionAnual['inscripciones'], 2) }}</h4></div>
+                                <div class="col-md-3 col-6 mb-2"><div class="text-muted small">Ventas</div><h4 class="text-info">Bs. {{ number_format($recaudacionAnual['ventas'], 2) }}</h4></div>
+                                <div class="col-md-3 col-6 mb-2"><div class="text-muted small">TOTAL</div><h4 class="font-weight-bold">Bs. {{ number_format($recaudacionAnual['total'], 2) }}</h4></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {{-- Ranking: mejores estudiantes + en riesgo --}}
+            <div class="row">
+                <div class="col-lg-6">
+                    <div class="card">
+                        <div class="card-header"><h4><i class="fas fa-trophy mr-2 text-warning"></i>Mejores Estudiantes {{ date('Y') }}</h4></div>
+                        <div class="card-body p-0">
+                            <table class="table table-striped mb-0">
+                                <thead><tr><th>#</th><th>Estudiante</th><th>Curso</th><th class="text-center">Promedio</th></tr></thead>
+                                <tbody>
+                                    @forelse($mejoresEstudiantes as $idx => $est)
+                                        <tr>
+                                            <td>
+                                                @if($idx === 0)<i class="fas fa-medal text-warning"></i>
+                                                @elseif($idx === 1)<i class="fas fa-medal" style="color:#b0b0b0;"></i>
+                                                @elseif($idx === 2)<i class="fas fa-medal" style="color:#cd7f32;"></i>
+                                                @else{{ $idx + 1 }}@endif
+                                            </td>
+                                            <td>{{ $est->nombre }}</td>
+                                            <td><span class="badge badge-primary">{{ $est->cur_nombre ?? '-' }}</span></td>
+                                            <td class="text-center font-weight-bold text-success">{{ $est->promedio }}</td>
+                                        </tr>
+                                    @empty
+                                        <tr><td colspan="4" class="text-center text-muted py-3">Sin notas aprobadas aún</td></tr>
+                                    @endforelse
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-6">
+                    <div class="card">
+                        <div class="card-header"><h4><i class="fas fa-exclamation-triangle mr-2 text-danger"></i>Estudiantes en Riesgo (&lt; 51)</h4></div>
+                        <div class="card-body p-0">
+                            <table class="table table-striped mb-0">
+                                <thead><tr><th>Estudiante</th><th>Curso</th><th class="text-center">Promedio</th></tr></thead>
+                                <tbody>
+                                    @forelse($estudiantesEnRiesgo as $est)
+                                        <tr>
+                                            <td>{{ $est->nombre }}</td>
+                                            <td><span class="badge badge-secondary">{{ $est->cur_nombre ?? '-' }}</span></td>
+                                            <td class="text-center font-weight-bold text-danger">{{ $est->promedio }}</td>
+                                        </tr>
+                                    @empty
+                                        <tr><td colspan="3" class="text-center text-muted py-3">Ningún estudiante en riesgo 🎉</td></tr>
+                                    @endforelse
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {{-- Próximos eventos de agenda --}}
+            @if($proximosEventos->count())
+            <div class="row">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header"><h4><i class="fas fa-calendar-alt mr-2"></i>Próximos Eventos (30 días)</h4></div>
+                        <div class="card-body">
+                            <ul class="list-group list-group-flush">
+                                @foreach($proximosEventos as $ev)
+                                    <li class="list-group-item d-flex justify-content-between align-items-center px-0">
+                                        <span>
+                                            <span class="badge {{ $ev->age_tipo == 1 ? 'badge-primary' : 'badge-warning' }} mr-2">{{ $ev->age_tipo == 1 ? 'Agenda' : 'Notificación' }}</span>
+                                            {{ $ev->age_titulo }}
+                                        </span>
+                                        <small class="text-muted"><i class="far fa-clock mr-1"></i>{{ \Carbon\Carbon::parse($ev->age_fechahora)->format('d/m/Y H:i') }}</small>
+                                    </li>
+                                @endforeach
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            @endif
+
             {{-- Asistencias + Estado inscripciones --}}
             <div class="row">
                 <div class="col-lg-6">
@@ -95,31 +216,13 @@
                 <div class="col-lg-6">
                     <div class="card">
                         <div class="card-header"><h4><i class="fas fa-chart-pie mr-2"></i>Inscripciones {{ date('Y') }}</h4></div>
-                        <div class="card-body"><canvas id="chartEstado" height="150"></canvas></div>
-                    </div>
-                </div>
-            </div>
-
-            {{-- Gráficos --}}
-            <div class="row">
-                <div class="col-lg-6">
-                    <div class="card">
-                        <div class="card-header"><h4><i class="fas fa-chart-line mr-2"></i>Inscripciones por Mes</h4></div>
-                        <div class="card-body"><canvas id="chartInscripciones" height="200"></canvas></div>
-                    </div>
-                </div>
-                <div class="col-lg-6">
-                    <div class="card">
-                        <div class="card-header"><h4><i class="fas fa-chart-bar mr-2"></i>Estudiantes por Curso</h4></div>
-                        <div class="card-body"><canvas id="chartEstudiantes" height="200"></canvas></div>
-                    </div>
-                </div>
-            </div>
-            <div class="row">
-                <div class="col-lg-12">
-                    <div class="card">
-                        <div class="card-header"><h4><i class="fas fa-chart-bar mr-2"></i>Ventas por Categoría (30 días)</h4></div>
-                        <div class="card-body"><canvas id="chartVentas" height="100"></canvas></div>
+                        <div class="card-body">
+                            <div class="row text-center">
+                                <div class="col-4"><h3 class="text-warning mb-0">{{ $estadoInscripciones['pendientes'] }}</h3><small class="text-muted">Activas</small></div>
+                                <div class="col-4"><h3 class="text-success mb-0">{{ $estadoInscripciones['pagadas'] }}</h3><small class="text-muted">Pagadas</small></div>
+                                <div class="col-4"><h3 class="text-danger mb-0">{{ $estadoInscripciones['anuladas'] }}</h3><small class="text-muted">Anuladas</small></div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -264,38 +367,4 @@
 @endsection
 
 @section('scripts')
-@if($user->rol_id == 1)
-<script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
-<script>
-new Chart(document.getElementById('chartEstado').getContext('2d'), {
-    type: 'doughnut',
-    data: {
-        labels: ['Activas', 'Pagadas', 'Anuladas'],
-        datasets: [{ data: [{{ $estadoInscripciones['pendientes'] }}, {{ $estadoInscripciones['pagadas'] }}, {{ $estadoInscripciones['anuladas'] }}], backgroundColor: ['#ffc107','#28a745','#dc3545'] }]
-    },
-    options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
-});
-
-var meses = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
-var dataMeses = new Array(12).fill(0);
-@foreach($inscripcionesPorMes as $item) dataMeses[{{ $item->mes - 1 }}] = {{ $item->total }}; @endforeach
-new Chart(document.getElementById('chartInscripciones').getContext('2d'), {
-    type: 'line',
-    data: { labels: meses, datasets: [{ label: 'Inscripciones', data: dataMeses, borderColor: '#007bff', backgroundColor: 'rgba(0,123,255,0.1)', tension: 0.4, fill: true }] },
-    options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
-});
-
-new Chart(document.getElementById('chartEstudiantes').getContext('2d'), {
-    type: 'bar',
-    data: { labels: [@foreach($estudiantesPorCurso as $c)'{{ $c->cur_nombre }}',@endforeach], datasets: [{ label: 'Estudiantes', data: [@foreach($estudiantesPorCurso as $c){{ $c->estudiantes_count }},@endforeach], backgroundColor: '#28a745' }] },
-    options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
-});
-
-new Chart(document.getElementById('chartVentas').getContext('2d'), {
-    type: 'bar',
-    data: { labels: [@foreach($ventasPorCategoria as $v)'{{ $v->categ_nombre }}',@endforeach], datasets: [{ label: 'Bs.', data: [@foreach($ventasPorCategoria as $v){{ $v->total }},@endforeach], backgroundColor: '#17a2b8' }] },
-    options: { responsive: true, indexAxis: 'y', plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true } } }
-});
-</script>
-@endif
 @endsection
