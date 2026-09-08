@@ -1,3 +1,44 @@
+@php
+    // ── Escala de letra según la cantidad real de columnas ──────────────────
+    // El centralizador anual llega a ~85 columnas en hoja legal horizontal y a
+    // tamaño fijo se desborda; el trimestral tiene ~30 y le sobra espacio.
+    // Se calcula el ancho real y se elige el tramo más grande que entre.
+    $nPer  = $periodos->count();
+    $anual = $nPer > 1;
+
+    // Grupos de campo que efectivamente imprimen columna PROM (2+ promediables).
+    $gruposConProm = [];
+    if (isset($gruposMap)) {
+        foreach ($asignaciones as $cmdX) {
+            $g = $gruposMap[$cmdX->mat_codigo] ?? null;
+            if (!$g) continue;
+            if ($g->materiasPromediables->count() >= 2) $gruposConProm[$g->grupo_id] = true;
+        }
+    }
+    $nGrupos = count($gruposConProm);
+
+    $colsTotal = 2                                          // N° + nombre
+        + $asignaciones->count() * ($anual ? $nPer + 1 : 1) // materias
+        + $nGrupos * ($anual ? $nPer + 1 : 1)               // PROM. por campo
+        + ($anual ? 2 : 3)                                  // suma / prom
+        + 5 + 3 + 1;                                        // asistencia + psico + enfermería
+
+    // Base original: números 7px. Los tramos apuntan a ~+40% en el caso
+    // trimestral (el habitual) y bajan lo justo en el anual más cargado.
+    if     ($colsTotal <= 40) { $fsNum = 10;  $fsHead = 7.5; $fsName = 8.5; $fsFinal = 12; }
+    elseif ($colsTotal <= 60) { $fsNum = 9;   $fsHead = 7;   $fsName = 8;   $fsFinal = 10.5; }
+    elseif ($colsTotal <= 80) { $fsNum = 8;   $fsHead = 6.2; $fsName = 7.5; $fsFinal = 9.5; }
+    else                      { $fsNum = 7.5; $fsHead = 5.5; $fsName = 7;   $fsFinal = 9; }
+
+    // Reparto de ancho. Sin table-layout:fixed dompdf usa layout automático y
+    // los nombres largos de materia en las cabeceras empujan la tabla más allá
+    // del borde de la hoja (el anual ya se desbordaba antes de tocar la letra).
+    // Con anchos explícitos la tabla nunca excede el 100% y las cabeceras
+    // simplemente se parten en varias líneas.
+    $wNombre = $colsTotal > 60 ? 9 : 13;   // % para APELLIDOS Y NOMBRES
+    $wNum    = 1.6;                        // % para N°
+    $pctCol  = max(0.4, round((100 - $wNombre - $wNum) / max(1, $colsTotal - 2), 3));
+@endphp
 <!DOCTYPE html>
 <html>
 <head>
@@ -5,51 +46,56 @@
     <title>Centralizador - {{ $curso->cur_nombre }}</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: "Times New Roman", Times, serif; font-size: 7px; padding: 4mm; }
+        body { font-family: "Times New Roman", Times, serif; font-size: {{ $fsNum }}px; padding: 4mm; }
         .header { display: table; width: 100%; margin-bottom: 3px; }
         .logo { display: table-cell; width: 45px; vertical-align: middle; }
         .logo img { width: 40px; height: auto; }
         .header-info { display: table-cell; vertical-align: middle; text-align: center; }
-        .header-info h3 { font-size: 9px; margin: 0; line-height: 1.1; font-weight:bold; }
-        .header-info p { font-size: 6px; margin: 0; }
-        .fecha-box { position: absolute; top: 4mm; right: 4mm; border: 1px solid #000; padding: 2px 6px; font-weight: bold; font-size: 6px; text-align: center; background:#fff; }
+        .header-info h3 { font-size: 11.5px; margin: 0; line-height: 1.1; font-weight:bold; }
+        .header-info p { font-size: 7.5px; margin: 0; }
+        .fecha-box { position: absolute; top: 4mm; right: 4mm; border: 1px solid #000; padding: 2px 6px; font-weight: bold; font-size: 7.5px; text-align: center; background:#fff; }
         .title-section { text-align: center; margin: 3px 0; border-bottom: 1.5px solid #000; padding-bottom: 2px; }
-        .title-section h2 { font-size: 10px; font-weight: bold; }
-        .title-section p { font-size: 7px; }
+        .title-section h2 { font-size: 12.5px; font-weight: bold; }
+        .title-section p { font-size: 8.5px; }
 
-        table.main { width: 100%; border-collapse: collapse; }
-        table.main th, table.main td { border: 0.5px solid #555; padding: 1px 2px; text-align: center; }
+        table.main { width: 100%; border-collapse: collapse; table-layout: fixed; }
+        table.main th, table.main td { border: 0.5px solid #555; padding: 0 1px; text-align: center; font-size: {{ $fsNum }}px; }
+        /* Interlineado ajustado: compensa el aumento de letra en alto. */
+        table.main td { font-weight: bold; line-height: 1; }
         table.main th { font-weight: bold; }
 
         /* Cabeceras de materia: nombre completo con wrap (dompdf-friendly) */
         .mat-header {
-            background: #e8e8e8; color: #000; font-size: 5.5px; font-weight: bold;
+            background: #e8e8e8; color: #000; font-size: {{ $fsHead }}px; font-weight: bold;
             line-height: 1.1; padding: 2px 1px;
             vertical-align: middle;
             word-break: break-word;
         }
-        .mat-header-anual { background:#e8e8e8; color:#000; font-size:6.5px; font-weight:bold; padding:2px 1px !important; }
-        .trim-header { background: #f5f5f5; color: #000; font-size: 5.5px; }
-        .prom-header { background: #d5d5d5; color: #000; font-size: 5.5px; font-weight: bold; }
+        .mat-header-anual { background:#e8e8e8; color:#000; font-size:{{ $fsHead + 1 }}px; font-weight:bold; padding:2px 1px !important;
+                            line-height:1.1; word-wrap:break-word; word-break:break-word; white-space:normal; }
+        /* Con table-layout:fixed el contenido debe poder partirse, nunca empujar la tabla. */
+        table.main th, table.main td { word-wrap: break-word; overflow: hidden; }
+        .trim-header { background: #f5f5f5; color: #000; font-size: {{ $fsHead }}px; }
+        .prom-header { background: #d5d5d5; color: #000; font-size: {{ $fsHead }}px; font-weight: bold; }
         /* Promedio por campo — bien diferenciado al lado de las materias */
-        .grupo-header { background: #2c3e50; color: #fff; font-size: 5.5px; font-weight: bold; }
-        .grupo-sub    { background: #34495e; color: #fff; font-size: 5.5px; font-weight: bold; }
-        .grupo-val    { background: #ecf0f1; font-weight: bold; color: #2c3e50; }
+        .grupo-header { background: #2c3e50; color: #fff; font-size: {{ $fsHead }}px; font-weight: bold; }
+        .grupo-sub    { background: #34495e; color: #fff; font-size: {{ $fsHead }}px; font-weight: bold; }
+        .grupo-val    { background: #ecf0f1; font-weight: bold; color: #2c3e50; font-size: {{ $fsNum }}px; }
 
-        .est-name { text-align: left !important; white-space: normal; word-wrap: break-word; font-size: 6.5px; padding-left: 3px !important; line-height: 1.15; }
-        .prom-col { background: #fff3cd; font-weight: bold; }
-        .suma-col { background: #d4edda; font-weight: bold; }
-        .prom-final { background: #c3e6cb; font-weight: bold; font-size: 7px; }
+        .est-name { text-align: left !important; white-space: normal; word-wrap: break-word; font-size: {{ $fsName }}px; font-weight: normal !important; padding-left: 3px !important; line-height: 1.15; }
+        .prom-col { background: #fff3cd; font-weight: bold; font-size: {{ $fsNum }}px; }
+        .suma-col { background: #d4edda; font-weight: bold; font-size: {{ $fsNum }}px; }
+        .prom-final { background: #c3e6cb; font-weight: bold; font-size: {{ $fsFinal }}px; }
         /* Reprobados: celda con fondo rojo claro + texto rojo oscuro negrita */
         .nota-baja { background:#fde0e0 !important; color: #c0392b; font-weight: bold; }
         .nota-cero { color: #c0392b; font-weight: bold; background: #fce4ec; }
 
-        .asist-header { background: #d6eaf8 !important; font-size: 5.5px; }
-        .psico-header { background: #ebd6f3 !important; font-size: 5.5px; }
-        .enf-header { background: #fadbd8 !important; font-size: 5.5px; }
-        .group-header-extra { font-size: 6px; font-weight: bold; }
+        .asist-header { background: #d6eaf8 !important; font-size: {{ $fsHead }}px; }
+        .psico-header { background: #ebd6f3 !important; font-size: {{ $fsHead }}px; }
+        .enf-header { background: #fadbd8 !important; font-size: {{ $fsHead }}px; }
+        .group-header-extra { font-size: {{ $fsHead + 0.5 }}px; font-weight: bold; }
 
-        .footer { position: fixed; bottom: 4mm; left: 4mm; font-size: 5px; color: #888; }
+        .footer { position: fixed; bottom: 4mm; left: 4mm; font-size: 6.5px; color: #888; }
     </style>
 </head>
 <body>
@@ -71,7 +117,7 @@
     </div>
 
     <div class="title-section">
-        <p style="font-size:7px;font-weight:bold;">{{ mb_strtoupper($curso->cur_nombre, 'UTF-8') }}</p>
+        <p style="font-size:{{ $fsHead + 2 }}px;font-weight:bold;">{{ mb_strtoupper($curso->cur_nombre, 'UTF-8') }}</p>
         <h2>CENTRALIZADOR — GESTIÓN {{ $gestion }}</h2>
     </div>
 
@@ -124,8 +170,8 @@
         <thead>
             @if($isAnual)
                 <tr>
-                    <th rowspan="2" style="width:14px;background:#ddd;">N°</th>
-                    <th rowspan="2" style="min-width:100px;background:#ddd;">APELLIDOS Y NOMBRES</th>
+                    <th rowspan="2" style="width:{{ $wNum }}%;background:#ddd;">N°</th>
+                    <th rowspan="2" style="width:{{ $wNombre }}%;background:#ddd;">APELLIDOS Y NOMBRES</th>
                     @foreach($materiasList as $cmd)
                         <th colspan="{{ $numPeriodos + 1 }}" class="mat-header" title="{{ $cmd->materia->mat_nombre }}">
                             {{ mb_strtoupper($cmd->materia->mat_nombre, 'UTF-8') }}
@@ -137,11 +183,11 @@
                             </th>
                         @endif
                     @endforeach
-                    <th rowspan="2" class="suma-col" style="width:16px;">SUMA<br>ANUAL</th>
-                    <th rowspan="2" class="prom-final" style="width:18px;">PROM.<br>ANUAL</th>
+                    <th rowspan="2" class="suma-col" style="width:{{ $pctCol * 1.6 }}%;">SUMA<br>ANUAL</th>
+                    <th rowspan="2" class="prom-final" style="width:{{ $pctCol * 1.6 }}%;">PROM.<br>ANUAL</th>
                     <th colspan="5" class="group-header-extra asist-header" title="Días Trab. / Total Asist. / Atrasos / Licencias / Faltas (Anual)">ASISTENCIA<br>(ANUAL)</th>
                     <th colspan="3" class="group-header-extra psico-header">CONTROL Y<br>SEGUIM.</th>
-                    <th rowspan="2" class="group-header-extra enf-header" style="width:14px;">ENFER<br>MERÍA</th>
+                    <th rowspan="2" class="group-header-extra enf-header" style="width:{{ $pctCol }}%;">ENFER<br>MERÍA</th>
                 </tr>
                 <tr>
                     @foreach($materiasList as $cmd)
@@ -168,8 +214,8 @@
                 </tr>
             @else
                 <tr>
-                    <th style="width:14px;background:#ddd;">N°</th>
-                    <th style="min-width:100px;background:#ddd;">APELLIDOS Y NOMBRES</th>
+                    <th style="width:{{ $wNum }}%;background:#ddd;">N°</th>
+                    <th style="width:{{ $wNombre }}%;background:#ddd;">APELLIDOS Y NOMBRES</th>
                     @foreach($materiasList as $cmd)
                         <th class="mat-header" title="{{ $cmd->materia->mat_nombre }}">
                             {{ mb_strtoupper($cmd->materia->mat_nombre, 'UTF-8') }}
@@ -181,9 +227,9 @@
                             </th>
                         @endif
                     @endforeach
-                    <th class="prom-final" style="width:18px;">PROM.</th>
-                    <th class="suma-col" style="width:16px;">SUMA</th>
-                    <th class="prom-final" style="width:18px;">PROM.</th>
+                    <th class="prom-final" style="width:{{ $pctCol * 1.6 }}%;">PROM.</th>
+                    <th class="suma-col" style="width:{{ $pctCol * 1.6 }}%;">SUMA</th>
+                    <th class="prom-final" style="width:{{ $pctCol * 1.6 }}%;">PROM.</th>
                     <th class="asist-header" title="Atrasos">ATR</th>
                     <th class="asist-header" title="Licencias (días)">TL</th>
                     <th class="asist-header" title="Faltas">TF</th>
@@ -206,7 +252,7 @@
                     <td style="{{ $retirado ? 'color:#c0392b;font-weight:700;' : '' }}">{{ $lista[$est->est_codigo] ?? ($i + 1) }}</td>
                     <td class="est-name" style="{{ $retirado ? 'color:#c0392b;font-weight:700;' : '' }}">
                         {{ mb_strtoupper($est->est_apellidos . ' ' . $est->est_nombres, 'UTF-8') }}
-                        @if($retirado)<span style="background:#c0392b;color:#fff;padding:0 3px;border-radius:2px;font-size:5px;margin-left:2px;">RETIRADO</span>@endif
+                        @if($retirado)<span style="background:#c0392b;color:#fff;padding:0 3px;border-radius:2px;font-size:{{ $fsHead - 0.5 }}px;margin-left:2px;">RETIRADO</span>@endif
                     </td>
 
                     @if($isAnual)
@@ -241,7 +287,7 @@
                                     }
                                     $promGAnual = $cp > 0 ? round($sp / $cp, 0) : 0;
                                 @endphp
-                                <td class="grupo-val" style="font-size:6px;">{{ $promGAnual ?: '' }}</td>
+                                <td class="grupo-val">{{ $promGAnual ?: '' }}</td>
                             @endif
                         @endforeach
                         <td class="suma-col">{{ $fila['suma'] }}</td>

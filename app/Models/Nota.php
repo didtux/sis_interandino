@@ -15,6 +15,7 @@ class Nota extends Model
         'nota_ser_respeto', 'nota_ser_responsabilidad', 'nota_ser_puntualidad', 'nota_ser_promedio',
         'nota_saber_parcial', 'nota_saber_examen', 'nota_saber_promedio',
         'nota_hacer_promedio', 'nota_autoevaluacion', 'nota_promedio_trimestral',
+        'nota_promedio_decimal',
         'nota_estado', 'nota_observacion',
         'nota_guardado_por', 'nota_fecha_guardado',
         'nota_enviado_por', 'nota_fecha_envio',

@@ -1,3 +1,38 @@
+@php
+    // ── Escala de letra según la cantidad real de columnas ──────────────────
+    // Mismo criterio que el centralizador: los NÚMEROS mandan, y el tramo se
+    // elige para no desbordar la hoja. El conteo fino ($totalData) se rehace
+    // más abajo para el reparto de anchos; acá sólo se necesita la magnitud.
+    $nPerG   = $periodos->count();
+    $anualG  = $nPerG > 1;
+
+    $gruposConPromG = [];
+    if (isset($gruposMap)) {
+        foreach ($asignaciones as $cmdX) {
+            $g = $gruposMap[$cmdX->mat_codigo] ?? null;
+            if (!$g) continue;
+            if ($g->materiasPromediables->count() >= 2) $gruposConPromG[$g->grupo_id] = true;
+        }
+    }
+
+    $colsTotalG = 2
+        + $asignaciones->count() * ($anualG ? $nPerG + 1 : 1)
+        + count($gruposConPromG) * ($anualG ? $nPerG + 1 : 1)
+        + ($anualG ? 2 : 0)
+        + $nPerG * 5;
+
+    // Base original: números 6px.
+    // TOPE DELIBERADO: 7.5px (+25%). Medido sobre 2doSEC (15 materias,
+    // 30 estudiantes) el registro trimestral entra en UNA hoja hasta 7.5px y
+    // salta a dos a partir de 8px. Se prioriza no duplicar el papel de cada
+    // curso; si se prefieren números más grandes aceptando la segunda hoja,
+    // basta subir el primer tramo. El último tramo (anual, ~99 columnas) topa
+    // en 6.8px por la misma razón: a 7px el registro anual pasa de 5 a 6 hojas.
+    if     ($colsTotalG <= 40) { $fsNum = 7.5; $fsHead = 7;   $fsName = 8;   $fsVert = 5.5; $hVert = 52; }
+    elseif ($colsTotalG <= 60) { $fsNum = 7.3; $fsHead = 6.5; $fsName = 7.5; $fsVert = 5.2; $hVert = 51; }
+    elseif ($colsTotalG <= 80) { $fsNum = 7.1; $fsHead = 6.2; $fsName = 7;   $fsVert = 5;   $hVert = 50; }
+    else                       { $fsNum = 6.8; $fsHead = 6;   $fsName = 6.8; $fsVert = 4.5; $hVert = 50; }
+@endphp
 <!DOCTYPE html>
 <html>
 <head>
@@ -5,46 +40,50 @@
     <title>Registro General - {{ $curso->cur_nombre }}</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: "Times New Roman", Times, serif; font-size: 7.5px; padding: 3mm; color: #333; }
+        body { font-family: "Times New Roman", Times, serif; font-size: {{ $fsNum }}px; padding: 3mm; color: #333; }
 
         .header { display: table; width: 100%; margin-bottom: 3px; }
         .logo { display: table-cell; width: 34px; vertical-align: middle; }
         .logo img { width: 30px; height: auto; }
         .header-info { display: table-cell; vertical-align: middle; text-align: center; }
-        .header-info h3 { font-size: 7.5px; margin: 0; line-height: 1.1; }
-        .header-info p { font-size: 4.5px; margin: 0; color: #666; }
-        .fecha-box { position: absolute; top: 3mm; right: 3mm; font-size: 5px; color: #999; }
+        .header-info h3 { font-size: 10.5px; margin: 0; line-height: 1.1; }
+        .header-info p { font-size: 6.5px; margin: 0; color: #666; }
+        .fecha-box { position: absolute; top: 3mm; right: 3mm; font-size: 6.5px; color: #999; }
 
         .title-bar { background: #2c3e50; color: #fff; text-align: center; padding: 3px 0; margin-bottom: 3px; }
-        .title-bar h2 { font-size: 7px; font-weight: bold; letter-spacing: 0.5px; }
-        .title-bar p { font-size: 5px; opacity: 0.85; }
+        .title-bar h2 { font-size: 11px; font-weight: bold; letter-spacing: 0.5px; }
+        .title-bar p { font-size: 8px; opacity: 0.85; }
 
         table.main { width: 100%; border-collapse: collapse; table-layout: fixed; }
         table.main th, table.main td {
             border: 0.5px solid #ccc;
-            padding: 1px 2px;
+            padding: 0 1px;
             text-align: center;
-            font-size: 6px;
+            font-size: {{ $fsNum }}px;
             overflow: hidden;
         }
+        /* Los números de nota son lo que se lee: negrita. El interlineado
+           ajustado compensa el aumento de letra para no ganar páginas. */
+        table.main td { font-weight: bold; line-height: 1; }
+        table.main tbody td { padding-top: 0; padding-bottom: 0; }
 
-        .th-dark { background: #2c3e50; color: #fff; font-size: 6px; }
-        .th-mat { background: #f8f9fa; color: #333; font-weight: bold; font-size: 6.5px; border-bottom: 1.5px solid #f39c12; line-height:1.15; word-break:normal; word-wrap:break-word; white-space:normal; padding: 2px 1px; }
-        .th-trim { background: #fafafa; font-size: 5.5px; color: #666; }
-        .th-prom { background: #fafafa; font-size: 5.5px; color: #333; font-weight: bold; }
-        .th-grupo { background: #2c3e50; color: #fff; font-weight: bold; font-size: 5.5px; }
-        .th-grupo-sub { background: #34495e; font-size: 5.5px; color: #fff; font-weight: bold; }
+        .th-dark { background: #2c3e50; color: #fff; font-size: {{ $fsHead }}px; }
+        .th-mat { background: #f8f9fa; color: #333; font-weight: bold; font-size: {{ $fsHead + 1 }}px; border-bottom: 1.5px solid #f39c12; line-height:1.15; word-break:normal; word-wrap:break-word; white-space:normal; padding: 2px 1px; }
+        .th-trim { background: #fafafa; font-size: {{ $fsHead }}px; color: #666; }
+        .th-prom { background: #fafafa; font-size: {{ $fsHead }}px; color: #333; font-weight: bold; }
+        .th-grupo { background: #2c3e50; color: #fff; font-weight: bold; font-size: {{ $fsHead }}px; }
+        .th-grupo-sub { background: #34495e; font-size: {{ $fsHead }}px; color: #fff; font-weight: bold; }
 
-        .th-asist-group { background: #eaf4fc; color: #1a5276; font-weight: bold; font-size: 5.5px; border-bottom: 1.5px solid #3498db; }
-        .th-vert { vertical-align: bottom; text-align: center; padding: 2px 0 !important; height: 50px; background: #fafafa; }
+        .th-asist-group { background: #eaf4fc; color: #1a5276; font-weight: bold; font-size: {{ $fsHead }}px; border-bottom: 1.5px solid #3498db; }
+        .th-vert { vertical-align: bottom; text-align: center; padding: 2px 0 !important; height: {{ $hVert }}px; background: #fafafa; }
 
-        .est-name { text-align: left !important; padding-left: 3px !important; font-size: 6.5px; white-space: normal; word-wrap: break-word; line-height: 1.15; }
+        .est-name { text-align: left !important; padding-left: 3px !important; font-size: {{ $fsName }}px; font-weight: normal !important; white-space: normal; word-wrap: break-word; line-height: 1.02; }
         /* Reprobados: celda con fondo rojo claro + texto rojo oscuro negrita */
         .nota-baja { background:#fde0e0 !important; color: #c0392b; font-weight: bold; }
-        .prom-col { background: #fffdf0; font-weight: bold; }
-        .grupo-val { color: #6c3483; font-weight: bold; }
-        .suma-col { font-weight: bold; background: #f0faf0; }
-        .prom-final { font-weight: bold; background: #e8f5e9; }
+        .prom-col { background: #fffdf0; font-weight: bold; font-size: {{ $fsNum }}px; }
+        .grupo-val { color: #6c3483; font-weight: bold; font-size: {{ $fsNum }}px; }
+        .suma-col { font-weight: bold; background: #f0faf0; font-size: {{ $fsNum }}px; }
+        .prom-final { font-weight: bold; background: #e8f5e9; font-size: {{ $fsNum + 2 }}px; }
 
         .asist-dt { color: #27ae60; }
         .asist-ta { color: #f39c12; }
@@ -54,7 +93,7 @@
 
         tbody tr:nth-child(even) td { background: #fcfcfc; }
 
-        .footer { position: fixed; bottom: 3mm; left: 3mm; right: 3mm; font-size: 4px; color: #bbb; border-top: 0.5px solid #eee; padding-top: 1px; }
+        .footer { position: fixed; bottom: 3mm; left: 3mm; right: 3mm; font-size: 6px; color: #bbb; border-top: 0.5px solid #eee; padding-top: 1px; }
     </style>
 </head>
 <body>
@@ -158,8 +197,8 @@
                         <th colspan="{{ $numPeriodos + 1 }}" class="th-grupo">{{ mb_strtoupper(mb_substr($grp->grupo_nombre, 0, 12, 'UTF-8'), 'UTF-8') }}</th>
                     @endif
                 @endforeach
-                <th rowspan="2" class="th-dark" style="font-size:3.5px;">∑</th>
-                <th rowspan="2" class="th-dark" style="font-size:3.5px;">x̄</th>
+                <th rowspan="2" class="th-dark" style="font-size:{{ $fsHead + 1 }}px;">∑</th>
+                <th rowspan="2" class="th-dark" style="font-size:{{ $fsHead + 1 }}px;">x̄</th>
                 @foreach($periodos as $p)
                     <th colspan="5" class="th-asist-group">{{ $p->periodo_numero }}° TRIM.</th>
                 @endforeach
@@ -179,11 +218,11 @@
                     @endif
                 @endforeach
                 @foreach($periodos as $p)
-                    <th class="th-vert"><svg width="9" height="45" xmlns="http://www.w3.org/2000/svg"><text x="6" y="43" transform="rotate(-90,6,43)" font-family="Arial" font-size="4.5" font-weight="bold" fill="#f39c12">Atrasos</text></svg></th>
-                    <th class="th-vert"><svg width="9" height="45" xmlns="http://www.w3.org/2000/svg"><text x="6" y="43" transform="rotate(-90,6,43)" font-family="Arial" font-size="4.5" font-weight="bold" fill="#2980b9">Licencias</text></svg></th>
-                    <th class="th-vert"><svg width="9" height="45" xmlns="http://www.w3.org/2000/svg"><text x="6" y="43" transform="rotate(-90,6,43)" font-family="Arial" font-size="4.5" font-weight="bold" fill="#e74c3c">Faltas</text></svg></th>
-                    <th class="th-vert"><svg width="9" height="45" xmlns="http://www.w3.org/2000/svg"><text x="6" y="43" transform="rotate(-90,6,43)" font-family="Arial" font-size="4.5" font-weight="bold" fill="#27ae60">Días Trabajados</text></svg></th>
-                    <th class="th-vert" style="background:#eaf4fc;"><svg width="9" height="45" xmlns="http://www.w3.org/2000/svg"><text x="6" y="43" transform="rotate(-90,6,43)" font-family="Arial" font-size="4.5" font-weight="bold" fill="#1a5276">Total Días Háb.</text></svg></th>
+                    <th class="th-vert"><svg width="{{ $fsVert + 5 }}" height="{{ $hVert - 4 }}" xmlns="http://www.w3.org/2000/svg"><text x="{{ $fsVert + 1.5 }}" y="{{ $hVert - 7 }}" transform="rotate(-90,{{ $fsVert + 1.5 }},{{ $hVert - 7 }})" font-family="Arial" font-size="{{ $fsVert }}" font-weight="bold" fill="#f39c12">Atrasos</text></svg></th>
+                    <th class="th-vert"><svg width="{{ $fsVert + 5 }}" height="{{ $hVert - 4 }}" xmlns="http://www.w3.org/2000/svg"><text x="{{ $fsVert + 1.5 }}" y="{{ $hVert - 7 }}" transform="rotate(-90,{{ $fsVert + 1.5 }},{{ $hVert - 7 }})" font-family="Arial" font-size="{{ $fsVert }}" font-weight="bold" fill="#2980b9">Licencias</text></svg></th>
+                    <th class="th-vert"><svg width="{{ $fsVert + 5 }}" height="{{ $hVert - 4 }}" xmlns="http://www.w3.org/2000/svg"><text x="{{ $fsVert + 1.5 }}" y="{{ $hVert - 7 }}" transform="rotate(-90,{{ $fsVert + 1.5 }},{{ $hVert - 7 }})" font-family="Arial" font-size="{{ $fsVert }}" font-weight="bold" fill="#e74c3c">Faltas</text></svg></th>
+                    <th class="th-vert"><svg width="{{ $fsVert + 5 }}" height="{{ $hVert - 4 }}" xmlns="http://www.w3.org/2000/svg"><text x="{{ $fsVert + 1.5 }}" y="{{ $hVert - 7 }}" transform="rotate(-90,{{ $fsVert + 1.5 }},{{ $hVert - 7 }})" font-family="Arial" font-size="{{ $fsVert }}" font-weight="bold" fill="#27ae60">Días Trabajados</text></svg></th>
+                    <th class="th-vert" style="background:#eaf4fc;"><svg width="{{ $fsVert + 5 }}" height="{{ $hVert - 4 }}" xmlns="http://www.w3.org/2000/svg"><text x="{{ $fsVert + 1.5 }}" y="{{ $hVert - 7 }}" transform="rotate(-90,{{ $fsVert + 1.5 }},{{ $hVert - 7 }})" font-family="Arial" font-size="{{ $fsVert }}" font-weight="bold" fill="#1a5276">Total Días Háb.</text></svg></th>
                 @endforeach
             </tr>
         @else
@@ -204,11 +243,11 @@
             </tr>
             <tr>
                 @foreach($periodos as $p)
-                    <th class="th-vert"><svg width="9" height="45" xmlns="http://www.w3.org/2000/svg"><text x="6" y="43" transform="rotate(-90,6,43)" font-family="Arial" font-size="4.5" font-weight="bold" fill="#f39c12">Atrasos</text></svg></th>
-                    <th class="th-vert"><svg width="9" height="45" xmlns="http://www.w3.org/2000/svg"><text x="6" y="43" transform="rotate(-90,6,43)" font-family="Arial" font-size="4.5" font-weight="bold" fill="#2980b9">Licencias</text></svg></th>
-                    <th class="th-vert"><svg width="9" height="45" xmlns="http://www.w3.org/2000/svg"><text x="6" y="43" transform="rotate(-90,6,43)" font-family="Arial" font-size="4.5" font-weight="bold" fill="#e74c3c">Faltas</text></svg></th>
-                    <th class="th-vert"><svg width="9" height="45" xmlns="http://www.w3.org/2000/svg"><text x="6" y="43" transform="rotate(-90,6,43)" font-family="Arial" font-size="4.5" font-weight="bold" fill="#27ae60">Días Trabajados</text></svg></th>
-                    <th class="th-vert" style="background:#eaf4fc;"><svg width="9" height="45" xmlns="http://www.w3.org/2000/svg"><text x="6" y="43" transform="rotate(-90,6,43)" font-family="Arial" font-size="4.5" font-weight="bold" fill="#1a5276">Total Días Háb.</text></svg></th>
+                    <th class="th-vert"><svg width="{{ $fsVert + 5 }}" height="{{ $hVert - 4 }}" xmlns="http://www.w3.org/2000/svg"><text x="{{ $fsVert + 1.5 }}" y="{{ $hVert - 7 }}" transform="rotate(-90,{{ $fsVert + 1.5 }},{{ $hVert - 7 }})" font-family="Arial" font-size="{{ $fsVert }}" font-weight="bold" fill="#f39c12">Atrasos</text></svg></th>
+                    <th class="th-vert"><svg width="{{ $fsVert + 5 }}" height="{{ $hVert - 4 }}" xmlns="http://www.w3.org/2000/svg"><text x="{{ $fsVert + 1.5 }}" y="{{ $hVert - 7 }}" transform="rotate(-90,{{ $fsVert + 1.5 }},{{ $hVert - 7 }})" font-family="Arial" font-size="{{ $fsVert }}" font-weight="bold" fill="#2980b9">Licencias</text></svg></th>
+                    <th class="th-vert"><svg width="{{ $fsVert + 5 }}" height="{{ $hVert - 4 }}" xmlns="http://www.w3.org/2000/svg"><text x="{{ $fsVert + 1.5 }}" y="{{ $hVert - 7 }}" transform="rotate(-90,{{ $fsVert + 1.5 }},{{ $hVert - 7 }})" font-family="Arial" font-size="{{ $fsVert }}" font-weight="bold" fill="#e74c3c">Faltas</text></svg></th>
+                    <th class="th-vert"><svg width="{{ $fsVert + 5 }}" height="{{ $hVert - 4 }}" xmlns="http://www.w3.org/2000/svg"><text x="{{ $fsVert + 1.5 }}" y="{{ $hVert - 7 }}" transform="rotate(-90,{{ $fsVert + 1.5 }},{{ $hVert - 7 }})" font-family="Arial" font-size="{{ $fsVert }}" font-weight="bold" fill="#27ae60">Días Trabajados</text></svg></th>
+                    <th class="th-vert" style="background:#eaf4fc;"><svg width="{{ $fsVert + 5 }}" height="{{ $hVert - 4 }}" xmlns="http://www.w3.org/2000/svg"><text x="{{ $fsVert + 1.5 }}" y="{{ $hVert - 7 }}" transform="rotate(-90,{{ $fsVert + 1.5 }},{{ $hVert - 7 }})" font-family="Arial" font-size="{{ $fsVert }}" font-weight="bold" fill="#1a5276">Total Días Háb.</text></svg></th>
                 @endforeach
             </tr>
         @endif
@@ -223,7 +262,7 @@
                     <td style="font-weight:bold;color:{{ $retirado ? '#c0392b' : '#999' }};">{{ $lista[$est->est_codigo] ?? ($i + 1) }}</td>
                     <td class="est-name" style="{{ $retirado ? 'color:#c0392b;font-weight:700;' : '' }}">
                         {{ mb_strtoupper($est->est_apellidos . ' ' . $est->est_nombres, 'UTF-8') }}
-                        @if($retirado)<span style="background:#c0392b;color:#fff;padding:0 3px;border-radius:2px;font-size:4px;margin-left:2px;">RET</span>@endif
+                        @if($retirado)<span style="background:#c0392b;color:#fff;padding:0 3px;border-radius:2px;font-size:{{ $fsHead - 1 }}px;margin-left:2px;">RET</span>@endif
                     </td>
                     @foreach($materiasList as $cmd)
                         @php $matData = $fila['materias'][$cmd->mat_codigo] ?? ['trimestres' => [], 'promedio' => 0]; @endphp

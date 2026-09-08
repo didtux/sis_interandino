@@ -101,7 +101,7 @@ class NotaController extends Controller
                 'n.est_codigo',
                 'e.est_nombres', 'e.est_apellidos',
                 'c.cur_nombre',
-                DB::raw('ROUND(AVG(n.nota_promedio_trimestral), 1) as promedio')
+                DB::raw('ROUND(AVG(COALESCE(n.nota_promedio_decimal, n.nota_promedio_trimestral)), 1) as promedio')
             )
             ->groupBy('n.est_codigo', 'e.est_nombres', 'e.est_apellidos', 'c.cur_nombre')
             ->orderByDesc('promedio')
@@ -119,7 +119,7 @@ class NotaController extends Controller
                 'n.est_codigo',
                 'e.est_nombres', 'e.est_apellidos',
                 'c.cur_nombre',
-                DB::raw('ROUND(AVG(n.nota_promedio_trimestral), 1) as promedio')
+                DB::raw('ROUND(AVG(COALESCE(n.nota_promedio_decimal, n.nota_promedio_trimestral)), 1) as promedio')
             )
             ->groupBy('n.est_codigo', 'e.est_nombres', 'e.est_apellidos', 'c.cur_nombre')
             ->having('promedio', '<', 51)
@@ -383,12 +383,10 @@ class NotaController extends Controller
                 $notaData
             );
 
-            $promedioTrimestral = 0;
-
+            // Persistir cada celda y armar el mapa de valores para el service.
+            $valoresPorDim = [];
             foreach ($dimensiones as $dim) {
                 $valores = $dimData[$dim->dimension_id] ?? [];
-                $suma = 0;
-                $count = 0;
 
                 for ($col = 1; $col <= $dim->dimension_columnas; $col++) {
                     $val = isset($valores[$col]) && $valores[$col] !== '' ? floatval($valores[$col]) : null;
@@ -396,20 +394,17 @@ class NotaController extends Controller
                         ['nota_id' => $nota->nota_id, 'dimension_id' => $dim->dimension_id, 'columna_num' => $col],
                         ['detalle_valor' => $val ?? 0]
                     );
-                    if ($val !== null && $val > 0) {
-                        $suma += $val;
-                        $count++;
-                    }
+                    $valoresPorDim[$dim->dimension_id][$col] = $val;
                 }
-
-                // Promedio: si hay notas, promedio de las ingresadas; si solo 1 columna, es el valor directo
-                $promDim = $count > 0 ? ($dim->dimension_columnas == 1 ? $suma : $suma / $count) : 0;
-                // Acumula con decimales (decimal(5,2)). El redondeo se aplica solo al mostrar.
-                $promedioTrimestral += $promDim;
             }
 
+            // Fórmula única y compartida con la pantalla: suma de dimensiones
+            // redondeadas (oficial) + suma exacta (sólo para cuadro de honor).
+            $calc = (new \App\Services\NotaPromedioService())->calcular($dimensiones, $valoresPorDim);
+
             $nota->update([
-                'nota_promedio_trimestral' => round($promedioTrimestral, 2)
+                'nota_promedio_trimestral' => $calc['oficial'],
+                'nota_promedio_decimal'    => $calc['decimal'],
             ]);
         }
 
@@ -556,28 +551,23 @@ class NotaController extends Controller
                 'rango' => '',
             ];
 
+            // Mismo service que la carga: los promedios por dimensión impresos
+            // son los mismos enteros con que se armó el PROM. TRIM.
+            $svcProm = new \App\Services\NotaPromedioService();
             foreach ($dimensiones as $dim) {
                 $valores = [];
-                $suma = 0; $count = 0;
                 for ($c = 1; $c <= $dim->dimension_columnas; $c++) {
-                    $val = $detallesMap[$dim->dimension_id][$c] ?? 0;
-                    $valores[$c] = $val;
-                    if ($val > 0) { $suma += $val; $count++; }
+                    $valores[$c] = $detallesMap[$dim->dimension_id][$c] ?? 0;
                 }
-                $prom = $count > 0 ? ($dim->dimension_columnas == 1 ? $suma : round($suma / $count)) : 0;
                 $fila['dimensiones'][$dim->dimension_id] = [
-                    'valores' => $valores,
-                    'promedio' => $prom,
+                    'valores'  => $valores,
+                    'promedio' => (int) round($svcProm->promedioDimension($dim, $valores)),
                 ];
             }
 
-            // Rango según sistema boliviano
-            $pt = $fila['promedio_trimestral'];
-            if ($pt < 20) $fila['rango'] = '';
-            elseif ($pt < 51) $fila['rango'] = 'ED';
-            elseif ($pt < 67) $fila['rango'] = 'DA';
-            elseif ($pt < 85) $fila['rango'] = 'DO';
-            else $fila['rango'] = 'DP';
+            // Rango sobre el ENTERO oficial, para que la etiqueta coincida con el
+            // número impreso (antes 66.6 imprimía 67 pero etiquetaba DA en vez de DO).
+            $fila['rango'] = $svcProm->rango($fila['promedio_trimestral']);
 
             $data[] = $fila;
         }
@@ -763,15 +753,17 @@ class NotaController extends Controller
                         ]
                     );
 
-                    $promedioTrimestral = 0;
+                    // Persistir cada celda (evidencia de la nota) y armar el mapa
+                    // de valores por dimensión para el fallback de cálculo.
+                    $valoresPorDim = [];
+                    $sumaPromExcel = 0.0;
+                    $hayPromExcel  = false;
 
                     foreach ($notaEst['dimensiones'] as $dimId => $dimData) {
                         $dim = $dimensiones->firstWhere('dimension_id', $dimId);
                         if (!$dim) continue;
 
                         $valores = $dimData['valores'] ?? [];
-                        $suma = 0;
-                        $count = 0;
 
                         for ($col = 1; $col <= $dim->dimension_columnas; $col++) {
                             $val = $valores[$col] ?? 0;
@@ -779,14 +771,45 @@ class NotaController extends Controller
                                 ['nota_id' => $nota->nota_id, 'dimension_id' => $dimId, 'columna_num' => $col],
                                 ['detalle_valor' => $val]
                             );
-                            if ($val > 0) { $suma += $val; $count++; }
+                            $valoresPorDim[$dimId][$col] = $val;
                         }
 
-                        $promDim = $count > 0 ? ($dim->dimension_columnas == 1 ? $suma : $suma / $count) : 0;
-                        $promedioTrimestral += $promDim;
+                        // Promedio que el propio Excel calculó para esta dimensión
+                        // (columnas G / R / AC de la plantilla).
+                        $pe = (float) ($dimData['promedio_excel'] ?? 0);
+                        if ($pe > 0) {
+                            $hayPromExcel = true;
+                            $sumaPromExcel += min($pe, (float) $dim->dimension_valor_max);
+                        }
                     }
 
-                    $nota->update(['nota_promedio_trimestral' => round($promedioTrimestral, 2)]);
+                    $svcProm = new \App\Services\NotaPromedioService();
+
+                    // ── Se RESPETA la nota cargada del Excel ────────────────────
+                    // 1º el PROM. TRIM. de la plantilla (celda AG) — es exactamente
+                    //    lo que el docente aprobó en la vista previa.
+                    // 2º si AG viene vacía, la suma de los promedios por dimensión
+                    //    que el Excel sí calculó (G / R / AC).
+                    // 3º si tampoco, se recalcula desde las celdas con la misma
+                    //    fórmula que usa la pantalla del docente.
+                    $promExcelTrim = (float) ($notaEst['promedio_trimestral'] ?? 0);
+
+                    if ($promExcelTrim > 0) {
+                        $oficial = (int) round($promExcelTrim);
+                        $decimal = round($promExcelTrim, 2);
+                    } elseif ($hayPromExcel) {
+                        $oficial = (int) round($sumaPromExcel);
+                        $decimal = round($sumaPromExcel, 2);
+                    } else {
+                        $calc    = $svcProm->calcular($dimensiones, $valoresPorDim);
+                        $oficial = $calc['oficial'];
+                        $decimal = $calc['decimal'];
+                    }
+
+                    $nota->update([
+                        'nota_promedio_trimestral' => $oficial,
+                        'nota_promedio_decimal'    => $decimal,
+                    ]);
                 }
             }
 

@@ -98,7 +98,7 @@ class HomeController extends Controller
                 'e.est_codigo',
                 DB::raw("CONCAT(e.est_apellidos,' ',e.est_nombres) as nombre"),
                 'c.cur_nombre',
-                DB::raw('ROUND(AVG(n.nota_promedio_trimestral),1) as promedio')
+                DB::raw('ROUND(AVG(COALESCE(n.nota_promedio_decimal, n.nota_promedio_trimestral)),1) as promedio')
             )
             ->groupBy('e.est_codigo', 'e.est_apellidos', 'e.est_nombres', 'c.cur_nombre')
             ->orderByDesc('promedio')
@@ -115,10 +115,10 @@ class HomeController extends Controller
                 'e.est_codigo',
                 DB::raw("CONCAT(e.est_apellidos,' ',e.est_nombres) as nombre"),
                 'c.cur_nombre',
-                DB::raw('ROUND(AVG(n.nota_promedio_trimestral),1) as promedio')
+                DB::raw('ROUND(AVG(COALESCE(n.nota_promedio_decimal, n.nota_promedio_trimestral)),1) as promedio')
             )
             ->groupBy('e.est_codigo', 'e.est_apellidos', 'e.est_nombres', 'c.cur_nombre')
-            ->havingRaw('AVG(n.nota_promedio_trimestral) < 51')
+            ->havingRaw('AVG(COALESCE(n.nota_promedio_decimal, n.nota_promedio_trimestral)) < 51')
             ->orderBy('promedio')
             ->limit(10)->get();
 

@@ -175,7 +175,7 @@
                                                 <td style="text-align:center;font-weight:bold;background:rgba(0,0,0,0.03);" class="prom-dim-{{ $dim->dimension_id }}">0</td>
                                             @endforeach
                                             @php $pt = round($nota->nota_promedio_trimestral ?? 0); $reprob = $pt > 0 && $pt < 51; @endphp
-                                            <td style="text-align:center;font-weight:bold;font-size:1rem;{{ $reprob ? 'background:#f8d7da;color:#c0392b;' : 'background:#fef3cd;' }}" class="prom-trim">{{ $nota->nota_promedio_trimestral ?? 0 }}</td>
+                                            <td style="text-align:center;font-weight:bold;font-size:1rem;{{ $reprob ? 'background:#f8d7da;color:#c0392b;' : 'background:#fef3cd;' }}" class="prom-trim">{{ $pt }}</td>
                                             @php $marcadoDoc = (bool) optional($advMap[$est->est_codigo] ?? null)->marcado_docente; @endphp
                                             <td style="text-align:center;{{ $reprob && !$marcadoDoc ? 'box-shadow:inset 0 0 0 2px #e67e22;' : '' }}">
                                                 <input type="checkbox" class="chk-adv" title="Reprobado parcial (docente)"

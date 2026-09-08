@@ -36,13 +36,15 @@
         /* Tabla notas */
         table.notas { width: 100%; border-collapse: collapse; }
         table.notas th, table.notas td { border: 1px solid #000; padding: 2px 3px; text-align: center; font-size: 7.5px; }
+        /* Los números de nota son lo que se lee: grandes y en negrita. */
+        table.notas tbody td { font-size: 11px; font-weight: bold; }
         table.notas th { background: #ddd; font-weight: bold; font-size: 7px; }
         .th-top { background: #bbb; font-size: 8px; }
-        .campo-cell { background: #f0f0f0; font-weight: bold; text-align: left !important; font-size: 7px; vertical-align: middle; padding-left: 4px !important; }
-        .materia-cell { text-align: left !important; padding-left: 8px !important; font-size: 7.5px; }
+        .campo-cell { background: #f0f0f0; font-weight: bold; text-align: left !important; font-size: 8px; vertical-align: middle; padding-left: 4px !important; }
+        .materia-cell { text-align: left !important; padding-left: 8px !important; font-size: 8.5px; font-weight: normal !important; }
         .prom-campo-row td { background: #e8e8e8; font-weight: bold; font-size: 7px; }
         .prom-campo-label { text-align: left !important; padding-left: 8px !important; font-style: italic; }
-        .prom-anual { background: #d5d5d5; font-weight: bold; }
+        .prom-anual { background: #d5d5d5; font-weight: bold; font-size: 11px; }
         .nota-baja { color: #c0392b; font-weight: bold; }
 
         /* Secciones inferiores */
@@ -229,7 +231,7 @@
                                     }
                                     $promAnualG = $cntAnualG > 0 ? round($sumaAnualG / $cntAnualG, 0) : 0;
                                 @endphp
-                                <td class="prom-anual" style="color:#6c3483;font-size:9px;">{{ $promAnualG > 0 ? $promAnualG : '' }}</td>
+                                <td class="prom-anual" style="color:#6c3483;">{{ $promAnualG > 0 ? $promAnualG : '' }}</td>
                             </tr>
                         @endif
                     @endif

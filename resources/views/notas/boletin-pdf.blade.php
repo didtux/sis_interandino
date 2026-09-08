@@ -1,15 +1,16 @@
 <!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>Boletín {{ $estudiante->est_codigo }}</title>
 <style>
-body{font-family:Arial,sans-serif;font-size:11px;margin:22px;}
+body{font-family:Arial,sans-serif;font-size:12px;margin:22px;}
 .header{text-align:center;margin-bottom:10px;}
 .header h2{margin:2px 0;}
 .datos{display:flex;justify-content:space-between;margin:8px 0;border:1px solid #888;padding:6px;}
 .foto{width:80px;height:90px;object-fit:cover;border:1px solid #888;}
 table{width:100%;border-collapse:collapse;margin-top:10px;}
 th,td{border:1px solid #444;padding:5px;}
-th{background:#1c4789;color:#fff;}
-.num{text-align:center;width:60px;}
+th{background:#1c4789;color:#fff;font-size:11px;}
+/* Los números de nota son lo que se lee: grandes y en negrita. */
+.num{text-align:center;width:60px;font-size:14px;font-weight:bold;}
 .rep{color:#c0392b;font-weight:bold;}
 .aprob{color:#2c8c2c;font-weight:bold;}
 </style></head><body>

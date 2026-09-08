@@ -44,7 +44,7 @@ class ConcejoController extends Controller
                 SELECT e.est_codigo,
                        CONCAT(e.est_apellidos,' ',e.est_nombres) AS nombre,
                        e.est_visible,
-                       ROUND(AVG(n.nota_promedio_trimestral), 2) AS promedio,
+                       ROUND(AVG(COALESCE(n.nota_promedio_decimal, n.nota_promedio_trimestral)), 2) AS promedio,
                        SUM(CASE WHEN n.nota_promedio_trimestral < 51 THEN 1 ELSE 0 END) AS materias_reprobadas,
                        COUNT(DISTINCT n.curmatdoc_id) AS materias_total
                 FROM colegio_estudiantes e

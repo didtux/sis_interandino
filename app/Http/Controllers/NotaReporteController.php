@@ -450,7 +450,7 @@ class NotaReporteController extends Controller
         if (in_array($tipo, ['ue', 'ue-nivel'])) {
             $sqlUE = "
                 SELECT c.cur_codigo, c.cur_nombre, c.cur_nivel, c.cur_orden,
-                       ROUND(AVG(n.nota_promedio_trimestral), 1) AS promedio_curso,
+                       ROUND(AVG(COALESCE(n.nota_promedio_decimal, n.nota_promedio_trimestral)), 1) AS promedio_curso,
                        COUNT(DISTINCT e.est_codigo) AS estudiantes
                 FROM colegio_estudiantes e
                 JOIN colegio_cursos c ON c.cur_codigo COLLATE utf8mb4_unicode_ci = e.cur_codigo COLLATE utf8mb4_unicode_ci
@@ -501,8 +501,8 @@ class NotaReporteController extends Controller
                     SELECT e.est_codigo,
                            CONCAT(e.est_apellidos, ' ', e.est_nombres) AS nombre,
                            c.cur_codigo, c.cur_nombre, c.cur_nivel, c.cur_orden,
-                           ROUND(SUM(n.nota_promedio_trimestral), 2) AS suma,
-                           ROUND(AVG(n.nota_promedio_trimestral), 2) AS promedio
+                           ROUND(SUM(COALESCE(n.nota_promedio_decimal, n.nota_promedio_trimestral)), 2) AS suma,
+                           ROUND(AVG(COALESCE(n.nota_promedio_decimal, n.nota_promedio_trimestral)), 2) AS promedio
                     FROM colegio_estudiantes e
                     JOIN colegio_cursos c ON c.cur_codigo COLLATE utf8mb4_unicode_ci = e.cur_codigo COLLATE utf8mb4_unicode_ci
                     JOIN colegio_notas n ON n.est_codigo COLLATE utf8mb4_unicode_ci = e.est_codigo COLLATE utf8mb4_unicode_ci
@@ -546,8 +546,8 @@ class NotaReporteController extends Controller
             SELECT e.est_codigo,
                    CONCAT(e.est_apellidos, ' ', e.est_nombres) AS nombre,
                    c.cur_nombre, c.cur_nivel,
-                   ROUND(SUM(n.nota_promedio_trimestral), 2) AS suma,
-                   ROUND(AVG(n.nota_promedio_trimestral), 2) AS promedio
+                   ROUND(SUM(COALESCE(n.nota_promedio_decimal, n.nota_promedio_trimestral)), 2) AS suma,
+                   ROUND(AVG(COALESCE(n.nota_promedio_decimal, n.nota_promedio_trimestral)), 2) AS promedio
             FROM colegio_estudiantes e
             JOIN colegio_cursos c ON c.cur_codigo COLLATE utf8mb4_unicode_ci = e.cur_codigo COLLATE utf8mb4_unicode_ci
             JOIN colegio_notas n ON n.est_codigo COLLATE utf8mb4_unicode_ci = e.est_codigo COLLATE utf8mb4_unicode_ci
@@ -575,7 +575,7 @@ class NotaReporteController extends Controller
         if ($tipo === 'curso' && $cursoCod) {
             $sqlRank = "
                 SELECT c.cur_codigo, c.cur_nombre, c.cur_nivel, c.cur_orden,
-                       ROUND(AVG(n.nota_promedio_trimestral), 2) AS promedio_curso,
+                       ROUND(AVG(COALESCE(n.nota_promedio_decimal, n.nota_promedio_trimestral)), 2) AS promedio_curso,
                        COUNT(DISTINCT e.est_codigo) AS estudiantes
                 FROM colegio_estudiantes e
                 JOIN colegio_cursos c ON c.cur_codigo COLLATE utf8mb4_unicode_ci = e.cur_codigo COLLATE utf8mb4_unicode_ci
@@ -620,8 +620,8 @@ class NotaReporteController extends Controller
             SELECT cc.cur_codigo, cc.cur_nombre, cc.cur_orden,
                    e.est_codigo,
                    CONCAT(e.est_apellidos, ' ', e.est_nombres) AS nombre,
-                   ROUND(SUM(n.nota_promedio_trimestral), 2) AS suma,
-                   ROUND(AVG(n.nota_promedio_trimestral), 2) AS promedio
+                   ROUND(SUM(COALESCE(n.nota_promedio_decimal, n.nota_promedio_trimestral)), 2) AS suma,
+                   ROUND(AVG(COALESCE(n.nota_promedio_decimal, n.nota_promedio_trimestral)), 2) AS promedio
             FROM colegio_lista_curso lc
             JOIN colegio_estudiantes e ON e.est_codigo COLLATE utf8mb4_unicode_ci = lc.est_codigo COLLATE utf8mb4_unicode_ci AND e.est_visible = 1
             JOIN colegio_cursos cc      ON cc.cur_codigo COLLATE utf8mb4_unicode_ci = lc.cur_codigo COLLATE utf8mb4_unicode_ci

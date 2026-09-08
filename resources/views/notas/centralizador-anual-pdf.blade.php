@@ -1,14 +1,15 @@
 <!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>Centralizador Anual</title>
 <style>
-body{font-family:Arial,sans-serif;font-size:9px;margin:18px;}
+body{font-family:Arial,sans-serif;font-size:11px;margin:18px;}
 .header{text-align:center;margin-bottom:8px;}
-.header h2{margin:2px 0;font-size:13px;}
-.sub{font-size:10px;}
+.header h2{margin:2px 0;font-size:15px;}
+.sub{font-size:11.5px;}
 table{width:100%;border-collapse:collapse;}
-th,td{border:1px solid #444;padding:3px;text-align:center;}
-th{background:#1c4789;color:#fff;font-size:9px;}
-.nombre{text-align:left;}
+/* Los números de nota son lo que se lee: grandes y en negrita. */
+th,td{border:1px solid #444;padding:3px 2px;text-align:center;font-size:12px;font-weight:bold;}
+th{background:#1c4789;color:#fff;font-size:10px;}
+.nombre{text-align:left;font-size:10.5px;font-weight:normal;}
 .rep{color:#c0392b;font-weight:bold;}
 .ret{background:#ffe6e6;}
 </style></head><body>
