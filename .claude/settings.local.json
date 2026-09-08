@@ -7,7 +7,9 @@
       "Bash(grep -v \"Trust\\\\|Restricted\\\\|Trusting\\\\|local PsySH\\\\|^$\")",
       "Bash(grep -v \"ftp\\\\|Unrecognized\\\\|Restricted\\\\|Trusting\\\\|local PsySH\\\\|Trust and\\\\|^$\")",
       "Bash(php -l app/Http/Controllers/EscaneoAsistenciaController.php)",
-      "Bash(grep -v \"ftp\\\\|^$\")"
+      "Bash(grep -v \"ftp\\\\|^$\")",
+      "Bash(php -l app/Http/Controllers/AlertaParcialController.php)",
+      "Bash(php -r \"echo 'php ok';\")"
     ]
   }
 }

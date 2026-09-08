@@ -121,6 +121,7 @@
                                             </th>
                                         @endforeach
                                         <th rowspan="2" style="text-align:center;background:#f39c12;color:#fff;width:70px;">PROM.<br>TRIM.</th>
+                                        <th rowspan="2" style="text-align:center;background:#e67e22;color:#fff;width:60px;" title="Marcar reprobación parcial (naranja docente)">ADV.<br>PARCIAL</th>
                                     </tr>
                                     <tr style="background:#34495e;color:#fff;font-size:0.75rem;">
                                         @foreach($dimensiones as $dim)
@@ -132,6 +133,13 @@
                                     </tr>
                                 </thead>
                                 <tbody>
+                                    @php
+                                        // Marcas de advertencia parcial ya guardadas para esta materia+periodo
+                                        $advMap = \App\Models\AlertaParcial::where('cur_codigo', $asignacion->cur_codigo)
+                                            ->where('mat_codigo', $asignacion->mat_codigo)
+                                            ->where('periodo_id', $periodo->periodo_id)
+                                            ->get()->keyBy('est_codigo');
+                                    @endphp
                                     @forelse($estudiantes as $i => $est)
                                         @php
                                             $nota = $notasExistentes[$est->est_codigo] ?? null;
@@ -168,6 +176,11 @@
                                             @endforeach
                                             @php $pt = round($nota->nota_promedio_trimestral ?? 0); $reprob = $pt > 0 && $pt < 51; @endphp
                                             <td style="text-align:center;font-weight:bold;font-size:1rem;{{ $reprob ? 'background:#f8d7da;color:#c0392b;' : 'background:#fef3cd;' }}" class="prom-trim">{{ $nota->nota_promedio_trimestral ?? 0 }}</td>
+                                            @php $marcadoDoc = (bool) optional($advMap[$est->est_codigo] ?? null)->marcado_docente; @endphp
+                                            <td style="text-align:center;{{ $reprob && !$marcadoDoc ? 'box-shadow:inset 0 0 0 2px #e67e22;' : '' }}">
+                                                <input type="checkbox" class="chk-adv" title="Reprobado parcial (docente)"
+                                                    data-est="{{ $est->est_codigo }}" {{ $marcadoDoc ? 'checked' : '' }}>
+                                            </td>
                                         </tr>
                                     @empty
                                         <tr><td colspan="{{ $totalCols }}"><div class="empty-state"><i class="fas fa-users"></i><h5>No hay estudiantes</h5></div></td></tr>
@@ -292,6 +305,24 @@
 @section('scripts')
 <script>
 $(document).ready(function() {
+    // ── Advertencia parcial: marcar reprobación (naranja docente) ──
+    $('.chk-adv').on('change', function() {
+        var $chk = $(this);
+        $.post('{{ route("alertas.toggle") }}', {
+            _token: '{{ csrf_token() }}',
+            est_codigo: $chk.data('est'),
+            mat_codigo: '{{ $asignacion->mat_codigo }}',
+            cur_codigo: '{{ $asignacion->cur_codigo }}',
+            periodo_id: '{{ $periodo->periodo_id }}',
+            gestion: '{{ $periodo->periodo_gestion ?? date("Y") }}',
+            rol: 'docente',
+            estado: $chk.is(':checked') ? 1 : 0
+        }).fail(function() {
+            alert('No se pudo guardar la marca de advertencia.');
+            $chk.prop('checked', !$chk.is(':checked'));
+        });
+    });
+
     // Custom file input label
     $('#archivoExcel').on('change', function() {
         var fileName = $(this).val().split('\\').pop();

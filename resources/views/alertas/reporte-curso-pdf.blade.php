@@ -57,7 +57,7 @@ th{background:#e8e8e8;}
         @foreach($estudiantes as $i => $est)
             @php $mats = $porEst[$est->est_codigo] ?? []; @endphp
             <tr>
-                <td>{{ $i + 1 }}</td>
+                <td>{{ (isset($lista) && isset($lista[$est->est_codigo])) ? $lista[$est->est_codigo] : $i + 1 }}</td>
                 <td class="nombre">{{ mb_strtoupper($est->est_apellidos.' '.$est->est_nombres, 'UTF-8') }}</td>
                 <td>
                     @if(empty($mats))

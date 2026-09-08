@@ -147,7 +147,11 @@ Route::middleware(['auth', 'permiso', 'auditoria', 'reportes:300,512M'])->group(
     Route::get('observados/reporte-pdf', [App\Http\Controllers\EstudianteObservadoController::class, 'reportePdf'])->name('observados.reporte-pdf');
 
     // ── Alerta Parcial (Advertencia primer trimestre) ──
-    Route::post('alertas-parcial/toggle', [App\Http\Controllers\AlertaParcialController::class, 'toggle'])->name('alertas.toggle');
+    Route::get('notas/advertencias',          [App\Http\Controllers\AlertaParcialController::class, 'matriz'])->name('alertas.matriz');
+    Route::post('alertas-parcial/toggle',     [App\Http\Controllers\AlertaParcialController::class, 'toggle'])->name('alertas.toggle');
+    Route::post('alertas-parcial/aplicar-sugerencia', [App\Http\Controllers\AlertaParcialController::class, 'aplicarSugerencia'])->name('alertas.aplicar-sugerencia');
+    Route::get('alertas-parcial/advertencia-lote', [App\Http\Controllers\AlertaParcialController::class, 'advertenciaLote'])->name('alertas.advertencia-lote');
+    Route::get('alertas-parcial/hoja-docente', [App\Http\Controllers\AlertaParcialController::class, 'hojaDocente'])->name('alertas.hoja-docente');
     Route::get('alertas-parcial/curso',       [App\Http\Controllers\AlertaParcialController::class, 'reporteCurso'])->name('alertas.curso');
     Route::get('alertas-parcial/estudiante',  [App\Http\Controllers\AlertaParcialController::class, 'reporteEstudiante'])->name('alertas.estudiante');
 

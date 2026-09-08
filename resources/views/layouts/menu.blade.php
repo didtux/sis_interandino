@@ -230,6 +230,7 @@
     </a>
     <ul class="collapse {{ Request::is('notas*') || Request::is('asistencia-clases*') ? 'show' : '' }}" id="notasMenu">
         <li><a href="{{ route('notas.index') }}"><i class="fas fa-clipboard-list"></i> Calificaciones</a></li>
+        <li><a href="{{ route('alertas.matriz') }}"><i class="fas fa-triangle-exclamation"></i> Advertencia Parcial</a></li>
         @if($esAdmin || $user->tieneAccesoModulo('notas.rendimiento'))
         <li><a href="{{ route('notas.rendimiento') }}"><i class="fas fa-chart-line"></i> Rendimiento</a></li>
         @endif
