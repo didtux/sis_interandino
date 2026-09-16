@@ -16,12 +16,55 @@ use Excel;
 
 class ConfiguracionAsistenciaController extends Controller
 {
+    /** @var \App\Services\HorarioEspecialService|null Cache por request. */
+    private $horariosEspeciales = null;
+
     // ========== CONFIGURACIÓN DE HORARIOS ==========
     public function index()
     {
         $configuraciones = ConfiguracionAsistencia::with(['curso', 'cursos'])->activo()->get();
         $cursos = Curso::visible()->get();
-        return view('asistencia-config.index', compact('configuraciones', 'cursos'));
+
+        // Qué rangos de fechas pisan cada configuración, para que no se lea esta
+        // pantalla como si su horario rigiera todo el año (ver Horarios especiales).
+        $sobrescrituras = $this->sobrescriturasPorConfig($configuraciones);
+
+        return view('asistencia-config.index', compact('configuraciones', 'cursos', 'sobrescrituras'));
+    }
+
+    /**
+     * Por cada configuración base, los horarios especiales que la sobrescriben.
+     *
+     * @return array<int, array<int, array{nombre:string,desde:string,hasta:string,receso:bool,horas:?string}>>
+     */
+    private function sobrescriturasPorConfig($configuraciones): array
+    {
+        $rangos = \App\Models\HorarioEspecial::with('detalles')->activo()->get();
+        if ($rangos->isEmpty()) return [];
+
+        $norm = fn($v) => \App\Services\HorarioEspecialService::normalizar($v);
+        $out = [];
+
+        foreach ($configuraciones as $c) {
+            foreach ($rangos as $r) {
+                // El turno vive en el detalle, así que se busca la fila categoría+turno.
+                $det = $r->detalles->first(fn($d) => $norm($d->det_categoria) === $norm($c->config_categoria)
+                    && $d->det_turno === $c->config_turno);
+
+                if (!$r->es_receso && !$det) continue;   // ese rango no toca esta configuración
+
+                $out[$c->config_id][] = [
+                    'nombre' => $r->esp_nombre,
+                    'desde'  => $r->esp_fecha_inicio->format('d/m/Y'),
+                    'hasta'  => $r->esp_fecha_fin->format('d/m/Y'),
+                    'receso' => (bool) $r->es_receso,
+                    'horas'  => $det
+                        ? substr($det->det_hora_entrada, 0, 5) . ' · tolera ' . substr($det->det_tolerancia_atraso, 0, 5)
+                        : null,
+                ];
+            }
+        }
+        return $out;
     }
 
     public function storeConfiguracion(Request $request)
@@ -207,10 +250,28 @@ class ConfiguracionAsistenciaController extends Controller
         }
         
         $tolerancia = strlen($config->tolerancia_atraso) > 8 ? substr($config->tolerancia_atraso, 11, 5) : substr($config->tolerancia_atraso, 0, 5);
+
+        // Horario especial vigente ese día (invierno / receso) por encima de la config.
+        $especial = $this->horariosEspeciales()->especialDeEstudianteEn(
+            $asistencia->estud_codigo,
+            $asistencia->asis_fecha->format('Y-m-d'),
+            $config->config_turno ?? 'Mañana'
+        );
+        if ($especial) {
+            if ($especial['receso']) return false;
+            $tolerancia = substr($especial['tolerancia'], 0, 5);
+        }
+
         $toleranciaPartes = explode(':', $tolerancia);
         $minutosLimite = ((int)$toleranciaPartes[0] * 60) + (int)$toleranciaPartes[1];
-        
+
         return $minutosLlegada > $minutosLimite;
+    }
+
+    /** Resolutor de horarios especiales, reutilizado para aprovechar su cache. */
+    private function horariosEspeciales(): \App\Services\HorarioEspecialService
+    {
+        return $this->horariosEspeciales ??= new \App\Services\HorarioEspecialService();
     }
 
     public function atrasosReportePdf(Request $request)
@@ -313,15 +374,21 @@ class ConfiguracionAsistenciaController extends Controller
             $config = $configuraciones->first();
         }
 
-        $horaEntrada = Carbon::parse($config->hora_entrada);
-        $tolerancia = Carbon::parse($config->tolerancia_atraso);
-        
+        // Horario especial del día (invierno / receso) por encima de la configuración.
+        $especial = $this->horariosEspeciales()->especialDeEstudianteEn(
+            $estudCodigo, now()->toDateString(), $config->config_turno ?? 'Mañana'
+        );
+        if ($especial && $especial['receso']) return;   // sin clases, no hay atraso
+
+        $horaEntrada = Carbon::parse($especial['entrada'] ?? $config->hora_entrada);
+        $tolerancia = Carbon::parse($especial['tolerancia'] ?? $config->tolerancia_atraso);
+
         $minutosTolerancia = $tolerancia->hour * 60 + $tolerancia->minute;
         $horaLimite = $horaEntrada->copy()->addMinutes($minutosTolerancia);
 
         if ($horaLlegada->gt($horaLimite)) {
             $minutosAtraso = $horaLlegada->diffInMinutes($horaEntrada);
-            
+
             Atraso::create([
                 'atraso_codigo' => 'ATR' . time() . rand(100, 999),
                 'estud_codigo' => $estudCodigo,

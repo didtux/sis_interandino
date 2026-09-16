@@ -7,14 +7,29 @@
             <div class="card">
                 <div class="card-header d-flex justify-content-between">
                     <h4><i class="fas fa-cog mr-2"></i>Configuración de Horarios</h4>
-                    <button class="btn btn-primary" data-toggle="modal" data-target="#modalConfig">
-                        <i class="fas fa-plus"></i> Nueva Configuración
-                    </button>
+                    <div>
+                        <a href="{{ route('asistencia-config.horarios-especiales') }}" class="btn btn-outline-info mr-1">
+                            <i class="fas fa-snowflake"></i> Horarios especiales
+                        </a>
+                        <button class="btn btn-primary" data-toggle="modal" data-target="#modalConfig">
+                            <i class="fas fa-plus"></i> Nueva Configuración
+                        </button>
+                    </div>
                 </div>
                 <div class="card-body">
                     @if(session('success'))
                         <div class="alert alert-success">{{ session('success') }}</div>
                     @endif
+
+                    {{-- Estos horarios no llevan fecha: rigen salvo que un rango los pise. --}}
+                    <p class="text-muted" style="font-size:.86rem">
+                        <i class="fas fa-info-circle"></i>
+                        Estas configuraciones <strong>no tienen fecha</strong>: rigen todo el año.
+                        Si durante un periodo se entró a otra hora (horario de invierno) o no hubo clases
+                        (vacaciones), eso se carga en
+                        <a href="{{ route('asistencia-config.horarios-especiales') }}">Horarios especiales</a>,
+                        y aparece debajo de la categoría correspondiente.
+                    </p>
 
                     <table class="table table-striped">
                         <thead>
@@ -33,7 +48,22 @@
                         <tbody>
                             @forelse($configuraciones as $c)
                                 <tr>
-                                    <td><span class="badge badge-primary">{{ $c->config_categoria }}</span></td>
+                                    <td>
+                                        <span class="badge badge-primary">{{ $c->config_categoria }}</span>
+                                        {{-- Este horario no rige todo el año si hay rangos que lo pisan --}}
+                                        @foreach(($sobrescrituras[$c->config_id] ?? []) as $s)
+                                            <div class="mt-1" style="font-size:.76rem; line-height:1.25">
+                                                <i class="fas fa-snowflake text-info"></i>
+                                                <strong>{{ $s['desde'] }}–{{ $s['hasta'] }}</strong>
+                                                @if($s['receso'])
+                                                    <span class="text-muted">sin clases</span>
+                                                @else
+                                                    <span class="text-muted">{{ $s['horas'] }}</span>
+                                                @endif
+                                                <br><span class="text-muted">{{ $s['nombre'] }}</span>
+                                            </div>
+                                        @endforeach
+                                    </td>
                                     <td><span class="badge badge-info">{{ $c->config_turno ?? 'N/A' }}</span></td>
                                     <td>
                                         @if($c->cursos->isEmpty())

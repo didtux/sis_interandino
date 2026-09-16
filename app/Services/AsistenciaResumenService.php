@@ -40,9 +40,30 @@ class AsistenciaResumenService
     /** Turno con el que trabaja esta instancia ('Mañana' por defecto, 'Tarde', etc.). */
     private string $turno;
 
+    /**
+     * Resuelve los horarios especiales por rango de fechas (horario de invierno,
+     * recesos). Se comparte entre llamadas para aprovechar su cache interna.
+     */
+    private HorarioEspecialService $horarios;
+
+    /** Cache de fechas sin clases por rango: "inicio|fin" => Collection['Y-m-d' => true] */
+    private array $sinClasesCache = [];
+
     public function __construct(string $turno = 'Mañana')
     {
         $this->turno = $turno;
+        $this->horarios = new HorarioEspecialService();
+    }
+
+    /**
+     * Fechas de receso (sin clases) dentro del rango. Los recesos aplican a todo
+     * el colegio, así que no dependen del estudiante y se cachean por rango.
+     */
+    private function fechasSinClases(string $inicio, string $fin)
+    {
+        $key = $inicio . '|' . $fin;
+        return $this->sinClasesCache[$key]
+            ??= $this->horarios->fechasSinClases($inicio, $fin);
     }
 
     /**
@@ -112,6 +133,11 @@ class AsistenciaResumenService
             // Ventana imposible para que no capture marcaciones de otro turno.
             $resultado = ['desde' => '23:59:59', 'hasta' => '00:00:00', 'tolerancia' => null, 'aplica' => false];
         }
+
+        // La categoría (cur_nivel) es la clave con la que los horarios especiales
+        // distinguen INICIAL de PRIMARIA/SECUNDARIA dentro de un mismo rango.
+        $resultado['categoria'] = $curNivel;
+
         return $this->configCache[$cacheKey] = $resultado;
     }
 
@@ -373,9 +399,13 @@ class AsistenciaResumenService
     }
 
     /**
-     * Conjunto de fechas L-V del rango, descontando feriados oficiales (tipo=1).
+     * Conjunto de fechas L-V del rango, descontando feriados oficiales (tipo=1)
+     * y los días de receso cargados como horario especial.
      * Es la "verdad" del calendario contra la que se calculan pres/licencias/faltas
      * para que se cumpla DT + Faltas = TOT.
+     *
+     * Los recesos se descuentan acá para que las vacaciones no cuenten como días
+     * hábiles ni, en consecuencia, generen faltas.
      */
     private function fechasHabilesCalendario(string $inicio, string $fin)
     {
@@ -386,12 +416,15 @@ class AsistenciaResumenService
             ->whereRaw('DAYOFWEEK(festivo_fecha) BETWEEN 2 AND 6')
             ->pluck('festivo_fecha')->map(fn($f) => (string) $f)->flip();
 
+        $sinClases = $this->fechasSinClases($inicio, $fin);
+
         $cur = Carbon::parse($inicio)->copy();
         $end = Carbon::parse($fin);
         $fechas = collect();
         while ($cur <= $end) {
-            if ($cur->isWeekday() && !$feriados->has($cur->format('Y-m-d'))) {
-                $fechas->push($cur->format('Y-m-d'));
+            $f = $cur->format('Y-m-d');
+            if ($cur->isWeekday() && !$feriados->has($f) && !$sinClases->has($f)) {
+                $fechas->push($f);
             }
             $cur->addDay();
         }
@@ -401,6 +434,7 @@ class AsistenciaResumenService
     /**
      * Días distintos L-V con al menos un registro en colegio_asistencia
      * (independientemente del estudiante) — refleja días donde el curso "trabajó".
+     * Los días de receso se excluyen aunque existan marcaciones sueltas.
      */
     private function fechasTrabajadasCurso(string $inicio, string $fin, ?string $estCodigo = null)
     {
@@ -408,13 +442,17 @@ class AsistenciaResumenService
             ? $this->configTurnoManana($estCodigo)
             : ['desde' => self::FALLBACK_DESDE, 'hasta' => self::FALLBACK_HASTA];
 
+        $sinClases = $this->fechasSinClases($inicio, $fin);
+
         return DB::table('colegio_asistencia')
             ->whereBetween('asis_fecha', [$inicio, $fin])
             ->whereRaw('DAYOFWEEK(asis_fecha) BETWEEN 2 AND 6')
             ->whereRaw('TIME(asis_hora) BETWEEN ? AND ?', [$win['desde'], $win['hasta']])
             ->select('asis_fecha')->distinct()->orderBy('asis_fecha')
             ->pluck('asis_fecha')
-            ->map(fn($f) => (string) $f);
+            ->map(fn($f) => (string) $f)
+            ->reject(fn($f) => $sinClases->has($f))
+            ->values();
     }
 
     /**
@@ -439,12 +477,17 @@ class AsistenciaResumenService
      * Atrasos = unión de:
      *   (a) registros manuales en `asistencia_atrasos`
      *   (b) marcaciones en `colegio_asistencia` cuya hora supera el `tolerancia_atraso`
-     *       de la configuración del estudiante (curso > global).
+     *       VIGENTE ESE DÍA (curso > global, pisado por el horario especial del rango).
      * Dedup por fecha: un solo atraso por día por estudiante.
+     *
+     * El rango se parte en tramos con `HorarioEspecialService`: cada tramo se consulta
+     * con SU tolerancia y SU hora de salida, y los tramos de receso no generan nada.
+     * Así, un boletín ya emitido deja de mostrar atrasos del horario de invierno sin
+     * tocar una sola marcación (los atrasos se derivan al leer, no están guardados).
      */
     private function atrasos(string $estCodigo, string $inicio, string $fin)
     {
-        // (a) Atrasos manuales
+        // (a) Atrasos manuales — los que caen en receso se descartan más abajo.
         $manuales = DB::table('asistencia_atrasos')
             ->where('estud_codigo', $estCodigo)
             ->whereBetween('atraso_fecha', [$inicio, $fin])
@@ -452,27 +495,81 @@ class AsistenciaResumenService
             ->select(DB::raw('atraso_fecha AS fecha'), DB::raw('atraso_hora AS hora'))
             ->get();
 
-        // (b) Atrasos derivados — comparación absoluta contra tolerancia_atraso del
-        //     turno mañana configurado para el curso del estudiante.
+        // (b) Atrasos derivados, tramo por tramo.
         $win = $this->configTurnoManana($estCodigo);
         $derivados = collect();
-        if (!empty($win['tolerancia'])) {
-            $derivados = DB::table('colegio_asistencia')
-                ->where('estud_codigo', $estCodigo)
-                ->whereBetween('asis_fecha', [$inicio, $fin])
-                ->whereRaw('DAYOFWEEK(asis_fecha) BETWEEN 2 AND 6')
-                ->whereRaw('TIME(asis_hora) > ?', [$win['tolerancia']])
-                ->whereRaw('TIME(asis_hora) <= ?', [$win['hasta']])
-                ->select(DB::raw('asis_fecha AS fecha'), DB::raw('asis_hora AS hora'))
-                ->get();
+
+        foreach ($this->ventanasAtraso($win, $inicio, $fin) as $v) {
+            $derivados = $derivados->concat(
+                DB::table('colegio_asistencia')
+                    ->where('estud_codigo', $estCodigo)
+                    ->whereRaw('DAYOFWEEK(asis_fecha) BETWEEN 2 AND 6')
+                    ->whereRaw('TIME(asis_hora) > ?', [$v['tolerancia']])
+                    ->whereRaw('TIME(asis_hora) <= ?', [$v['hasta']])
+                    ->where(function ($q) use ($v) {
+                        foreach ($v['rangos'] as [$d, $h]) $q->orWhereBetween('asis_fecha', [$d, $h]);
+                    })
+                    ->select(DB::raw('asis_fecha AS fecha'), DB::raw('asis_hora AS hora'))
+                    ->get()
+            );
         }
+
+        // Los días de receso no generan atrasos, ni derivados ni manuales.
+        $sinClases = $this->fechasSinClases($inicio, $fin);
 
         // Unión + dedup por fecha (un atraso por día)
         return $manuales->concat($derivados)
+            ->reject(fn($r) => $sinClases->has((string) $r->fecha))
             ->unique(fn($r) => (string) $r->fecha)
             ->sortBy('fecha')
             ->map(fn($r) => (object) ['atraso_fecha' => $r->fecha, 'atraso_hora' => $r->hora])
             ->values();
+    }
+
+    /**
+     * Ventanas [tolerancia, hasta] con los rangos de fecha en que rige cada una.
+     *
+     * Para los tramos normales se usa la configuración resuelta por
+     * `configTurnoManana()` —que además de la categoría considera el pivot y la
+     * config puntual del curso—, y sólo los tramos de horario especial traen sus
+     * propias horas. Así, sin horarios especiales cargados, el resultado es
+     * exactamente el de antes: una sola ventana sobre todo el rango.
+     *
+     * Tramos con la misma tolerancia y salida se agrupan en una sola consulta.
+     *
+     * @return array<int, array{tolerancia:string,hasta:string,rangos:array<int,array{0:string,1:string}>}>
+     */
+    private function ventanasAtraso(array $win, string $inicio, string $fin): array
+    {
+        $categoria = $win['categoria'] ?? null;
+
+        // Sin categoría no hay con qué cruzar los horarios especiales: comportamiento previo.
+        if (!$categoria) {
+            return empty($win['tolerancia'])
+                ? []
+                : [['tolerancia' => $win['tolerancia'], 'hasta' => $win['hasta'], 'rangos' => [[$inicio, $fin]]]];
+        }
+
+        $grupos = [];
+        foreach ($this->horarios->tramos($inicio, $fin, $categoria, $this->turno) as $t) {
+            if ($t['tipo'] === 'receso') continue;
+
+            if ($t['tipo'] === 'especial') {
+                $tol   = $t['tolerancia'];
+                $hasta = $t['salida'];
+            } else {
+                $tol   = $win['tolerancia'];
+                $hasta = $win['hasta'];
+            }
+            if (empty($tol) || empty($hasta)) continue;
+
+            $tol   = substr((string) $tol, 0, 8);
+            $hasta = substr((string) $hasta, 0, 8);
+            $grupos[$tol . '|' . $hasta]['tolerancia'] = $tol;
+            $grupos[$tol . '|' . $hasta]['hasta']      = $hasta;
+            $grupos[$tol . '|' . $hasta]['rangos'][]   = [$t['desde'], $t['hasta']];
+        }
+        return array_values($grupos);
     }
 
     private function permisosCantidadEnRango(string $estCodigo, string $inicio, string $fin): int

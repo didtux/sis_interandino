@@ -20,6 +20,9 @@ use Illuminate\Support\Facades\DB;
 
 class AsistenciaController extends Controller
 {
+    /** @var \App\Services\HorarioEspecialService|null Cache por request. */
+    private $horariosEspeciales = null;
+
     public function index(Request $request)
     {
         // Determinar rango de fechas
@@ -351,13 +354,32 @@ class AsistenciaController extends Controller
         }
         
         // La tolerancia es la hora límite completa
-        $tolerancia = is_object($config->tolerancia_atraso) 
-            ? $config->tolerancia_atraso->format('H:i') 
+        $tolerancia = is_object($config->tolerancia_atraso)
+            ? $config->tolerancia_atraso->format('H:i')
             : (strlen($config->tolerancia_atraso) > 8 ? substr($config->tolerancia_atraso, 11, 5) : substr($config->tolerancia_atraso, 0, 5));
+
+        // Si ese día regía un horario especial (p. ej. horario de invierno), manda
+        // su tolerancia; si era un receso, no hay clases y por lo tanto no hay atraso.
+        $especial = $this->horariosEspeciales()->especialDeEstudianteEn(
+            $asistencia->estud_codigo,
+            $asistencia->asis_fecha->format('Y-m-d'),
+            $config->config_turno ?? 'Mañana'
+        );
+        if ($especial) {
+            if ($especial['receso']) return false;
+            $tolerancia = substr($especial['tolerancia'], 0, 5);
+        }
+
         $toleranciaPartes = explode(':', $tolerancia);
         $minutosLimite = ((int)$toleranciaPartes[0] * 60) + (int)$toleranciaPartes[1];
-        
+
         return $minutosLlegada > $minutosLimite;
+    }
+
+    /** Resolutor de horarios especiales, reutilizado para aprovechar su cache. */
+    private function horariosEspeciales(): \App\Services\HorarioEspecialService
+    {
+        return $this->horariosEspeciales ??= new \App\Services\HorarioEspecialService();
     }
 
 
@@ -466,15 +488,23 @@ class AsistenciaController extends Controller
             $config = $configuraciones->first();
         }
 
-        $horaEntrada = Carbon::parse($config->hora_entrada);
-        $tolerancia = Carbon::parse($config->tolerancia_atraso);
-        
+        // Horario especial del día (horario de invierno, receso): pisa la configuración.
+        $especial = $this->horariosEspeciales()->especialDeEstudianteEn(
+            $estudCodigo,
+            Carbon::parse($fechaAtraso)->format('Y-m-d'),
+            $config->config_turno ?? 'Mañana'
+        );
+        if ($especial && $especial['receso']) return;   // sin clases, no hay atraso
+
+        $horaEntrada = Carbon::parse($especial['entrada'] ?? $config->hora_entrada);
+        $tolerancia = Carbon::parse($especial['tolerancia'] ?? $config->tolerancia_atraso);
+
         $minutosTolerancia = $tolerancia->hour * 60 + $tolerancia->minute;
         $horaLimite = $horaEntrada->copy()->addMinutes($minutosTolerancia);
 
         if ($horaLlegada->gt($horaLimite)) {
             $minutosAtraso = $horaLlegada->diffInMinutes($horaEntrada);
-            
+
             // Verificar que no exista ya un atraso para este estudiante en esta fecha
             $atrasoExistente = Atraso::where('estud_codigo', $estudCodigo)
                 ->whereDate('atraso_fecha', $fechaAtraso)

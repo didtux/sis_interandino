@@ -252,6 +252,14 @@ Route::middleware(['auth', 'permiso', 'auditoria', 'reportes:300,512M'])->group(
         Route::get('/licencias/excel-anual-est',  [App\Http\Controllers\ReporteLicenciaController::class, 'anualEstudianteExcel'])->name('licencias.excel-anual-est');
         Route::get('/licencias/excel-anual-curso',[App\Http\Controllers\ReporteLicenciaController::class, 'anualCursoExcel'])->name('licencias.excel-anual-curso');
         
+        // Horarios especiales por rango de fechas (horario de invierno, recesos)
+        Route::get('/horarios-especiales', [App\Http\Controllers\HorarioEspecialController::class, 'index'])->name('horarios-especiales');
+        Route::post('/horarios-especiales', [App\Http\Controllers\HorarioEspecialController::class, 'store'])->name('horarios-especiales.store');
+        Route::get('/horarios-especiales/preview', [App\Http\Controllers\HorarioEspecialController::class, 'preview'])->name('horarios-especiales.preview');
+        Route::put('/horarios-especiales/{id}', [App\Http\Controllers\HorarioEspecialController::class, 'update'])->name('horarios-especiales.update');
+        Route::post('/horarios-especiales/{id}/toggle', [App\Http\Controllers\HorarioEspecialController::class, 'toggle'])->name('horarios-especiales.toggle');
+        Route::delete('/horarios-especiales/{id}', [App\Http\Controllers\HorarioEspecialController::class, 'destroy'])->name('horarios-especiales.destroy');
+
         // Fechas Festivas
         Route::get('/festivos', [App\Http\Controllers\ConfiguracionAsistenciaController::class, 'fechasFestivas'])->name('festivos');
         Route::post('/festivos', [App\Http\Controllers\ConfiguracionAsistenciaController::class, 'storeFestivo'])->name('festivos.store');

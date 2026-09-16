@@ -29,6 +29,9 @@ class SincronizarAtrasos extends Command
         $asistencias = $query->get();
         $procesados = 0;
         $atrasosCreados = 0;
+
+        // Una sola instancia para todo el recorrido: cachea rangos y categorías.
+        $horarios = new \App\Services\HorarioEspecialService();
         
         foreach ($asistencias as $asistencia) {
             if (!$asistencia->estudiante) continue;
@@ -71,8 +74,16 @@ class SincronizarAtrasos extends Command
                 $config = $configs->first();
             }
             
-            $horaEntrada = Carbon::parse($config->hora_entrada);
-            $tolerancia = Carbon::parse($config->tolerancia_atraso);
+            // Horario especial vigente ESE día (horario de invierno, receso).
+            $especial = $horarios->especialDeEstudianteEn(
+                $asistencia->estud_codigo,
+                Carbon::parse($asistencia->asis_fecha)->format('Y-m-d'),
+                $config->config_turno ?? 'Mañana'
+            );
+            if ($especial && $especial['receso']) continue;   // sin clases, no hay atraso
+
+            $horaEntrada = Carbon::parse($especial['entrada'] ?? $config->hora_entrada);
+            $tolerancia = Carbon::parse($especial['tolerancia'] ?? $config->tolerancia_atraso);
             $minutosTolerancia = $tolerancia->hour * 60 + $tolerancia->minute;
             $horaLimite = $horaEntrada->copy()->addMinutes($minutosTolerancia);
             

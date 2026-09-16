@@ -209,6 +209,7 @@
         @endif
         @if($esAdmin || $user->tieneAccesoModulo('asistencia-config.festivos'))
         <li><a href="{{ route('asistencia-config.festivos') }}"><i class="fas fa-calendar-day"></i> Festivos</a></li>
+        <li><a href="{{ route('asistencia-config.horarios-especiales') }}"><i class="fas fa-snowflake"></i> Horarios especiales</a></li>
         @endif
         @if($esAdmin || $user->tieneAccesoModulo('asistencia-config.reportes'))
         <li><a href="{{ route('asistencia-config.reportes') }}"><i class="fas fa-file-pdf"></i> Reportes</a></li>
