@@ -129,6 +129,10 @@ Route::middleware(['auth', 'permiso', 'auditoria', 'reportes:300,512M'])->group(
     Route::delete('notas/configuracion/periodo/{id}', [App\Http\Controllers\NotaController::class, 'eliminarPeriodo'])->name('notas.eliminar-periodo');
     Route::post('notas/configuracion/dimension', [App\Http\Controllers\NotaController::class, 'guardarDimension'])->name('notas.guardar-dimension');
     Route::delete('notas/configuracion/dimension/{id}', [App\Http\Controllers\NotaController::class, 'eliminarDimension'])->name('notas.eliminar-dimension');
+    // Recálculo de promedios ya guardados (sólo admin; el rol se valida en el controlador)
+    Route::get('notas/configuracion/recalculo-preview', [App\Http\Controllers\NotaController::class, 'recalculoPreview'])->name('notas.recalculo-preview');
+    Route::get('notas/configuracion/recalculo-desglose', [App\Http\Controllers\NotaController::class, 'recalculoDesglose'])->name('notas.recalculo-desglose');
+    Route::post('notas/configuracion/recalcular', [App\Http\Controllers\NotaController::class, 'recalcularEjecutar'])->name('notas.recalcular');
     Route::get('notas/calificar/{curmatdoc}/{periodo}', [App\Http\Controllers\NotaController::class, 'calificar'])->name('notas.calificar');
     Route::get('notas/reporte-valoracion/{curmatdoc}/{periodo}', [App\Http\Controllers\NotaController::class, 'reporteValoracion'])->name('notas.reporte-valoracion');
     Route::post('notas/guardar', [App\Http\Controllers\NotaController::class, 'guardar'])->name('notas.guardar');

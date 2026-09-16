@@ -419,9 +419,11 @@ class NotaController extends Controller
                         'detalles'   => $n->detalles->map(fn($d) => ['dim'=>$d->dimension_id,'col'=>$d->columna_num,'val'=>$d->detalle_valor])->all(),
                     ];
                 })->all();
+            // audit_accion es un ENUM('crear','editar','eliminar'): cualquier otro
+            // valor lanza "Data truncated" y tumba el guardado con un 500.
             \App\Models\Auditoria::registrar(
-                'EDICION_NOTAS_ADMIN',
-                'NOTAS',
+                'editar',
+                'NOTAS_EDICION_ADMIN',
                 'Edición de notas fuera de tiempo/aprobadas por admin — ' .
                     $asignacion->materia->mat_nombre . ' / ' . $asignacion->curso->cur_nombre .
                     ' / ' . $periodo->periodo_nombre .
@@ -459,6 +461,129 @@ class NotaController extends Controller
         $periodos = NotaPeriodo::where('periodo_gestion', $gestion)->orderBy('periodo_numero')->get();
         $dimensiones = NotaDimension::where('dimension_gestion', $gestion)->orderBy('dimension_orden')->get();
         return view('notas.configuracion', compact('periodos', 'dimensiones', 'gestion'));
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // RECÁLCULO DE PROMEDIOS YA GUARDADOS
+    // ═══════════════════════════════════════════════════════════════
+    //
+    // Las notas guardadas antes de unificar la fórmula conservan el promedio
+    // viejo (suma de decimales) y siguen imprimiendo un número distinto al que
+    // ve el docente en pantalla. Estas dos acciones permiten revisarlas y
+    // corregirlas desde Configuración.
+
+    /** Vista previa: qué notas cambiarían. No modifica nada. */
+    public function recalculoPreview(Request $request)
+    {
+        $this->soloAdmin();
+
+        $request->validate([
+            'gestion'    => 'required|integer|min:2000|max:2100',
+            'periodo_id' => 'nullable|integer',
+        ]);
+
+        $periodoId = $request->filled('periodo_id') ? intval($request->periodo_id) : null;
+
+        try {
+            $data = (new \App\Services\RecalculoNotasService())
+                ->analizar(intval($request->gestion), $periodoId);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'ok'      => false,
+                'mensaje' => 'No se pudo analizar: ' . $e->getMessage(),
+            ], 500);
+        }
+
+        return response()->json(['ok' => true] + $data);
+    }
+
+    /**
+     * Desglose de una sola nota: celdas por dimensión, promedio exacto y el
+     * redondeo aplicado a cada una. Es la justificación del número nuevo.
+     */
+    public function recalculoDesglose(Request $request)
+    {
+        $this->soloAdmin();
+
+        $request->validate(['nota_id' => 'required|integer|min:1']);
+
+        try {
+            $d = (new \App\Services\RecalculoNotasService())
+                ->desglose(intval($request->nota_id));
+        } catch (\Throwable $e) {
+            return response()->json(['ok' => false, 'mensaje' => $e->getMessage()], 500);
+        }
+
+        if (!$d) {
+            return response()->json(['ok' => false, 'mensaje' => 'No se encontró la nota.'], 404);
+        }
+
+        return response()->json(['ok' => true] + $d);
+    }
+
+    /** Aplica el recálculo. Irreversible salvo por la auditoría que deja. */
+    public function recalcularEjecutar(Request $request)
+    {
+        $this->soloAdmin();
+
+        $request->validate([
+            'gestion'      => 'required|integer|min:2000|max:2100',
+            'periodo_id'   => 'nullable|integer',
+            'confirmacion' => 'required|string',
+            'notas'        => 'nullable|string',
+            'alcance'      => 'nullable|in:todo,seleccion',
+        ]);
+
+        if (mb_strtoupper(trim($request->confirmacion)) !== 'RECALCULAR') {
+            return back()->with('error', 'Confirmación incorrecta. Debe escribir RECALCULAR para continuar.');
+        }
+
+        $periodoId = $request->filled('periodo_id') ? intval($request->periodo_id) : null;
+
+        // Selección hecha en pantalla: lista de nota_id separada por comas.
+        // Se manda en un solo campo para no chocar con max_input_vars de PHP.
+        $notaIds = null;
+        if ($request->input('alcance') === 'seleccion') {
+            $notaIds = collect(explode(',', (string) $request->input('notas')))
+                ->map(fn($v) => intval(trim($v)))
+                ->filter(fn($v) => $v > 0)
+                ->unique()
+                ->values()
+                ->all();
+
+            if (empty($notaIds)) {
+                return back()->with('error', 'No seleccionaste ninguna nota para recalcular.');
+            }
+        }
+
+        try {
+            set_time_limit(300);
+            $r = (new \App\Services\RecalculoNotasService())
+                ->ejecutar(intval($request->gestion), $periodoId, $notaIds);
+        } catch (\Throwable $e) {
+            return back()->with('error', 'El recálculo falló y no se aplicó ningún cambio: ' . $e->getMessage());
+        }
+
+        if ($r['afectadas'] === 0 && $r['decimal_completado'] === 0) {
+            return back()->with('success', 'No había nada que corregir: todas las notas del alcance ya estaban bien calculadas.');
+        }
+
+        return back()->with('success', sprintf(
+            'Recálculo aplicado: %d nota(s) corregida(s)%s. %d registro(s) actualizado(s) en total. Queda constancia en Auditoría.',
+            $r['afectadas'],
+            $r['cambia_situacion'] > 0
+                ? sprintf(', de las cuales %d cambiaron de situación (aprobado/reprobado)', $r['cambia_situacion'])
+                : '',
+            $r['filas']
+        ));
+    }
+
+    /** El recálculo toca notas aprobadas: sólo administradores. */
+    private function soloAdmin(): void
+    {
+        if (auth()->user()->rol_id != 1) {
+            abort(403, 'Sólo un administrador puede recalcular promedios ya guardados.');
+        }
     }
 
     public function guardarPeriodo(Request $request)
@@ -856,8 +981,8 @@ class NotaController extends Controller
                         ];
                     })->all();
                 \App\Models\Auditoria::registrar(
-                    'IMPORT_EXCEL_NOTAS_ADMIN',
-                    'NOTAS',
+                    'editar',
+                    'NOTAS_IMPORT_EXCEL_ADMIN',
                     'Importación Excel admin — ' . ($asignacion->materia->mat_nombre ?? '') . ' / ' . ($asignacion->curso->cur_nombre ?? '') .
                         ' / ' . $periodo->periodo_nombre .
                         ($fueraConf ? ' (FUERA DE PERIODO)' : '') .
