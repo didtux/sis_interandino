@@ -1063,14 +1063,56 @@ class NotaController extends Controller
             ->values();
     }
 
+    /**
+     * Notas aprobadas de un curso y periodo: [est_codigo][mat_codigo] => promedio.
+     *
+     * Los centralizadores recorren estudiante x materia x trimestre, así que pedir
+     * la nota de a una era una consulta con subquery por celda: 444 consultas en
+     * un curso de 37 alumnos. Todo el curso entra en una sola.
+     *
+     * @var array<string, array<string, array<string, int>>>  "cur|periodo" => mapa
+     */
+    private array $notasCursoCache = [];
+
+    private function notasDelCurso($curCodigo, $periodoId): array
+    {
+        $key = $curCodigo . '|' . $periodoId;
+        if (isset($this->notasCursoCache[$key])) return $this->notasCursoCache[$key];
+
+        // Materia de cada asignación del curso. Se cruza en PHP: colegio_materias
+        // es latin1 y colegio_notas utf8mb4, y unirlas en SQL da "Illegal mix of
+        // collations".
+        $materiaPorAsignacion = DB::table('colegio_curso_materia_docente')
+            ->where('cur_codigo', $curCodigo)
+            ->pluck('mat_codigo', 'curmatdoc_id')
+            ->all();
+
+        $mapa = [];
+        if (!empty($materiaPorAsignacion)) {
+            DB::table('colegio_notas')
+                ->whereIn('curmatdoc_id', array_keys($materiaPorAsignacion))
+                ->where('periodo_id', $periodoId)
+                ->where('nota_estado', 2)
+                ->select('est_codigo', 'curmatdoc_id', 'nota_promedio_trimestral')
+                ->orderBy('nota_id')
+                ->get()
+                ->each(function ($n) use (&$mapa, $materiaPorAsignacion) {
+                    $mat = $materiaPorAsignacion[$n->curmatdoc_id] ?? null;
+                    if ($mat === null) return;
+                    // Si una materia tiene más de una asignación en el curso se
+                    // conserva la primera, igual que hacía el first() anterior.
+                    if (!isset($mapa[$n->est_codigo][$mat])) {
+                        $mapa[$n->est_codigo][$mat] = (int) round($n->nota_promedio_trimestral);
+                    }
+                });
+        }
+
+        return $this->notasCursoCache[$key] = $mapa;
+    }
+
     private function getNotaPromedio($estCodigo, $curCodigo, $matCodigo, $periodoId)
     {
-        $nota = Nota::where('est_codigo', $estCodigo)
-            ->where('periodo_id', $periodoId)
-            ->where('nota_estado', 2)
-            ->whereHas('cursoMateriaDocente', fn($q) => $q->where('cur_codigo', $curCodigo)->where('mat_codigo', $matCodigo))
-            ->first();
-        return $nota ? round($nota->nota_promedio_trimestral) : 0;
+        return $this->notasDelCurso($curCodigo, $periodoId)[$estCodigo][$matCodigo] ?? 0;
     }
 
     /**
@@ -1098,9 +1140,26 @@ class NotaController extends Controller
      * Asistencia institucional por trimestre usando las fechas exactas del periodo.
      * Cuenta solo lun-vie, excluye festivos.
      */
+
+    /**
+     * Instancia compartida por turno del resumen de asistencia.
+     *
+     * El service cachea internamente lo que no depende del estudiante (feriados,
+     * días trabajados del colegio, configuración del curso). Crear uno nuevo por
+     * estudiante tiraba ese cache y repetía ~38 consultas por alumno.
+     *
+     * @var array<string, \App\Services\AsistenciaResumenService>
+     */
+    private array $resumenServices = [];
+
+    private function resumenService(string $turno = 'Mañana'): \App\Services\AsistenciaResumenService
+    {
+        return $this->resumenServices[$turno] ??= new \App\Services\AsistenciaResumenService($turno);
+    }
+
     private function getAsistenciaTrimestreEst($estCodigo, $periodo, $year)
     {
-        $service = new \App\Services\AsistenciaResumenService();
+        $service = $this->resumenService();
 
         // Si el periodo no terminó y no hay notas aprobadas → no mostrar nada.
         if (!$service->periodoVisible($periodo)) {

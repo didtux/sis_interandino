@@ -39,6 +39,29 @@ class HorarioEspecialService
         return strtr($v, ['Á' => 'A', 'É' => 'E', 'Í' => 'I', 'Ó' => 'O', 'Ú' => 'U']);
     }
 
+    /**
+     * ¿Están creadas las tablas del módulo?
+     *
+     * Se resuelve una sola vez por proceso: es una consulta al esquema y este
+     * service se instancia por cada reporte. Si faltan, todo el módulo se
+     * comporta como si no hubiera ningún rango cargado, en vez de tumbar los
+     * boletines con "Base table or view not found".
+     */
+    public static function tablasDisponibles(): bool
+    {
+        static $existen = null;
+
+        if ($existen === null) {
+            try {
+                $existen = \Illuminate\Support\Facades\Schema::hasTable('asistencia_horarios_especiales')
+                    && \Illuminate\Support\Facades\Schema::hasTable('asistencia_horarios_especiales_detalle');
+            } catch (\Throwable $e) {
+                $existen = false;
+            }
+        }
+        return $existen;
+    }
+
     /** Clave con la que se indexa el detalle de un rango: categoría + turno. */
     private static function clave(?string $categoria, ?string $turno): string
     {
@@ -60,6 +83,11 @@ class HorarioEspecialService
     private function rangos(int $gestion): array
     {
         if (isset($this->cacheRangos[$gestion])) return $this->cacheRangos[$gestion];
+
+        // Si todavía no se corrió upgrade_2026_09_horarios_especiales.sql, el
+        // módulo simplemente no aplica: sin este guard, la falta de las tablas
+        // tumbaría TODOS los boletines y reportes de asistencia.
+        if (!self::tablasDisponibles()) return $this->cacheRangos[$gestion] = [];
 
         $cabeceras = HorarioEspecial::activo()->gestion($gestion)
             ->orderBy('esp_id')

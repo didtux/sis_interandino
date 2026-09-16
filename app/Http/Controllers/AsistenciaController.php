@@ -23,6 +23,22 @@ class AsistenciaController extends Controller
     /** @var \App\Services\HorarioEspecialService|null Cache por request. */
     private $horariosEspeciales = null;
 
+    /**
+     * Instancia compartida por turno del resumen de asistencia.
+     *
+     * El service cachea internamente lo que no depende del estudiante (feriados,
+     * días trabajados del colegio, configuración del curso). Crear uno nuevo por
+     * estudiante tiraba ese cache y repetía ~38 consultas por alumno.
+     *
+     * @var array<string, \App\Services\AsistenciaResumenService>
+     */
+    private array $resumenServices = [];
+
+    private function resumenService(string $turno = 'Mañana'): \App\Services\AsistenciaResumenService
+    {
+        return $this->resumenServices[$turno] ??= new \App\Services\AsistenciaResumenService($turno);
+    }
+
     public function index(Request $request)
     {
         // Determinar rango de fechas
@@ -696,7 +712,7 @@ class AsistenciaController extends Controller
 
     private function getAsistenciaTrimestreEst($estCodigo, $periodo, $year, $turno = 'Mañana')
     {
-        $service = new \App\Services\AsistenciaResumenService($turno);
+        $service = $this->resumenService($turno);
         $r = $service->resumen(
             $estCodigo,
             $periodo->periodo_fecha_inicio->format('Y-m-d'),
@@ -745,7 +761,7 @@ class AsistenciaController extends Controller
         }
 
         // ¿El curso pertenece al turno seleccionado? (avisa en el PDF si no)
-        $turnoNoAplica = !(new \App\Services\AsistenciaResumenService($turnoNombre))->turnoAplica($estudiantes->first()->est_codigo);
+        $turnoNoAplica = !$this->resumenService($turnoNombre)->turnoAplica($estudiantes->first()->est_codigo);
 
         // Construir meses dentro del rango del periodo
         $mesesConfig = [];
@@ -864,7 +880,7 @@ class AsistenciaController extends Controller
         }
 
         // ¿El curso pertenece al turno seleccionado? (avisa en el PDF si no)
-        $turnoNoAplica = !(new \App\Services\AsistenciaResumenService($turnoNombre))->turnoAplica($estudiantes->first()->est_codigo);
+        $turnoNoAplica = !$this->resumenService($turnoNombre)->turnoAplica($estudiantes->first()->est_codigo);
 
         // Pre-compute data per student per trimestre
         $datosEstudiantes = [];

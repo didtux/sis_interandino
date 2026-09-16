@@ -66,5 +66,6 @@ class Kernel extends HttpKernel
         'permiso' => \App\Http\Middleware\CheckPermiso::class,
         'auditoria' => \App\Http\Middleware\RegistrarAuditoria::class,
         'reportes' => \App\Http\Middleware\ExtendExecutionTime::class,
+        'aviso-descarga' => \App\Http\Middleware\AvisarFinDescarga::class,
     ];
 }

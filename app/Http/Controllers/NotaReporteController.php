@@ -379,8 +379,9 @@ class NotaReporteController extends Controller
     /** Centralizador anual: 3 trimestres + promedio anual por curso */
     public function centralizadorAnual(Request $request)
     {
-        $cursoCod = $request->input('curso');
-        if (!$cursoCod) abort(400, 'Falta curso');
+        // La pantalla manda 'curso'; otros enlaces del sistema usan 'cur_codigo'.
+        $cursoCod = $request->input('curso') ?: $request->input('cur_codigo');
+        if (!$cursoCod) abort(400, 'Falta el curso');
         $gestion = (int) $request->input('gestion', date('Y'));
 
         $curso     = Curso::where('cur_codigo', $cursoCod)->firstOrFail();
@@ -390,7 +391,9 @@ class NotaReporteController extends Controller
             ->where('cur_codigo', $cursoCod)->where('curmatdoc_estado', 1)->get();
         $materias  = $asignaciones->pluck('materia')->filter()->sortBy('mat_orden')->values();
 
-        $estudiantes = Estudiante::where('cur_codigo', $cursoCod)
+        // cur_codigo existe en las dos tablas del join: sin calificar, MariaDB
+        // rechaza la consulta con "Column 'cur_codigo' in where clause is ambiguous".
+        $estudiantes = Estudiante::where('colegio_estudiantes.cur_codigo', $cursoCod)
             ->leftJoin('colegio_lista_curso', function($j) use ($gestion, $cursoCod){
                 $j->whereRaw('colegio_estudiantes.est_codigo COLLATE utf8mb4_unicode_ci = colegio_lista_curso.est_codigo COLLATE utf8mb4_unicode_ci')
                   ->where('colegio_lista_curso.lista_gestion', $gestion)
@@ -655,7 +658,7 @@ class NotaReporteController extends Controller
         $periodos   = NotaPeriodo::activo()->gestion($gestion)->orderBy('periodo_numero')->get();
 
         $rows = DB::select("
-            SELECT m.mat_codigo, m.mat_nombre, m.mat_abreviatura, m.mat_orden,
+            SELECT m.mat_codigo, m.mat_nombre, m.mat_orden,
                    n.periodo_id, ROUND(n.nota_promedio_trimestral) AS prom
             FROM colegio_notas n
             JOIN colegio_curso_materia_docente cmd

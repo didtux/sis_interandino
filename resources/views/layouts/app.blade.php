@@ -60,6 +60,8 @@
 <script src="{{ mix('assets/js/profile.js') }}"></script>
 <script src="{{ mix('assets/js/custom/custom.js') }}"></script>
 
+@include('layouts.partials.loader-reportes')
+
 @include('profile.change_password')
 @include('profile.edit_profile')
 

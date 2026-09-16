@@ -21,6 +21,19 @@ use Illuminate\Support\Facades\DB;
 
 class PadrePortalController extends Controller
 {
+    /**
+     * Instancia compartida del resumen de asistencia: cachea lo que no depende
+     * del estudiante, así el bucle por hijos no repite las mismas consultas.
+     *
+     * @var array<string, \App\Services\AsistenciaResumenService>
+     */
+    private array $resumenServices = [];
+
+    private function resumenService(string $turno = 'Mañana'): \App\Services\AsistenciaResumenService
+    {
+        return $this->resumenServices[$turno] ??= new \App\Services\AsistenciaResumenService($turno);
+    }
+
     private function getPadre()
     {
         $user = auth()->user();
@@ -78,7 +91,7 @@ class PadrePortalController extends Controller
 
             // Faltas totales — vía servicio unificado (mismo cálculo que boletín/concejo).
             $periodos = NotaPeriodo::activo()->gestion($gestion)->orderBy('periodo_numero')->get();
-            $resumenTrim = (new \App\Services\AsistenciaResumenService())
+            $resumenTrim = $this->resumenService()
                 ->resumenPorTrimestre($est->est_codigo, $periodos);
             $info['faltas'] = collect($resumenTrim)->sum('faltas');
 
@@ -139,7 +152,7 @@ class PadrePortalController extends Controller
         if ($estSeleccionado) {
             // Servicio unificado: turno mañana, dedup por fecha, L-V sin feriados.
             // DT = presencias + licencias (atrasos cuentan como asistencia); TOT = días hábiles calendario.
-            $resumenTrim = (new \App\Services\AsistenciaResumenService())
+            $resumenTrim = $this->resumenService()
                 ->resumenPorTrimestre($estSeleccionado->est_codigo, $periodos);
 
             foreach ($periodos as $p) {

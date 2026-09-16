@@ -53,7 +53,7 @@
                                     <th style="min-width:30px;">#</th>
                                     <th style="min-width:220px;">Estudiante</th>
                                     @foreach($materias as $m)
-                                        <th title="{{ $m->mat_nombre }}" style="white-space:nowrap;">{{ $m->mat_abreviatura ?: $m->mat_nombre }}</th>
+                                        <th title="{{ $m->mat_nombre }}" style="white-space:nowrap;">{{ $m->mat_abreviatura ?? $m->mat_nombre }}</th>
                                     @endforeach
                                     <th>Prom.</th>
                                 </tr>

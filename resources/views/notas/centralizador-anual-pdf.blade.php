@@ -25,7 +25,7 @@ th{background:#1c4789;color:#fff;font-size:10px;}
             <th rowspan="2" style="width:20px;">#</th>
             <th rowspan="2" class="nombre">Apellidos y Nombres</th>
             @foreach($materias as $m)
-                <th colspan="{{ count($periodos) + 1 }}">{{ $m->mat_abreviatura ?: $m->mat_nombre }}</th>
+                <th colspan="{{ count($periodos) + 1 }}">{{ $m->mat_abreviatura ?? $m->mat_nombre }}</th>
             @endforeach
             <th rowspan="2">Prom. Anual</th>
         </tr>

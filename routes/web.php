@@ -48,7 +48,7 @@ Route::middleware(['auth', 'auditoria'])->group(function () {
 });
 
 // Rutas del Sistema de Colegio
-Route::middleware(['auth', 'permiso', 'auditoria', 'reportes:300,512M'])->group(function () {
+Route::middleware(['auth', 'permiso', 'auditoria', 'reportes:600,1024M', 'aviso-descarga'])->group(function () {
     // Usuarios
     Route::resource('usuarios', App\Http\Controllers\UserController::class);
     
