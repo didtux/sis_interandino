@@ -1196,17 +1196,29 @@ class NotaController extends Controller
         return compact('higiene', 'atencion');
     }
 
+    /**
+     * Control y Seguimiento del boletín: llamadas y compromisos del trimestre.
+     *
+     * En COMPROMISOS sólo cuentan los ESCRITOS. `psico_tipo_acuerdo` admite
+     * VERBAL, ESCRITO y NINGUNO; antes se contaba como compromiso todo lo que no
+     * fuera NINGUNO, así que los acuerdos verbales inflaban la columna SI.
+     * La columna NO son los casos del trimestre sin compromiso escrito, de modo
+     * que SI + NO sigue siendo el total de casos.
+     */
     private function getPsicoTrimestreEst($estCodigo, $periodo)
     {
         $llamadas = CasoPsicopedagogia::activo()->where('est_codigo', $estCodigo)
             ->whereBetween('psico_fecha', [$periodo->periodo_fecha_inicio, $periodo->periodo_fecha_fin])->count();
         $compromisosSi = CasoPsicopedagogia::activo()->where('est_codigo', $estCodigo)
-            ->where('psico_tipo_acuerdo', '!=', 'NINGUNO')
+            ->where('psico_tipo_acuerdo', 'ESCRITO')
             ->whereBetween('psico_fecha', [$periodo->periodo_fecha_inicio, $periodo->periodo_fecha_fin])->count();
-        $compromisosNo = CasoPsicopedagogia::activo()->where('est_codigo', $estCodigo)
-            ->where('psico_tipo_acuerdo', 'NINGUNO')
-            ->whereBetween('psico_fecha', [$periodo->periodo_fecha_inicio, $periodo->periodo_fecha_fin])->count();
-        return ['llamadas_si' => $llamadas, 'llamadas_no' => 0, 'compromisos_si' => $compromisosSi, 'compromisos_no' => $compromisosNo];
+
+        return [
+            'llamadas_si'     => $llamadas,
+            'llamadas_no'     => 0,
+            'compromisos_si'  => $compromisosSi,
+            'compromisos_no'  => max(0, $llamadas - $compromisosSi),
+        ];
     }
 
     /**

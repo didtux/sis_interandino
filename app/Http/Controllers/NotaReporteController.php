@@ -110,7 +110,11 @@ class NotaReporteController extends Controller
         }
 
         // ── Control y Seguimiento (Psicopedagogía) por periodo ─────────────
-        $controlPorPeriodo = [];
+        // En COMPROMISOS sólo entran los ESCRITOS: tener texto en psico_acuerdo
+        // no alcanza, porque los acuerdos verbales también lo llevan.
+        // La vista lee esto como $psicoData, con las mismas cuatro claves que
+        // arma NotaController::getPsicoTrimestreEst().
+        $psicoData = [];
         foreach ($periodos as $periodo) {
             $inicio = $periodo->periodo_fecha_inicio->format('Y-m-d');
             $fin    = $periodo->periodo_fecha_fin->format('Y-m-d');
@@ -120,10 +124,13 @@ class NotaReporteController extends Controller
                 ->whereBetween('psico_fecha', [$inicio, $fin])
                 ->get();
 
-            $controlPorPeriodo[$periodo->periodo_numero] = [
+            $escritos = $casos->where('psico_tipo_acuerdo', 'ESCRITO')->count();
+
+            $psicoData[$periodo->periodo_numero] = [
                 'llamadas_si'     => $casos->count(),
-                'compromisos_si'  => $casos->filter(fn($c) =>
-                    !empty($c->psico_acuerdo))->count(),
+                'llamadas_no'     => 0,
+                'compromisos_si'  => $escritos,
+                'compromisos_no'  => max(0, $casos->count() - $escritos),
             ];
         }
 
@@ -134,7 +141,7 @@ class NotaReporteController extends Controller
         $pdf = Pdf::loadView('notas.reporte-personal-pdf', compact(
             'estudiante', 'periodos', 'notasPorMateria',
             'asistenciaPorPeriodo', 'enfermeriaPorPeriodo',
-            'controlPorPeriodo', 'gestion', 'listaNumero',
+            'psicoData', 'gestion', 'listaNumero',
             'gruposMap', 'gruposActivos', 'curmatdocs'
         ))->setPaper('letter', 'portrait');
 
