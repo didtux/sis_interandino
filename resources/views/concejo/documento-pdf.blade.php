@@ -5,10 +5,9 @@ body{font-family:Arial,sans-serif;font-size:11px;margin:22px;}
 .header{text-align:center;margin-bottom:10px;}
 .header h2{margin:2px 0;}
 .datos{display:flex;justify-content:space-between;margin:8px 0;border:1px solid #888;padding:6px;}
-/* El colegio pidio que la foto del padre se vea del mismo tamano que la del
-   estudiante. Antes era 80x90 contra 30x30 circular (un octavo del area). */
+/* El colegio pidio que la foto del padre se vea igual que la del estudiante:
+   las dos usan .foto (antes el padre iba en 30x30 circular). */
 .foto{width:80px;height:90px;object-fit:cover;border:1px solid #888;}
-.foto-padre{width:70px;height:80px;object-fit:cover;border:1px solid #888;vertical-align:middle;margin-right:6px;}
 table{width:100%;border-collapse:collapse;margin-top:10px;}
 th,td{border:1px solid #444;padding:5px;}
 th{background:#1c4789;color:#fff;}
@@ -19,7 +18,7 @@ th{background:#1c4789;color:#fff;}
 .totales td{padding:5px 8px;}
 </style></head><body>
 <div class="header">
-    @if($config && $config->config_logo)<img src="{{ public_path('storage/'.$config->config_logo) }}" style="height:48px;">@endif
+    @if($config && $config->config_logo && file_exists(public_path('storage/'.$config->config_logo)))<img src="{{ public_path('storage/'.$config->config_logo) }}" style="height:48px;">@endif
     <h2>{{ $config->config_denominacion ?? 'UNIDAD EDUCATIVA' }} {{ $config->config_nombre_ue ?? '' }}</h2>
     <h3>DOCUMENTO PARA CONCEJO EDUCATIVO — Gestión {{ $gestion }}</h3>
     <div>{{ date('d/m/Y H:i') }} — Control-Cole</div>
@@ -44,20 +43,30 @@ th{background:#1c4789;color:#fff;}
         </td>
         {{-- Lado derecho: datos de los padres --}}
         <td style="vertical-align:top;padding:6px;border:none;border-left:1px solid #ccc;width:48%;">
-            <b>Padres / Tutores:</b><br>
+
+            {{-- Foto y datos en celdas separadas: con la foto inline y
+                 vertical-align:middle, dompdf la dibujaba encima del título. --}}
             @forelse($estudiante->padres as $pf)
                 @php
                     $padreFoto = !empty($pf->pfam_foto) && file_exists(public_path('storage/'.$pf->pfam_foto))
                         ? public_path('storage/'.$pf->pfam_foto) : null;
                 @endphp
-                <div style="margin-bottom:6px;">
-                    @if($padreFoto)
-                        <img src="{{ $padreFoto }}" class="foto-padre">
-                    @endif
-                    {{ $pf->pfam_nombres ?? '-' }} {{ $pf->pfam_apellidos ?? '' }}
-                    @if(!empty($pf->pfam_parentesco)) <span style="color:#555;">({{ $pf->pfam_parentesco }})</span>@endif
-                    @if(!empty($pf->pfam_numeroscelular)) — {{ $pf->pfam_numeroscelular }}@endif
-                </div>
+                <table style="width:100%;border-collapse:collapse;margin:0 0 6px 0;">
+                    <tr>
+                        {{-- Mismo armado que el estudiante: foto 80x90 y datos a la derecha, arriba. --}}
+                        @if($padreFoto)
+                            <td style="border:none;padding:0 8px 0 0;width:84px;vertical-align:top;text-align:center;">
+                                <img src="{{ $padreFoto }}" class="foto">
+                            </td>
+                        @endif
+                        <td style="border:none;padding:0;vertical-align:top;">
+                            <b>{{ !empty($pf->pfam_parentesco) ? $pf->pfam_parentesco : 'Padre / Tutor' }}:</b>
+                            {{ $pf->pfam_nombres ?? '-' }} {{ $pf->pfam_apellidos ?? '' }}<br>
+                            @if(!empty($pf->pfam_ci))<b>CI:</b> {{ $pf->pfam_ci }}<br>@endif
+                            @if(!empty($pf->pfam_numeroscelular))<b>Celular:</b> {{ $pf->pfam_numeroscelular }}@endif
+                        </td>
+                    </tr>
+                </table>
             @empty
                 <span style="color:#888;">Sin registros</span>
             @endforelse

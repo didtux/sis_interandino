@@ -34,13 +34,16 @@ table.grid td{
     // antes) y la hoja sigue entrando en pocas paginas. ECC_Q (25%) aguanta el
     // desgaste de una hoja plastificada o manoseada; con ECC_H el codigo
     // saltaria a version 2 y creceria sin necesidad.
+    // La instancia de QRCode se crea POR ESTUDIANTE: en chillerlan v5 render()
+    // agrega el dato a los segmentos que ya tiene, así que reusarla hacía que
+    // el 2do QR codificara "Est00516Est00010", el 3ro tres códigos, etc. Sólo
+    // el primero de cada hoja se leía bien y los demás crecían de tamaño.
     $qrOpts = new \chillerlan\QRCode\QROptions([
         'outputType' => \chillerlan\QRCode\QRCode::OUTPUT_IMAGE_PNG,
         'eccLevel'   => \chillerlan\QRCode\QRCode::ECC_Q,
         'scale'      => 5,
         'imageBase64'=> true,
     ]);
-    $qrInstance = new \chillerlan\QRCode\QRCode($qrOpts);
 @endphp
 
 <table class="grid">
@@ -50,7 +53,7 @@ table.grid td{
             <td class="qr-card">
                 @php
                     $qrSrc = null;
-                    try { $qrSrc = $qrInstance->render($e->est_codigo); } catch (\Throwable $ex) { $qrSrc = null; }
+                    try { $qrSrc = (new \chillerlan\QRCode\QRCode($qrOpts))->render($e->est_codigo); } catch (\Throwable $ex) { $qrSrc = null; }
                 @endphp
                 @if($qrSrc)
                     <img src="{{ $qrSrc }}">
