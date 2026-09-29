@@ -9,7 +9,24 @@
                     <h4>Nuevo Estudiante</h4>
                 </div>
                 <div class="card-body">
-                    <form action="{{ route('estudiantes.store') }}" method="POST" enctype="multipart/form-data">
+                    @if($errors->any())
+                        <div class="alert alert-danger">
+                            <i class="fas fa-exclamation-circle mr-2"></i>
+                            @foreach($errors->all() as $error) {{ $error }}<br> @endforeach
+                            {{-- El bloqueo por lista de observados sólo lo levanta dirección --}}
+                            @if($errors->has('error') && in_array(auth()->user()->rol_id ?? 0, [1, 9, 10]))
+                                <hr class="my-2">
+                                <div class="form-check">
+                                    <input type="checkbox" class="form-check-input" id="overrideObs" form="formEstudiante" name="override_observado" value="1">
+                                    <label class="form-check-label font-weight-bold" for="overrideObs">
+                                        Autorizo el registro pese a la observación (dirección)
+                                    </label>
+                                </div>
+                            @endif
+                        </div>
+                    @endif
+
+                    <form id="formEstudiante" action="{{ route('estudiantes.store') }}" method="POST" enctype="multipart/form-data">
                         @csrf
                         
                         <div class="form-group mb-3">

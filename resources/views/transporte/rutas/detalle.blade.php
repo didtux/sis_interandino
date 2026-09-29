@@ -41,7 +41,19 @@
     </div>
 </div>
 
-<h5 class="mt-3">Estudiantes Asignados</h5>
+<div class="d-flex justify-content-between align-items-end mt-3 mb-2">
+    <h5 class="mb-0">Estudiantes Asignados</h5>
+    {{-- Selector de mes: sin esto no se podía ver quién pagó un mes concreto --}}
+    <div style="max-width:220px;">
+        <label class="small text-muted mb-1">Mes del pago</label>
+        <select class="form-control form-control-sm" onchange="cargarDetalleRuta({{ $ruta->ruta_id }}, this.value)">
+            @foreach($meses as $m)
+                <option value="{{ $m }}" {{ $mes === $m ? 'selected' : '' }}>{{ $m }}</option>
+            @endforeach
+            <option value="todos" {{ $mes === 'todos' ? 'selected' : '' }}>Todos (último pago)</option>
+        </select>
+    </div>
+</div>
 <table class="table table-striped table-sm">
     <thead>
         <tr>
@@ -49,7 +61,7 @@
             <th>Estudiante</th>
             <th>Curso</th>
             <th>Dirección</th>
-            <th>Monto Pagado</th>
+            <th>Pago {{ $mes === 'todos' ? '(último)' : $mes }}</th>
         </tr>
     </thead>
     <tbody>
@@ -59,7 +71,18 @@
                 <td>{{ $er->estudiante->est_nombres }} {{ $er->estudiante->est_apellidos }}</td>
                 <td>{{ $er->estudiante->curso->cur_nombre ?? '-' }}</td>
                 <td>{{ $er->ter_direccion_recogida ?? '-' }}</td>
-                <td>Bs. {{ $er->pago ? number_format($er->pago->tpago_monto, 2) : '0.00' }}</td>
+                @php
+                    $montoMes = $mes === 'todos'
+                        ? ($er->pago ? $er->pago->tpago_monto : 0)
+                        : ($pagosMes[$er->est_codigo] ?? 0);
+                @endphp
+                <td>
+                    @if($montoMes > 0)
+                        Bs. {{ number_format($montoMes, 2) }}
+                    @else
+                        <span class="badge badge-danger">SIN PAGO</span>
+                    @endif
+                </td>
             </tr>
         @empty
             <tr>
@@ -70,7 +93,24 @@
     <tfoot>
         <tr class="table-info">
             <td colspan="4" class="text-right"><strong>TOTAL:</strong></td>
-            <td><strong>Bs. {{ number_format($ruta->estudiantes->where('ter_estado', 1)->sum(function($er) { return $er->pago ? $er->pago->tpago_monto : 0; }), 2) }}</strong></td>
+            @php
+                $totalMes = $ruta->estudiantes->where('ter_estado', 1)->sum(function($er) use ($mes, $pagosMes) {
+                    return $mes === 'todos'
+                        ? ($er->pago ? $er->pago->tpago_monto : 0)
+                        : ($pagosMes[$er->est_codigo] ?? 0);
+                });
+                $sinPago = $ruta->estudiantes->where('ter_estado', 1)->filter(function($er) use ($mes, $pagosMes) {
+                    return $mes === 'todos'
+                        ? !$er->pago
+                        : !isset($pagosMes[$er->est_codigo]);
+                })->count();
+            @endphp
+            <td>
+                <strong>Bs. {{ number_format($totalMes, 2) }}</strong>
+                @if($sinPago > 0)
+                    <br><small class="text-danger">{{ $sinPago }} sin pago</small>
+                @endif
+            </td>
         </tr>
     </tfoot>
 </table>

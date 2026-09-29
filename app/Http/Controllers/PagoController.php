@@ -18,11 +18,17 @@ class PagoController extends Controller
         $query = Pago::with('estudiante.curso', 'padreFamilia')
             ->whereHas('estudiante', fn($q) => $q->where('est_visible', 1));
 
-        if (request()->filled('fecha_inicio')) {
-            $query->whereDate('pagos_fecha', '>=', request('fecha_inicio'));
+        // Caja abre el módulo para ver lo del día: si no vino ningún filtro, el
+        // rango arranca en hoy. Con ?todos=1 se ve el histórico completo.
+        $sinFiltros = !request()->hasAny(['fecha_inicio', 'fecha_fin', 'cur_codigo', 'est_codigo', 'estado', 'todos', 'page']);
+        $fechaInicio = request('fecha_inicio', $sinFiltros ? date('Y-m-d') : null);
+        $fechaFin    = request('fecha_fin',    $sinFiltros ? date('Y-m-d') : null);
+
+        if (!empty($fechaInicio)) {
+            $query->whereDate('pagos_fecha', '>=', $fechaInicio);
         }
-        if (request()->filled('fecha_fin')) {
-            $query->whereDate('pagos_fecha', '<=', request('fecha_fin'));
+        if (!empty($fechaFin)) {
+            $query->whereDate('pagos_fecha', '<=', $fechaFin);
         }
         if (request()->filled('cur_codigo')) {
             $query->whereHas('estudiante', function($q) {
@@ -69,12 +75,16 @@ class PagoController extends Controller
 
         $estudiantes = Estudiante::visible()->get();
         $cursos = Curso::visible()->get();
-        return view('pagos.index', compact('pagos', 'estudiantes', 'cursos', 'pagosRecibo', 'codigosConjuntos'));
+        return view('pagos.index', compact('pagos', 'estudiantes', 'cursos', 'pagosRecibo', 'codigosConjuntos', 'fechaInicio', 'fechaFin', 'sinFiltros'));
     }
 
-    public function create()
+    public function create(Request $request)
     {
         $year = date('Y');
+
+        // El listado de mora enlaza con ?est_codigo=..., pero nadie lo leía y el
+        // cajero tenía que volver a buscar al alumno a mano.
+        $estPreseleccionado = $request->query('est_codigo');
 
         // Cargar padres que tienen estudiantes inscritos
         $padres = PadreFamilia::activo()
@@ -207,7 +217,7 @@ class PagoController extends Controller
             ];
         }
 
-        return view('pagos.create', compact('padres', 'estudiantesData'));
+        return view('pagos.create', compact('padres', 'estudiantesData', 'estPreseleccionado'));
     }
 
     public function store(Request $request)
@@ -369,16 +379,36 @@ class PagoController extends Controller
             $query->where('est_codigo', $request->est_codigo);
         }
 
-        $pagos = $query->orderBy('est_codigo')->get();
-        
+        // groupBy respeta el orden de llegada: ordenando por est_codigo los cursos
+        // salian en el orden en que apareciera su primer alumno. Se ordena por
+        // cur_orden en PHP (cur_orden vive en otra tabla y con otra colacion).
+        $pagos = $query->get()->sortBy([
+            fn($a, $b) => (optional(optional($a->estudiante)->curso)->cur_orden ?? 9999)
+                       <=> (optional(optional($b->estudiante)->curso)->cur_orden ?? 9999),
+            fn($a, $b) => strcmp(optional(optional($a->estudiante)->curso)->cur_nombre ?? '',
+                                 optional(optional($b->estudiante)->curso)->cur_nombre ?? ''),
+            fn($a, $b) => strcmp(optional($a->estudiante)->est_apellidos ?? '',
+                                 optional($b->estudiante)->est_apellidos ?? ''),
+        ])->values();
+
         $pdf = Pdf::loadView('pagos.reporte-mensualidades-pdf', compact('pagos', 'request'))
             ->setPaper('legal', 'landscape');
         return $pdf->stream('reporte-mensualidades-' . date('Y-m-d') . '.pdf');
     }
 
+    /**
+     * Antes devolvía un `storage/app/reporte-pagos.xlsx` fijo que no existe (el
+     * botón siempre reventaba), ignorando además los filtros de la pantalla.
+     * Ahora usa PagosExport, que estaba escrito y sin usar.
+     */
     public function reporteExcel(Request $request)
     {
-        return response()->download(storage_path('app/reporte-pagos.xlsx'));
+        $filtros = $request->only(['fecha_inicio', 'fecha_fin', 'est_codigo', 'cur_codigo', 'concepto']);
+
+        return \Maatwebsite\Excel\Facades\Excel::download(
+            new \App\Exports\PagosExport($filtros),
+            'listado-pagos-' . date('Y-m-d') . '.xlsx'
+        );
     }
 
     public function getPadresByEstudiante($est_codigo)
@@ -460,7 +490,9 @@ class PagoController extends Controller
     {
         $year = $request->year ?? date('Y');
         $query = Estudiante::visible()->with(['curso', 'pagos' => function($q) use ($year) {
-            $q->whereYear('pagos_fecha', $year);
+            // Los anulados no son ingresos: el PDF ya los excluia y el Excel no,
+            // asi que los dos reportes no cuadraban.
+            $q->whereYear('pagos_fecha', $year)->where('pagos_estado', 1);
         }]);
 
         if ($request->filled('cur_codigo')) {
@@ -475,11 +507,20 @@ class PagoController extends Controller
         );
     }
 
-    public function mora()
+    /**
+     * Estudiantes con al menos un mes impago entre el inicio de cuotas y el mes
+     * de corte. Antes se miraba un único mes, así que un alumno que debía marzo
+     * pero había pagado abril no salía en la lista. Ahora la deuda se acumula.
+     *
+     * El inicio de cuotas es febrero, salvo Registro Especial (caso especial),
+     * donde arranca en insc_mes_inicio: los meses previos no se le cobran.
+     *
+     * Deja calculado en cada estudiante, para que la pantalla y el PDF muestren
+     * lo mismo: mora_meses_pagados, mora_meses_pendientes, mora_mensualidad y
+     * mora_deuda.
+     */
+    private function calcularMora(int $mesCorte, ?string $curCodigo, int $year)
     {
-        $year = date('Y');
-        $mesActual = date('n');
-        
         $query = Estudiante::visible()
             ->with([
                 'curso',
@@ -491,91 +532,69 @@ class PagoController extends Controller
                 }
             ]);
 
-        if (request()->filled('cur_codigo')) {
-            $query->where('cur_codigo', request('cur_codigo'));
-        }
-        if (request()->filled('mes')) {
-            $mesActual = request('mes');
+        if (!empty($curCodigo)) {
+            $query->where('cur_codigo', $curCodigo);
         }
 
         $estudiantes = $query->orderBy('cur_codigo')->orderBy('est_apellidos')->get();
-        
-        $estudiantesEnMora = $estudiantes->filter(function($est) use ($mesActual, $year) {
-            // Caso Especial: si el estudiante recién arranca en insc_mes_inicio, no está en mora
-            // antes de ese mes.
-            if ($est->inscripcion && ($est->inscripcion->insc_caso_especial ?? 0) == 1) {
+
+        return $estudiantes->filter(function($est) use ($mesCorte) {
+            // Sin inscripción activa no se le puede reclamar mensualidad.
+            if (!$est->inscripcion) return false;
+
+            $mesInicio = 2;
+            if (($est->inscripcion->insc_caso_especial ?? 0) == 1) {
                 $mesInicio = (int) ($est->inscripcion->insc_mes_inicio ?? 2);
-                if ($mesActual < $mesInicio) return false;
             }
 
-            if ($est->pagos->count() > 0) {
-                $mesesPagados = [];
-                foreach($est->pagos as $pago) {
-                    $mesesCubiertos = $pago->meses_cubiertos;
-                    $mesesPagados = array_merge($mesesPagados, $mesesCubiertos);
-                }
-                $mesesPagados = array_unique($mesesPagados);
-
-                if ($mesActual >= 2 && $mesActual <= 11) {
-                    return !in_array($mesActual, $mesesPagados);
-                }
+            $mesesPagados = [];
+            foreach ($est->pagos as $pago) {
+                $mesesPagados = array_merge($mesesPagados, $pago->meses_cubiertos);
             }
-            elseif ($est->inscripcion && $mesActual >= 2 && $mesActual <= 11) {
-                return true;
+            $mesesPagados = array_values(array_unique($mesesPagados));
+            sort($mesesPagados);
+
+            $pendientes = [];
+            for ($m = $mesInicio; $m <= min($mesCorte, 11); $m++) {
+                if (!in_array($m, $mesesPagados)) $pendientes[] = $m;
             }
 
-            return false;
+            $mensualidad = $est->inscripcion->insc_monto_final / 10;
+
+            $est->mora_meses_pagados    = $mesesPagados;
+            $est->mora_meses_pendientes = $pendientes;
+            $est->mora_mensualidad      = $mensualidad;
+            $est->mora_deuda            = $mensualidad * count($pendientes);
+
+            return count($pendientes) > 0;
         });
+    }
+
+    public function mora()
+    {
+        $year = (int) date('Y');
+        $mesActual = request()->filled('mes') ? (int) request('mes') : (int) date('n');
+
+        $estudiantesEnMora = $this->calcularMora($mesActual, request('cur_codigo'), $year);
+        $deudaTotal = $estudiantesEnMora->sum('mora_deuda');
 
         $cursos = Curso::visible()->get();
         $mesesNombres = ['', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
-        
-        return view('pagos.mora', compact('estudiantesEnMora', 'cursos', 'mesActual', 'mesesNombres'));
+
+        return view('pagos.mora', compact('estudiantesEnMora', 'cursos', 'mesActual', 'mesesNombres', 'deudaTotal'));
     }
 
     public function moraPdf(Request $request)
     {
-        $year = date('Y');
-        $mesActual = $request->mes ?? date('n');
-        
-        $query = Estudiante::visible()
-            ->with([
-                'curso',
-                'inscripcion' => function($q) use ($year) {
-                    $q->where('insc_gestion', $year)->where('insc_estado', 1);
-                },
-                'pagos' => function($q) use ($year) {
-                    $q->whereYear('pagos_fecha', $year)->where('pagos_estado', 1);
-                }
-            ]);
+        $year = (int) date('Y');
+        $mesActual = $request->filled('mes') ? (int) $request->mes : (int) date('n');
 
-        if ($request->filled('cur_codigo')) {
-            $query->where('cur_codigo', $request->cur_codigo);
-        }
-
-        $estudiantes = $query->orderBy('cur_codigo')->orderBy('est_apellidos')->get();
-        
-        $estudiantesEnMora = $estudiantes->filter(function($est) use ($mesActual) {
-            if ($est->pagos->count() > 0) {
-                $mesesPagados = [];
-                foreach($est->pagos as $pago) {
-                    $mesesPagados = array_merge($mesesPagados, $pago->meses_cubiertos);
-                }
-                $mesesPagados = array_unique($mesesPagados);
-                
-                if ($mesActual >= 2 && $mesActual <= 11) {
-                    return !in_array($mesActual, $mesesPagados);
-                }
-            }
-            elseif ($est->inscripcion && $mesActual >= 2 && $mesActual <= 11) {
-                return true;
-            }
-            return false;
-        });
+        $estudiantesEnMora = $this->calcularMora($mesActual, $request->cur_codigo, $year);
+        $deudaTotal = $estudiantesEnMora->sum('mora_deuda');
 
         $mesesNombres = ['', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
-        
-        $pdf = Pdf::loadView('pagos.mora-pdf', compact('estudiantesEnMora', 'mesActual', 'mesesNombres', 'year'))
+
+        $pdf = Pdf::loadView('pagos.mora-pdf', compact('estudiantesEnMora', 'mesActual', 'mesesNombres', 'year', 'deudaTotal'))
             ->setPaper('letter', 'portrait');
         return $pdf->stream('estudiantes-mora-' . date('Y-m-d') . '.pdf');
     }

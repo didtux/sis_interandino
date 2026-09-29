@@ -371,6 +371,13 @@ function generarReciboGrupo(codigo) {
         doc.setFont(undefined, 'normal');
         var fechaPago = items[0].fecha_inicio ? items[0].fecha_inicio : '';
         doc.text('Fecha: ' + new Date().toLocaleDateString('es-BO'), 15, 92);
+        // El colegio identifica la movilidad por el numero de bus: tiene que
+        // figurar en el comprobante.
+        if (items[0].bus && items[0].bus !== '-') {
+            doc.setFont(undefined, 'bold');
+            doc.text('BUS N° ' + items[0].bus + (items[0].ruta && items[0].ruta !== '-' ? '  ·  Ruta: ' + items[0].ruta : ''), 597, 92, { align: 'right' });
+            doc.setFont(undefined, 'normal');
+        }
 
         doc.setLineWidth(1);
         doc.line(15, 100, 597, 100);

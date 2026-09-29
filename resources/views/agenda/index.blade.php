@@ -40,10 +40,16 @@
                                     <option value="1" {{ request('tipo') == '1' ? 'selected' : '' }}>Agenda</option>
                                     <option value="2" {{ request('tipo') == '2' ? 'selected' : '' }}>Notificación</option>
                                 </select>
+                                <input type="date" name="fecha_inicio" value="{{ request('fecha_inicio') }}" class="form-control form-control-sm" title="Desde">
+                                <input type="date" name="fecha_fin" value="{{ request('fecha_fin') }}" class="form-control form-control-sm" title="Hasta">
                                 <button class="btn btn-primary btn-sm"><i class="fas fa-search mr-1"></i>Filtrar</button>
-                                @if(request()->hasAny(['buscar','tipo']))
+                                @if(request()->hasAny(['buscar','tipo','fecha_inicio','fecha_fin']))
                                     <a href="{{ route('agenda.index') }}" class="btn btn-secondary btn-sm"><i class="fas fa-times mr-1"></i>Limpiar</a>
                                 @endif
+                                {{-- Agenda imprimible: el módulo no tenía ninguna salida en papel --}}
+                                <a href="{{ route('agenda.reporte-pdf', request()->only(['buscar','tipo','fecha_inicio','fecha_fin'])) }}" class="btn btn-danger btn-sm" target="_blank">
+                                    <i class="fas fa-file-pdf mr-1"></i>Imprimir
+                                </a>
                             </form>
 
                             <div class="table-responsive-modern">

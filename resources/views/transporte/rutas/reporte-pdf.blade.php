@@ -74,7 +74,16 @@
                 </tr>
                 <tr>
                     <th>Vehículo:</th>
-                    <td colspan="3">{{ $vehiculo ? $vehiculo->veh_marca . ' ' . $vehiculo->veh_modelo . ' - ' . $vehiculo->veh_placa : '-' }}</td>
+                    {{-- El numero de bus es como el colegio identifica la movilidad;
+                         estaba en la base y no se imprimia. --}}
+                    <td colspan="3">
+                        @if($vehiculo)
+                            @if(!empty($vehiculo->veh_numero_bus))<strong>BUS N° {{ $vehiculo->veh_numero_bus }}</strong> — @endif
+                            {{ $vehiculo->veh_marca }} {{ $vehiculo->veh_modelo }} - {{ $vehiculo->veh_placa }}
+                        @else
+                            -
+                        @endif
+                    </td>
                 </tr>
                 @if($ruta->ruta_descripcion)
                 <tr>

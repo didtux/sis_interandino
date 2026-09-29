@@ -168,6 +168,138 @@ class AsistenciaClaseController extends Controller
         ));
     }
 
+    /**
+     * Pantalla de escaneo QR para que el docente tome la asistencia DE SU CLASE.
+     *
+     * El escaneo que ya existía (EscaneoAsistenciaController) es el de portería:
+     * escribe en colegio_asistencia, no distingue materia y además le da 403 al
+     * docente. Este escribe en notas_asistencia_clases, que es la tabla de la
+     * asistencia por clase, y respeta los mismos permisos que registrar().
+     */
+    public function qr($curmatdocId, $periodoId, Request $request)
+    {
+        [$asignacion, $periodo] = $this->asignacionAutorizada($curmatdocId, $periodoId);
+
+        $gestion = $periodo->periodo_gestion;
+        $fecha   = $request->input('fecha', now()->toDateString());
+        $enRango = $fecha >= $periodo->periodo_fecha_inicio->toDateString()
+                && $fecha <= $periodo->periodo_fecha_fin->toDateString();
+
+        $estudiantes = Estudiante::visible()
+            ->where('colegio_estudiantes.cur_codigo', $asignacion->cur_codigo)
+            ->leftJoin('colegio_lista_curso', function ($j) use ($gestion, $asignacion) {
+                $j->whereRaw('colegio_estudiantes.est_codigo COLLATE utf8mb4_unicode_ci = colegio_lista_curso.est_codigo')
+                  ->where('colegio_lista_curso.lista_gestion', $gestion)
+                  ->where('colegio_lista_curso.cur_codigo', $asignacion->cur_codigo);
+            })
+            ->select('colegio_estudiantes.*', 'colegio_lista_curso.lista_numero')
+            ->orderBy('colegio_lista_curso.lista_numero')
+            ->orderBy('colegio_estudiantes.est_apellidos')->get();
+
+        $asistencias = AsistenciaClase::where('curmatdoc_id', $curmatdocId)
+            ->where('asiscl_fecha', $fecha)->get()->keyBy('est_codigo');
+
+        return view('notas.asistencia-clases.qr', compact(
+            'asignacion', 'periodo', 'estudiantes', 'asistencias', 'fecha', 'enRango'
+        ));
+    }
+
+    /**
+     * Marca un estudiante por QR. El código escaneado es el est_codigo, el mismo
+     * que imprime la hoja de QR de estudiantes.
+     */
+    public function qrMarcar(Request $request)
+    {
+        $request->validate([
+            'curmatdoc_id' => 'required',
+            'periodo_id'   => 'required',
+            'fecha'        => 'required|date',
+            'codigo'       => 'required',
+            'estado'       => 'nullable|in:P,A,F,L',
+        ]);
+
+        [$asignacion, $periodo] = $this->asignacionAutorizada($request->curmatdoc_id, $request->periodo_id);
+
+        $fecha  = $request->fecha;
+        $estado = $request->input('estado', 'P');
+        $user   = auth()->user();
+        $hoy    = now()->toDateString();
+
+        if ($fecha < $periodo->periodo_fecha_inicio->toDateString() || $fecha > $periodo->periodo_fecha_fin->toDateString()) {
+            return response()->json(['success' => false, 'message' => 'La fecha está fuera del rango del periodo.']);
+        }
+
+        // Misma regla que guardar(): el docente sólo edita el día de hoy.
+        $esDocente = $user->us_entidad_tipo === 'docente';
+        $yaExiste  = AsistenciaClase::where('curmatdoc_id', $asignacion->curmatdoc_id)
+            ->where('asiscl_fecha', $fecha)->exists();
+        if ($esDocente && $yaExiste && $fecha != $hoy) {
+            return response()->json(['success' => false, 'message' => 'Solo puede editar la asistencia del día actual.']);
+        }
+
+        $codigo = trim((string) $request->codigo);
+        $estudiante = Estudiante::visible()->where('est_codigo', $codigo)->first();
+        if (!$estudiante) {
+            return response()->json(['success' => false, 'message' => 'Estudiante no encontrado o inactivo: ' . $codigo]);
+        }
+        // Que sea de ESTE curso: el QR de otro curso no puede colarse en la clase.
+        if ($estudiante->cur_codigo !== $asignacion->cur_codigo) {
+            return response()->json([
+                'success' => false,
+                'message' => ($estudiante->est_apellidos . ' ' . $estudiante->est_nombres) . ' no pertenece a este curso.',
+            ]);
+        }
+
+        $previo = AsistenciaClase::where('curmatdoc_id', $asignacion->curmatdoc_id)
+            ->where('est_codigo', $codigo)->where('asiscl_fecha', $fecha)->first();
+        $repetido = $previo !== null;
+
+        AsistenciaClase::updateOrCreate(
+            ['curmatdoc_id' => $asignacion->curmatdoc_id, 'est_codigo' => $codigo, 'asiscl_fecha' => $fecha],
+            [
+                'periodo_id'            => $periodo->periodo_id,
+                'asiscl_estado'         => $estado,
+                'asiscl_registrado_por' => $user->us_id,
+            ]
+        );
+
+        $numero = ListaCurso::where('est_codigo', $codigo)
+            ->where('lista_gestion', $periodo->periodo_gestion)
+            ->where('cur_codigo', $asignacion->cur_codigo)->value('lista_numero');
+
+        return response()->json([
+            'success'  => true,
+            'repetido' => $repetido,
+            'message'  => $repetido ? 'Actualizado' : 'Registrado',
+            'estudiante' => [
+                'codigo' => $codigo,
+                'numero' => $numero,
+                'nombre' => trim($estudiante->est_apellidos . ' ' . $estudiante->est_nombres),
+                'estado' => $estado,
+                'hora'   => now()->format('H:i:s'),
+            ],
+            'total_marcados' => AsistenciaClase::where('curmatdoc_id', $asignacion->curmatdoc_id)
+                ->where('asiscl_fecha', $fecha)->count(),
+        ]);
+    }
+
+    /**
+     * Asignación + periodo, verificando que el docente logueado sea el titular.
+     * Misma comprobación repetida en registrar(), vistaGeneral() y guardar().
+     */
+    private function asignacionAutorizada($curmatdocId, $periodoId): array
+    {
+        $asignacion = CursoMateriaDocente::with(['curso', 'materia', 'docente'])->findOrFail($curmatdocId);
+        $periodo    = NotaPeriodo::findOrFail($periodoId);
+
+        $user = auth()->user();
+        if ($user->us_entidad_tipo === 'docente' && $user->us_entidad_id
+            && $user->us_entidad_id !== $asignacion->doc_codigo) {
+            abort(403);
+        }
+        return [$asignacion, $periodo];
+    }
+
     public function guardar(Request $request)
     {
         $curmatdocId = $request->input('curmatdoc_id');

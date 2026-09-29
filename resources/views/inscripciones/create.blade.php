@@ -24,10 +24,16 @@
                                 <label>Estudiante <span class="text-danger">*</span></label>
                                 <select name="est_codigo" id="selectEstudiante" class="form-control select2" required>
                                     <option value="">Seleccione...</option>
+                                    {{-- Los data-* son lo que secretaría ya cargó en la ficha: se precargan al elegir --}}
                                     @foreach($estudiantes as $e)
-                                        <option value="{{ $e->est_codigo }}">{{ $e->est_codigo }} - {{ $e->est_nombres }} {{ $e->est_apellidos }}</option>
+                                        <option value="{{ $e->est_codigo }}"
+                                                data-curso="{{ $e->cur_codigo }}"
+                                                data-ci="{{ $e->est_ci }}"
+                                                data-ingreso="{{ $e->est_fecha ? \Carbon\Carbon::parse($e->est_fecha)->format('d/m/Y') : '' }}"
+                                                data-preinsc="{{ (float) ($e->preinscripcion ?? 0) }}">{{ $e->est_codigo }} - {{ $e->est_nombres }} {{ $e->est_apellidos }}</option>
                                     @endforeach
                                 </select>
+                                <div id="fichaEstudiante" class="alert alert-info py-2 px-3 mt-2 mb-0" style="display:none;font-size:12px;"></div>
                             </div>
                             <div class="col-md-5" id="divPadre">
                                 <label>Padre/Tutor <span class="text-danger">*</span></label>
@@ -47,7 +53,7 @@
                             </div>
                             <div class="col-md-6 mt-3">
                                 <label>Curso <span class="text-danger">*</span></label>
-                                <select name="cur_codigo" class="form-control select2" required>
+                                <select name="cur_codigo" id="selectCurso" class="form-control select2" required>
                                     <option value="">Seleccione...</option>
                                     @foreach($cursos as $c)
                                         <option value="{{ $c->cur_codigo }}">{{ $c->cur_nombre }}</option>
@@ -217,11 +223,33 @@ var fueraDePlazo = {{ $fueraDePlazo ? 'true' : 'false' }};
 
 $('.select2').select2({ theme: 'bootstrap4', width: '100%' });
 
+/**
+ * Registro Especial: si la inscripción arranca en un mes anterior, el pago
+ * inicial tiene que poder imputarse a ese mes. Antes el inicio retroactivo se
+ * permitía pero el mes destino seguía bloqueado desde el mes actual, así que
+ * la plata no se podía asignar donde correspondía.
+ */
+function sincronizarMesDestino() {
+    var $destino = $('#mes_destino');
+    if (!$destino.length) return;               // sólo existe si la inscripción es fuera de plazo
+    var esp = $('#checkCasoEspecial').is(':checked');
+    var minimo = esp ? (parseInt($('#selMesInicioEsp').val()) || mesActual) : mesActual;
+
+    $destino.find('option').each(function() {
+        var m = parseInt($(this).val());
+        $(this).prop('disabled', m < minimo)
+               .text(mesesNombres[m] + (m < minimo ? ' (Vencido)' : ''));
+    });
+    if ((parseInt($destino.val()) || 0) < minimo) $destino.val(minimo).trigger('change');
+}
+
 $('#checkCasoEspecial').on('change', function() {
     var on = $(this).is(':checked');
     $('#boxCasoEspecial').toggle(on);
     $('#selMesInicioEsp').prop('required', on);
+    sincronizarMesDestino();
 });
+$('#selMesInicioEsp').on('change', sincronizarMesDestino);
 
 $('#checkOtroPadre').on('change', function() {
     var esOtro = $(this).is(':checked');
@@ -232,7 +260,38 @@ $('#checkOtroPadre').on('change', function() {
     if (!esOtro) $('#pfam_nombre_nuevo').val('');
 });
 
+/**
+ * Precarga lo que secretaría ya registró en la ficha del alumno: curso, CI,
+ * fecha de ingreso y el monto de preinscripción. Antes había que volver a
+ * escribirlo todo a mano aunque el dato ya estuviera en el sistema.
+ * Todo queda editable: son valores sugeridos, no impuestos.
+ */
 $('#selectEstudiante').on('change', function() {
+    var opt = $(this).find('option:selected');
+    var curso   = opt.data('curso')   || '';
+    var ci      = opt.data('ci')      || '';
+    var ingreso = opt.data('ingreso') || '';
+    var preinsc = parseFloat(opt.data('preinsc')) || 0;
+
+    if (opt.val()) {
+        if (curso && $('#selectCurso option[value="' + curso + '"]').length) {
+            $('#selectCurso').val(curso).trigger('change');
+        }
+        if (preinsc > 0) {
+            // El campo está topeado en 500 por el backend (min(monto, 500)).
+            $('#monto_pagado').val(Math.min(preinsc, 500).toFixed(2));
+        }
+        var ficha = '<i class="fas fa-id-card mr-1"></i><strong>Ficha:</strong> ';
+        ficha += 'CI ' + (ci || 'sin registrar');
+        ficha += ' &nbsp;|&nbsp; Ingreso: ' + (ingreso || 'sin registrar');
+        ficha += ' &nbsp;|&nbsp; Preinscripción: Bs. ' + preinsc.toFixed(2);
+        if (!curso) ficha += ' &nbsp;|&nbsp; <span class="text-danger">sin curso en la ficha</span>';
+        $('#fichaEstudiante').html(ficha).show();
+        calcularMontos();
+    } else {
+        $('#fichaEstudiante').hide().empty();
+    }
+
     var estCodigo = $(this).val();
     if (estCodigo) {
         $.ajax({

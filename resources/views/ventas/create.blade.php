@@ -348,7 +348,12 @@ function guardarVenta() {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            alert('Venta registrada exitosamente');
+            // El ticket sale solo al cerrar la venta: antes había que buscar la
+            // venta en el listado para poder imprimir el comprobante.
+            if (data.recibo_url) {
+                window.open(data.recibo_url, '_blank');
+            }
+            alert('Venta ' + (data.ven_codigo || '') + ' registrada. Total Bs. ' + Number(data.total).toFixed(2));
             window.location.href = '{{ route("ventas.index") }}';
         } else {
             alert('Error: ' + data.message);

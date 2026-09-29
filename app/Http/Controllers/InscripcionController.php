@@ -16,6 +16,15 @@ class InscripcionController extends Controller
     {
         $query = Inscripcion::with(['estudiante.padres', 'curso', 'padreFamilia', 'pagos', 'descuentos']);
 
+        // Gestión: sin este filtro la grilla mezclaba años y los totales de abajo
+        // sumaban inscripciones de gestiones anteriores. Por defecto, la actual.
+        $gestiones = Inscripcion::select('insc_gestion')->distinct()
+            ->orderBy('insc_gestion', 'desc')->pluck('insc_gestion')->filter()->values();
+        $gestion = $request->input('gestion', date('Y'));
+        if ($gestion !== 'todas') {
+            $query->where('insc_gestion', $gestion);
+        }
+
         if ($request->buscar) {
             $query->whereHas('estudiante', function($q) use ($request) {
                 $q->where('est_nombres', 'like', '%' . $request->buscar . '%')
@@ -62,7 +71,8 @@ class InscripcionController extends Controller
         $descuentos = \App\Models\Descuento::where('desc_estado', 1)->get();
 
         // Precargar total de mensualidades pagadas por estudiante
-        $year = date('Y');
+        // (del mismo año que se está mirando, no siempre del actual)
+        $year = $gestion === 'todas' ? date('Y') : (int) $gestion;
         $mesActualNum = intval(date('n'));
         $estCodigos = $inscripciones->pluck('est_codigo')->unique()->toArray();
         $mensualidadesPagadas = Pago::whereIn('est_codigo', $estCodigos)
@@ -92,7 +102,7 @@ class InscripcionController extends Controller
             }
         }
 
-        return view('inscripciones.index', compact('inscripciones', 'descuentos', 'mensualidadesPagadas', 'primerMesPorEst', 'mesActualNum'));
+        return view('inscripciones.index', compact('inscripciones', 'descuentos', 'mensualidadesPagadas', 'primerMesPorEst', 'mesActualNum', 'gestiones', 'gestion'));
     }
 
     public function reportes(Request $request)
@@ -131,6 +141,12 @@ class InscripcionController extends Controller
     public function reportePdf(Request $request)
     {
         $query = Inscripcion::with(['estudiante', 'curso', 'padreFamilia', 'descuentos']);
+
+        // Misma gestión que la grilla de la que se exporta (ver index()).
+        $gestion = $request->input('gestion', date('Y'));
+        if ($gestion !== 'todas') {
+            $query->where('insc_gestion', $gestion);
+        }
 
         if ($request->buscar) {
             $query->whereHas('estudiante', function($q) use ($request) {
@@ -177,7 +193,7 @@ class InscripcionController extends Controller
         $inscripciones = $query->orderBy('insc_fecha', 'desc')->get();
 
         // Mensualidades pagadas por estudiante
-        $year = date('Y');
+        $year = $gestion === 'todas' ? date('Y') : (int) $gestion;
         $estCodigos = $inscripciones->pluck('est_codigo')->unique()->toArray();
         $mensualidadesPagadas = Pago::whereIn('est_codigo', $estCodigos)
             ->whereYear('pagos_fecha', $year)
@@ -294,6 +310,25 @@ class InscripcionController extends Controller
         $casoEspecial  = $request->has('insc_caso_especial');
         $mesInicio     = $casoEspecial ? max(2, min(12, (int) ($request->insc_mes_inicio ?? date('n')))) : null;
 
+        // El mes al que se imputa la primera mensualidad no puede ser anterior al
+        // mes actual, salvo en Registro Especial, donde el piso es el mes de inicio
+        // retroactivo. Hasta ahora esto sólo existía en la vista (option disabled)
+        // y el backend aceptaba cualquier mes que le llegara.
+        if ($soloRegistro && $request->filled('insc_mes_destino')) {
+            $mesDestinoReq = (int) $request->insc_mes_destino;
+            $mesMinimo     = $casoEspecial ? $mesInicio : (int) date('n');
+            $meses = ['','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+            if ($mesDestinoReq < $mesMinimo) {
+                return back()->withErrors(['error' =>
+                    'El mes destino de la primera mensualidad (' . ($meses[$mesDestinoReq] ?? $mesDestinoReq) . ') es anterior a ' .
+                    ($meses[$mesMinimo] ?? $mesMinimo) . '. ' .
+                    ($casoEspecial
+                        ? 'En Registro Especial no puede ser anterior al mes de inicio retroactivo.'
+                        : 'Para imputarlo a un mes anterior marcá "Registro Especial" e indicá el mes de inicio.')
+                ])->withInput();
+            }
+        }
+
         // Código secuencial INSC000XXX
         $ultimoInsc = Inscripcion::where('insc_codigo', 'REGEXP', '^INSC[0-9]{6}$')
             ->orderByRaw('CAST(SUBSTRING(insc_codigo, 5) AS UNSIGNED) DESC')
@@ -335,7 +370,11 @@ class InscripcionController extends Controller
         $prefijoRecibo = $sinFactura ? 'TAL' : 'REC';
 
         if ($soloRegistro && $montoPagado > 0) {
-            // FUERA DE TIEMPO: los 500 van como primera mensualidad del mes seleccionado
+            // FUERA DE TIEMPO: los 500 van como primera mensualidad del mes seleccionado.
+            // El mes destino no puede ser anterior al mes actual, salvo Registro
+            // Especial, donde el piso es el mes de inicio retroactivo. Hasta ahora
+            // esto sólo estaba en la vista (option disabled) y el backend aceptaba
+            // cualquier mes que le mandaran.
             $mesDestino = intval($request->insc_mes_destino ?? date('n'));
             $mesesNombresArr = ['','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
             $mesNombre = $mesesNombresArr[$mesDestino] ?? 'Mes';

@@ -42,11 +42,11 @@
                         <div class="row">
                             <div class="col-md-3">
                                 <label>Fecha Inicio</label>
-                                <input type="date" name="fecha_inicio" class="form-control" value="{{ request('fecha_inicio') }}">
+                                <input type="date" name="fecha_inicio" id="f_inicio" class="form-control" value="{{ $fechaInicio ?? request('fecha_inicio') }}">
                             </div>
                             <div class="col-md-3">
                                 <label>Fecha Fin</label>
-                                <input type="date" name="fecha_fin" class="form-control" value="{{ request('fecha_fin') }}">
+                                <input type="date" name="fecha_fin" id="f_fin" class="form-control" value="{{ $fechaFin ?? request('fecha_fin') }}">
                             </div>
                             <div class="col-md-2">
                                 <label>Curso</label>
@@ -75,10 +75,26 @@
                                 </select>
                             </div>
                         </div>
+                        {{-- Presets: la cajera abre el módulo para ver el día, no todo el histórico --}}
+                        <div class="row mt-2">
+                            <div class="col-md-12">
+                                <div class="btn-group btn-group-sm" role="group">
+                                    <button type="button" class="btn btn-outline-primary" onclick="rangoPreset('hoy')">Hoy</button>
+                                    <button type="button" class="btn btn-outline-primary" onclick="rangoPreset('mes')">Este mes</button>
+                                    <button type="button" class="btn btn-outline-primary" onclick="rangoPreset('gestion')">Gestión {{ date('Y') }}</button>
+                                </div>
+                                @if(!empty($sinFiltros))
+                                    <span class="ml-2 text-muted small">
+                                        <i class="fas fa-info-circle"></i> Mostrando los pagos de hoy.
+                                        <a href="{{ route('pagos.index') }}?todos=1">Ver todo el histórico</a>
+                                    </span>
+                                @endif
+                            </div>
+                        </div>
                         <div class="row mt-3">
                             <div class="col-md-12">
                                 <button type="submit" class="btn btn-primary"><i class="fas fa-filter"></i> Filtrar</button>
-                                <a href="{{ route('pagos.index') }}" class="btn btn-secondary"><i class="fas fa-times"></i> Limpiar</a>
+                                <a href="{{ route('pagos.index') }}?todos=1" class="btn btn-secondary"><i class="fas fa-times"></i> Limpiar</a>
                                 <div class="btn-group" role="group">
                                     <button type="button" class="btn btn-danger dropdown-toggle" data-toggle="dropdown">
                                         <i class="fas fa-file-pdf"></i> Reportes PDF
@@ -252,6 +268,27 @@
 @endsection
 
 @section('scripts')
+<script>
+/** Presets de rango de fechas: Hoy / Este mes / Gestión. Rellenan los inputs y envían el filtro. */
+function rangoPreset(tipo) {
+    var hoy = new Date();
+    var p = function(n) { return ('0' + n).slice(-2); };
+    var fmt = function(d) { return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()); };
+    var desde, hasta = fmt(hoy);
+
+    if (tipo === 'hoy') {
+        desde = fmt(hoy);
+    } else if (tipo === 'mes') {
+        desde = fmt(new Date(hoy.getFullYear(), hoy.getMonth(), 1));
+    } else {
+        desde = hoy.getFullYear() + '-01-01';
+        hasta = hoy.getFullYear() + '-12-31';
+    }
+    $('#f_inicio').val(desde);
+    $('#f_fin').val(hasta);
+    $('#f_inicio').closest('form').submit();
+}
+</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script>
 var pagosRecibo = @json($pagosRecibo);

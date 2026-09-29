@@ -132,7 +132,7 @@
         @if($esAdmin || $user->tieneAccesoModulo('estudiantes'))
         <li><a href="{{ route('estudiantes.index') }}"><i class="fas fa-list"></i> Lista Estudiantes</a></li>
         @endif
-        @if($esAdmin || in_array(optional($user)->rol_id, [1,4]) || $user->us_entidad_tipo === 'docente')
+        @if($esAdmin || in_array(optional($user)->rol_id, [1,9,10,11]) || $user->us_entidad_tipo === 'docente')
         <li><a href="{{ route('kardex-estudiante.index') }}"><i class="fas fa-folder-open"></i> Kardex / Anotaciones</a></li>
         @endif
     </ul>
@@ -162,7 +162,9 @@
     </a>
     <ul class="collapse {{ Request::is('docentes*') || Request::is('kardex-docente*') ? 'show' : '' }}" id="docentesMenu">
         <li><a href="{{ route('docentes.index') }}"><i class="fas fa-list"></i> Lista Docentes</a></li>
-        @if($esAdmin || in_array(optional($user)->rol_id, [1,4]))
+        {{-- Mismos roles que KardexDocenteController::soloDireccion(): antes
+             estaba en [1,4] y el 4 es Chofer, así que dirección no lo veía. --}}
+        @if($esAdmin || in_array(optional($user)->rol_id, [1,9,10,11]))
         <li><a href="{{ route('kardex-docente.index') }}"><i class="fas fa-folder-open"></i> Kardex Docente</a></li>
         @endif
         @if($esAdmin || in_array(optional($user)->rol_id, [1,9,10,11]))
@@ -176,7 +178,7 @@
 @if($user && $user->us_entidad_tipo === 'docente')
 <li class="side-menus {{ Request::is('mis-comunicados*') ? 'active' : '' }}">
     <a class="nav-link" href="{{ route('comunicados.docente') }}">
-        <i class="fas fa-inbox"></i><span>Mis Comunicados</span>
+        <i class="fas fa-inbox"></i><span>Mis Documentos</span>
     </a>
 </li>
 @endif
@@ -236,7 +238,7 @@
         <li><a href="{{ route('notas.rendimiento') }}"><i class="fas fa-chart-line"></i> Rendimiento</a></li>
         @endif
         <li><a href="{{ route('asistencia-clases.index') }}"><i class="fas fa-clipboard-check"></i> Asistencia Clases</a></li>
-        @if($esAdmin || in_array(optional($user)->rol_id, [1,4]))
+        @if($esAdmin || in_array(optional($user)->rol_id, [1,9,10,11]))
         <li><a href="{{ route('reimpresiones.index') }}"><i class="fas fa-print"></i> Reimpresiones</a></li>
         @endif
         @if($esAdmin)
@@ -255,7 +257,7 @@
 @endif
 
 {{-- Estudiantes observados (Lista Negra) — solo dirección/admin --}}
-@if($esAdmin || in_array(optional($user)->rol_id, [1,4]))
+@if($esAdmin || in_array(optional($user)->rol_id, [1,9,10,11,13]))
 <li class="side-menus {{ Request::is('observados*') ? 'active' : '' }}">
     <a class="nav-link" href="{{ route('observados.index') }}">
         <i class="fas fa-user-slash"></i><span>Estudiantes Observados</span>
@@ -280,6 +282,7 @@
         @endif
         @if($esAdmin || $user->tieneAccesoModulo('descuentos'))
         <li><a href="{{ route('descuentos.index') }}"><i class="fas fa-percent"></i> Descuentos</a></li>
+        <li><a href="{{ route('descuentos.estudiantes') }}"><i class="fas fa-user-tag"></i> Estudiantes con descuento</a></li>
         @endif
         @if($esAdmin || $user->tieneAccesoModulo('servicios'))
         <li><a href="{{ route('servicios.index') }}"><i class="fas fa-concierge-bell"></i> Servicios</a></li>

@@ -113,9 +113,20 @@ class PagoServicioController extends Controller
         return response()->json(['success' => true, 'message' => 'Pago anulado']);
     }
 
-    public function recibo($id)
+    /**
+     * ?formato=termica imprime en 80 mm, igual que ventas y caja diaria. Sin
+     * ese parámetro se mantiene el recibo de media carta de siempre.
+     */
+    public function recibo($id, Request $request)
     {
         $pago = PagoServicio::with('servicio', 'estudiante.curso', 'padreFamilia')->findOrFail($id);
+
+        if ($request->input('formato') === 'termica') {
+            $pdf = Pdf::loadView('pagos-servicios.recibo-termica', compact('pago'))
+                ->setPaper([0, 0, 226.77, 600], 'portrait');
+            return $pdf->stream('recibo-servicio-' . $pago->pserv_codigo . '-termico.pdf');
+        }
+
         $pdf = Pdf::loadView('pagos-servicios.recibo', compact('pago'))
             ->setPaper([0, 0, 396, 612], 'portrait');
         return $pdf->stream('recibo-servicio-' . $pago->pserv_codigo . '.pdf');

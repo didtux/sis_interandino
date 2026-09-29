@@ -320,6 +320,16 @@
                     </select>
                 </div>
                 <div class="form-group">
+                    <div class="custom-control custom-checkbox">
+                        {{-- El cuadro estadístico arrastra un salto de página, así
+                             que el reporte nunca entraba en una sola hoja. --}}
+                        <input type="checkbox" class="custom-control-input" id="stats_trim">
+                        <label class="custom-control-label" for="stats_trim">
+                            Incluir cuadro estadístico <small class="text-muted">(agrega una hoja)</small>
+                        </label>
+                    </div>
+                </div>
+                <div class="form-group">
                     <label>Turno</label>
                     <select id="turno_trim" class="form-control">
                         @forelse($turnos->pluck('nombre')->unique() as $tn)
@@ -542,8 +552,9 @@ function generarReporteTrimestral(tipo) {
     }
     
     const turno = encodeURIComponent($('#turno_trim').val() || 'Mañana');
+    const stats = $('#stats_trim').is(':checked') ? '1' : '0';
     const url = tipo === 'pdf'
-        ? '{{ route("asistencias.reporte-trimestral") }}?cur_codigo=' + curso + '&trimestre=' + trimestre + '&turno_nombre=' + turno
+        ? '{{ route("asistencias.reporte-trimestral") }}?cur_codigo=' + curso + '&trimestre=' + trimestre + '&turno_nombre=' + turno + '&stats=' + stats
         : '{{ route("asistencias.reporte-trimestral-excel") }}?cur_codigo=' + curso + '&trimestre=' + trimestre + '&turno_nombre=' + turno;
 
     window.open(url, '_blank');

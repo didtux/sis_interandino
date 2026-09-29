@@ -5,7 +5,10 @@ body{font-family:Arial,sans-serif;font-size:11px;margin:22px;}
 .header{text-align:center;margin-bottom:10px;}
 .header h2{margin:2px 0;}
 .datos{display:flex;justify-content:space-between;margin:8px 0;border:1px solid #888;padding:6px;}
+/* El colegio pidio que la foto del padre se vea del mismo tamano que la del
+   estudiante. Antes era 80x90 contra 30x30 circular (un octavo del area). */
 .foto{width:80px;height:90px;object-fit:cover;border:1px solid #888;}
+.foto-padre{width:70px;height:80px;object-fit:cover;border:1px solid #888;vertical-align:middle;margin-right:6px;}
 table{width:100%;border-collapse:collapse;margin-top:10px;}
 th,td{border:1px solid #444;padding:5px;}
 th{background:#1c4789;color:#fff;}
@@ -24,28 +27,32 @@ th{background:#1c4789;color:#fff;}
 <table style="width:100%;border:1px solid #888;margin:8px 0;border-collapse:collapse;">
     <tr>
         {{-- Lado izquierdo: foto + datos del estudiante --}}
-        <td style="vertical-align:top;padding:6px;border:none;width:15%;text-align:center;">
-            @if($estudiante->est_foto)
-                <img src="{{ public_path('storage/'.$estudiante->est_foto) }}" class="foto">
+        <td style="vertical-align:top;padding:6px;border:none;width:14%;text-align:center;">
+            @php
+                $fotoEst = !empty($estudiante->est_foto) && file_exists(public_path('storage/'.$estudiante->est_foto))
+                    ? public_path('storage/'.$estudiante->est_foto) : null;
+            @endphp
+            @if($fotoEst)
+                <img src="{{ $fotoEst }}" class="foto">
             @endif
         </td>
-        <td style="vertical-align:top;padding:6px;border:none;width:42%;">
+        <td style="vertical-align:top;padding:6px;border:none;width:38%;">
             <b>Estudiante:</b> {{ $estudiante->est_apellidos }} {{ $estudiante->est_nombres }}<br>
             <b>Grado:</b> {{ optional($estudiante->curso)->cur_nombre ?? '-' }}<br>
             <b>U.E. de procedencia:</b> {{ $estudiante->est_ueprocedencia ?? '-' }}<br>
             <b>CI:</b> {{ $estudiante->est_ci ?? '-' }}
         </td>
         {{-- Lado derecho: datos de los padres --}}
-        <td style="vertical-align:top;padding:6px;border:none;border-left:1px solid #ccc;width:43%;">
+        <td style="vertical-align:top;padding:6px;border:none;border-left:1px solid #ccc;width:48%;">
             <b>Padres / Tutores:</b><br>
             @forelse($estudiante->padres as $pf)
                 @php
                     $padreFoto = !empty($pf->pfam_foto) && file_exists(public_path('storage/'.$pf->pfam_foto))
                         ? public_path('storage/'.$pf->pfam_foto) : null;
                 @endphp
-                <div style="margin-bottom:4px;">
+                <div style="margin-bottom:6px;">
                     @if($padreFoto)
-                        <img src="{{ $padreFoto }}" style="width:30px;height:30px;object-fit:cover;border:1px solid #888;border-radius:50%;vertical-align:middle;margin-right:4px;">
+                        <img src="{{ $padreFoto }}" class="foto-padre">
                     @endif
                     {{ $pf->pfam_nombres ?? '-' }} {{ $pf->pfam_apellidos ?? '' }}
                     @if(!empty($pf->pfam_parentesco)) <span style="color:#555;">({{ $pf->pfam_parentesco }})</span>@endif

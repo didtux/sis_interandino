@@ -40,17 +40,31 @@ class PagoTransporteController extends Controller
         $codigosConjuntos = [];
 
         if ($codigosEnPagina->isNotEmpty()) {
-            $todos = PagoTransporte::with('estudiante.curso')
+            // Se trae tambien la ruta/vehiculo: el recibo tiene que decir el
+            // numero de bus y el payload no lo llevaba.
+            $todos = PagoTransporte::with([
+                    'estudiante.curso',
+                    'estudiante.rutaTransporte.ruta.asignaciones.vehiculo',
+                ])
                 ->whereIn('tpago_codigo', $codigosEnPagina)
                 ->orderBy('est_codigo')
                 ->get();
 
             foreach ($todos->groupBy('tpago_codigo') as $codigo => $grupo) {
                 $items = $grupo->map(function($p) {
+                    $rutaEst = optional($p->estudiante)->rutaTransporte;
+                    $asig    = $rutaEst && $rutaEst->ruta
+                        ? $rutaEst->ruta->asignaciones->where('asig_estado', 1)->first()
+                        : null;
+
                     return [
                         'tpago_id' => $p->tpago_id,
                         'estudiante' => ($p->estudiante->est_nombres ?? '') . ' ' . ($p->estudiante->est_apellidos ?? ''),
                         'curso' => $p->estudiante->curso->cur_nombre ?? 'N/A',
+                        'ruta' => optional(optional($rutaEst)->ruta)->ruta_nombre ?? '-',
+                        'bus'  => $asig && $asig->vehiculo
+                            ? ($asig->vehiculo->veh_numero_bus ?: $asig->vehiculo->veh_placa)
+                            : '-',
                         'tipo' => $p->tpago_tipo,
                         'mes' => $p->tpago_mes,
                         'monto' => $p->tpago_monto,

@@ -11,10 +11,43 @@
                 <div class="card-body">
                     <form method="GET" class="mb-3">
                         <div class="row">
-                            <div class="col-md-4">
+                            <div class="col-md-3">
                                 <div class="form-group">
                                     <label>Buscar Producto</label>
                                     <input type="text" name="buscar" class="form-control" placeholder="Nombre o código" value="{{ request('buscar') }}">
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="form-group">
+                                    <label>Categoría</label>
+                                    <select name="categ_codigo" class="form-control select2">
+                                        <option value="">Todas</option>
+                                        @foreach($categorias ?? [] as $cat)
+                                            <option value="{{ $cat->categ_codigo }}" {{ request('categ_codigo') == $cat->categ_codigo ? 'selected' : '' }}>{{ $cat->categ_nombre }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="form-group">
+                                    <label>Proveedor</label>
+                                    <select name="prov_codigo" class="form-control select2">
+                                        <option value="">Todos</option>
+                                        @foreach($proveedores ?? [] as $prov)
+                                            <option value="{{ $prov->prov_codigo }}" {{ request('prov_codigo') == $prov->prov_codigo ? 'selected' : '' }}>{{ $prov->prov_nombre }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="form-group">
+                                    <label>Producto</label>
+                                    <select name="prod_codigo" class="form-control select2">
+                                        <option value="">Todos</option>
+                                        @foreach($catalogo ?? [] as $prod)
+                                            <option value="{{ $prod->prod_codigo }}" {{ request('prod_codigo') == $prod->prod_codigo ? 'selected' : '' }}>{{ $prod->prod_nombre }}</option>
+                                        @endforeach
+                                    </select>
                                 </div>
                             </div>
                             <div class="col-md-4">
@@ -107,14 +140,15 @@
 
 @section('scripts')
 <script>
+$(function() { $('.select2').select2({ width: '100%' }); });
+
 function exportarPDF() {
+    // El PDF sale con los mismos filtros que la pantalla.
     const params = new URLSearchParams();
-    const buscar = document.querySelector('input[name="buscar"]').value;
-    const estado = document.querySelector('select[name="estado"]').value;
-    
-    if (buscar) params.append('buscar', buscar);
-    if (estado) params.append('estado', estado);
-    
+    ['buscar', 'estado', 'categ_codigo', 'prov_codigo', 'prod_codigo'].forEach(function(campo) {
+        const el = document.querySelector('[name="' + campo + '"]');
+        if (el && el.value) params.append(campo, el.value);
+    });
     window.open('{{ route("movimientos.reporte-stock-pdf") }}?' + params.toString(), '_blank');
 }
 </script>

@@ -13,11 +13,15 @@ use Illuminate\Support\Facades\DB;
 
 class BoletinDescargaController extends Controller
 {
-    /** Solo admin / dirección pueden auditar reimpresiones. */
+    /**
+     * Solo admin / dirección pueden auditar reimpresiones: Admin(1), Director
+     * General(9), Directora Académica(10), Secretaría(11). Antes era [1, 4] y
+     * el rol 4 es Chofer, así que dirección recibía 403.
+     */
     private function autorizar()
     {
         $u = auth()->user();
-        if (!$u || !in_array($u->rol_id, [1, 4])) {
+        if (!$u || !in_array($u->rol_id, [1, 9, 10, 11])) {
             abort(403, 'Solo dirección puede auditar reimpresiones.');
         }
     }

@@ -58,10 +58,15 @@ class ReporteLicenciaController extends Controller
         return $q->get();
     }
 
-    /** Mapa est_codigo => cur_codigo (curso actual del estudiante). */
+    /**
+     * Mapa est_codigo => cur_codigo (curso actual del estudiante).
+     *
+     * Incluye a los retirados: si se los filtraba acá, sus licencias se
+     * descartaban en silencio y ni siquiera sumaban al total del curso.
+     */
     private function mapaEstudianteCurso(): \Illuminate\Support\Collection
     {
-        return Estudiante::where('est_visible', 1)->pluck('cur_codigo', 'est_codigo');
+        return Estudiante::pluck('cur_codigo', 'est_codigo');
     }
 
     /**
@@ -212,10 +217,11 @@ class ReporteLicenciaController extends Controller
         }
         $curso = Curso::where('cur_codigo', $curCodigo)->first();
 
-        $estudiantes = Estudiante::where('est_visible', 1)
-            ->where('cur_codigo', $curCodigo)
+        // Los retirados también van: el colegio los quiere ver, en rojo, con lo
+        // que se les haya registrado hasta su baja.
+        $estudiantes = Estudiante::where('cur_codigo', $curCodigo)
             ->orderBy('est_apellidos')->orderBy('est_nombres')
-            ->get(['est_codigo', 'est_apellidos', 'est_nombres']);
+            ->get(['est_codigo', 'est_apellidos', 'est_nombres', 'est_visible']);
 
         $inicioAnio = Carbon::create($gestion, 2, 1)->startOfMonth();
         $finAnio    = Carbon::create($gestion, 12, 31)->endOfMonth();
@@ -259,8 +265,14 @@ class ReporteLicenciaController extends Controller
         $fila = 5;
         $n = 1;
         foreach ($estudiantes as $e) {
+            $retirado = ($e->est_visible ?? 1) == 0;
             $sheet->setCellValue('A' . $fila, $n);
-            $sheet->setCellValue('B' . $fila, $e->est_apellidos . ' ' . $e->est_nombres);
+            $sheet->setCellValue('B' . $fila, $e->est_apellidos . ' ' . $e->est_nombres . ($retirado ? ' (RETIRADO)' : ''));
+            // Mismo criterio visual que los PDF de notas y asistencia.
+            if ($retirado) {
+                $sheet->getStyle('A' . $fila . ':' . $colTotal . $fila)
+                    ->getFont()->getColor()->setRGB('C0392B');
+            }
             $totalEst = 0;
             foreach ($this->mesesNombre as $num => $nombre) {
                 $cnt = isset($licDias[$e->est_codigo][$num]) ? count($licDias[$e->est_codigo][$num]) : 0;
@@ -350,6 +362,225 @@ class ReporteLicenciaController extends Controller
     // ───────────────────────────────────────────────────────────────
     // Estilo + descarga
     // ───────────────────────────────────────────────────────────────
+    // ──────────────────────────────────────────────────────────────
+    // Versiones PDF de los tres reportes
+    //
+    // El colegio pedía poder imprimirlos: hasta ahora sólo existía el Excel, que
+    // no sirve para firmar ni archivar. Los tres comparten la misma vista
+    // (licencias/reporte-pdf) porque los tres son la misma matriz: una etiqueta,
+    // N columnas de período y un TOTAL.
+    // ──────────────────────────────────────────────────────────────
+
+    public function mensualPdf(Request $request)
+    {
+        $gestion = (int) $request->input('gestion', date('Y'));
+        $mes     = (int) $request->input('mes', date('n'));
+        $turno   = $request->input('turno');
+        if (!isset($this->mesesNombre[$mes])) $mes = max(2, min(12, $mes));
+
+        $inicioMes = Carbon::create($gestion, $mes, 1)->startOfMonth();
+        $finMes    = (clone $inicioMes)->endOfMonth();
+
+        $dias = [];
+        $cur = $inicioMes->copy();
+        while ($cur <= $finMes) {
+            if ($cur->isWeekday()) $dias[] = $cur->copy();
+            $cur->addDay();
+        }
+
+        $cursos   = $this->cursosDelTurno($turno);
+        $estCurso = $this->mapaEstudianteCurso();
+        $festivos = $this->festivosEnRango($inicioMes->toDateString(), $finMes->toDateString());
+        $permisos = $this->permisosEnRango($inicioMes->toDateString(), $finMes->toDateString());
+
+        $counts = [];
+        foreach ($permisos as $pm) {
+            $curCod = $estCurso[$pm->estud_codigo] ?? null;
+            if (!$curCod) continue;
+            $ini = Carbon::parse($pm->permiso_fecha_inicio)->max($inicioMes);
+            $fin = Carbon::parse($pm->permiso_fecha_fin)->min($finMes);
+            $d = $ini->copy();
+            while ($d <= $fin) {
+                if ($d->isWeekday()) $counts[$curCod][$d->toDateString()][$pm->estud_codigo] = true;
+                $d->addDay();
+            }
+        }
+
+        $columnas = [];
+        foreach ($dias as $dia) {
+            $columnas[] = ['clave' => $dia->toDateString(), 'titulo' => ($this->diaLetra[$dia->dayOfWeekIso] ?? '') . $dia->day];
+        }
+
+        $filas = [];
+        $totalPorDia = [];
+        $granTotal = 0;
+        foreach ($cursos as $c) {
+            $valores = [];
+            $totalCurso = 0;
+            foreach ($dias as $dia) {
+                $f = $dia->toDateString();
+                if (isset($festivos[$f])) {
+                    $valores[$f] = mb_substr($festivos[$f], 0, 6, 'UTF-8');   // texto = feriado
+                } else {
+                    $n = isset($counts[$c->cur_codigo][$f]) ? count($counts[$c->cur_codigo][$f]) : 0;
+                    $valores[$f] = $n;
+                    $totalCurso += $n;
+                    $totalPorDia[$f] = ($totalPorDia[$f] ?? 0) + $n;
+                }
+            }
+            $granTotal += $totalCurso;
+            $filas[] = ['etiqueta' => $c->cur_nombre, 'valores' => $valores, 'total' => $totalCurso];
+        }
+
+        return $this->pdfMatriz(
+            'FALTAS CON LICENCIA',
+            $this->mesesNombre[$mes] . ' ' . $gestion . $this->sufijoTurno($turno),
+            'CURSO', $columnas, $filas,
+            ['valores' => $totalPorDia, 'total' => $granTotal],
+            'licencias-mensual-' . strtolower($this->mesesNombre[$mes]) . '-' . $gestion,
+            'landscape'
+        );
+    }
+
+    public function anualEstudiantePdf(Request $request)
+    {
+        $gestion   = (int) $request->input('gestion', date('Y'));
+        $curCodigo = $request->input('cur_codigo');
+        if (!$curCodigo) {
+            return back()->with('error', 'Seleccione un curso para el reporte anual por estudiante.');
+        }
+        $curso = Curso::where('cur_codigo', $curCodigo)->first();
+
+        // Los retirados también van, en rojo (mismo criterio que el Excel).
+        $estudiantes = Estudiante::where('cur_codigo', $curCodigo)
+            ->orderBy('est_apellidos')->orderBy('est_nombres')
+            ->get(['est_codigo', 'est_apellidos', 'est_nombres', 'est_visible']);
+
+        $inicioAnio = Carbon::create($gestion, 2, 1)->startOfMonth();
+        $finAnio    = Carbon::create($gestion, 12, 31)->endOfMonth();
+        $permisos   = $this->permisosEnRango($inicioAnio->toDateString(), $finAnio->toDateString());
+
+        $licDias = [];
+        foreach ($permisos as $pm) {
+            $ini = Carbon::parse($pm->permiso_fecha_inicio)->max($inicioAnio);
+            $fin = Carbon::parse($pm->permiso_fecha_fin)->min($finAnio);
+            $d = $ini->copy();
+            while ($d <= $fin) {
+                if ($d->isWeekday()) $licDias[$pm->estud_codigo][$d->month][$d->toDateString()] = true;
+                $d->addDay();
+            }
+        }
+
+        $columnas = [];
+        foreach ($this->mesesNombre as $num => $nombre) {
+            $columnas[] = ['clave' => $num, 'titulo' => mb_substr($nombre, 0, 3, 'UTF-8')];
+        }
+
+        $filas = [];
+        $totalPorMes = [];
+        $granTotal = 0;
+        foreach ($estudiantes as $e) {
+            $retirado = ($e->est_visible ?? 1) == 0;
+            $valores = [];
+            $totalEst = 0;
+            foreach ($this->mesesNombre as $num => $nombre) {
+                $cnt = isset($licDias[$e->est_codigo][$num]) ? count($licDias[$e->est_codigo][$num]) : 0;
+                $valores[$num] = $cnt;
+                $totalEst += $cnt;
+                $totalPorMes[$num] = ($totalPorMes[$num] ?? 0) + $cnt;
+            }
+            $granTotal += $totalEst;
+            $filas[] = [
+                'etiqueta' => $e->est_apellidos . ' ' . $e->est_nombres . ($retirado ? ' (RETIRADO)' : ''),
+                'valores'  => $valores,
+                'total'    => $totalEst,
+                'retirado' => $retirado,
+            ];
+        }
+
+        return $this->pdfMatriz(
+            'REPORTE ANUAL DE LICENCIAS POR ESTUDIANTE',
+            'Curso: ' . ($curso->cur_nombre ?? $curCodigo) . '  —  Gestión ' . $gestion,
+            'NOMBRE DEL ALUMNO', $columnas, $filas,
+            ['valores' => $totalPorMes, 'total' => $granTotal],
+            'licencias-anual-estudiante-' . $curCodigo . '-' . $gestion,
+            'portrait'
+        );
+    }
+
+    public function anualCursoPdf(Request $request)
+    {
+        $gestion = (int) $request->input('gestion', date('Y'));
+        $turno   = $request->input('turno');
+
+        $cursos   = $this->cursosDelTurno($turno);
+        $estCurso = $this->mapaEstudianteCurso();
+
+        $inicioAnio = Carbon::create($gestion, 2, 1)->startOfMonth();
+        $finAnio    = Carbon::create($gestion, 12, 31)->endOfMonth();
+        $permisos   = $this->permisosEnRango($inicioAnio->toDateString(), $finAnio->toDateString());
+
+        $tot = [];
+        foreach ($permisos as $pm) {
+            $curCod = $estCurso[$pm->estud_codigo] ?? null;
+            if (!$curCod) continue;
+            $ini = Carbon::parse($pm->permiso_fecha_inicio)->max($inicioAnio);
+            $fin = Carbon::parse($pm->permiso_fecha_fin)->min($finAnio);
+            $d = $ini->copy();
+            while ($d <= $fin) {
+                if ($d->isWeekday()) $tot[$curCod][$d->month] = ($tot[$curCod][$d->month] ?? 0) + 1;
+                $d->addDay();
+            }
+        }
+
+        $columnas = [];
+        foreach ($this->mesesNombre as $num => $nombre) {
+            $columnas[] = ['clave' => $num, 'titulo' => mb_substr($nombre, 0, 3, 'UTF-8')];
+        }
+
+        $filas = [];
+        $totalPorMes = [];
+        $granTotal = 0;
+        foreach ($cursos as $c) {
+            $valores = [];
+            $totalCurso = 0;
+            foreach ($this->mesesNombre as $num => $nombre) {
+                $cnt = $tot[$c->cur_codigo][$num] ?? 0;
+                $valores[$num] = $cnt;
+                $totalCurso += $cnt;
+                $totalPorMes[$num] = ($totalPorMes[$num] ?? 0) + $cnt;
+            }
+            $granTotal += $totalCurso;
+            $filas[] = ['etiqueta' => $c->cur_nombre, 'valores' => $valores, 'total' => $totalCurso];
+        }
+
+        return $this->pdfMatriz(
+            'REPORTE ANUAL DE LICENCIAS POR CURSO',
+            'Gestión ' . $gestion . $this->sufijoTurno($turno),
+            'CURSO', $columnas, $filas,
+            ['valores' => $totalPorMes, 'total' => $granTotal],
+            'licencias-anual-curso-' . $gestion,
+            'portrait'
+        );
+    }
+
+    /** " — TURNO: X" cuando el reporte se acota a un turno. */
+    private function sufijoTurno($turnoConfigId): string
+    {
+        if (!$turnoConfigId) return '';
+        return '  —  TURNO: ' . (ConfiguracionAsistencia::find($turnoConfigId)->config_turno ?? '');
+    }
+
+    private function pdfMatriz(string $titulo, string $subtitulo, string $etiquetaColumna,
+                               array $columnas, array $filas, array $totales,
+                               string $archivo, string $orientacion)
+    {
+        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('licencias.reporte-pdf',
+                compact('titulo', 'subtitulo', 'etiquetaColumna', 'columnas', 'filas', 'totales'))
+            ->setPaper('letter', $orientacion);
+        return $pdf->stream($archivo . '.pdf');
+    }
+
     private function estiloMatriz($sheet, string $colTotal, int $filaFin, int $filaHeader): void
     {
         $sheet->getStyle('A1')->getFont()->setBold(true)->setSize(13);

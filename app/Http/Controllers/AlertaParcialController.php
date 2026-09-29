@@ -356,6 +356,62 @@ class AlertaParcialController extends Controller
         return $pdf->stream('advertencia-' . $estudiante->est_codigo . '.pdf');
     }
 
+    /**
+     * Acta de conformidad de advertencia parcial, por estudiante y trimestre.
+     *
+     * Es el papel que firma el padre cuando se le comunica la advertencia. No
+     * existía: lo único parecido era el acta de psicopedagogía, que es de fin
+     * de gestión y de otro proceso. Sigue su formato para que el colegio
+     * reconozca el documento, pero con el detalle de las áreas observadas.
+     */
+    public function actaConformidad(Request $request)
+    {
+        $request->validate(['est_codigo' => 'required', 'periodo_id' => 'required|integer']);
+
+        $gestion    = (int) $request->input('gestion', date('Y'));
+        $estudiante = Estudiante::with('curso', 'padres')->where('est_codigo', $request->est_codigo)->firstOrFail();
+        $periodo    = NotaPeriodo::findOrFail($request->periodo_id);
+
+        // Materias del curso, para poder nombrar las observadas.
+        $materias = CursoMateriaDocente::with('materia')
+            ->where('cur_codigo', $estudiante->cur_codigo)->where('curmatdoc_estado', 1)->get()
+            ->pluck('materia')->filter()->unique('mat_codigo')
+            ->sortBy(fn($m) => $m->mat_orden ?? 999);
+
+        $alertas = AlertaParcial::where('est_codigo', $estudiante->est_codigo)
+            ->where('periodo_id', $periodo->periodo_id)
+            ->where(function ($q) { $q->where('marcado_docente', 1)->orWhere('marcado_director', 1); })
+            ->get()->keyBy('mat_codigo');
+
+        // Se recorren las materias del curso (no las alertas) para respetar el
+        // orden del plan de estudios en el acta.
+        $materiasObservadas = [];
+        foreach ($materias as $m) {
+            $a = $alertas[$m->mat_codigo] ?? null;
+            if (!$a) continue;
+            $materiasObservadas[] = [
+                'nombre' => $m->mat_nombre,
+                // Cuando marcan los dos, gana dirección: es el mismo criterio
+                // que ya usan reporteCurso() y advertenciaLote().
+                'origen' => $a->marcado_director ? 'director' : 'docente',
+            ];
+        }
+
+        $padre = $estudiante->padres->first();
+
+        $numeroLista = ListaCurso::where('est_codigo', $estudiante->est_codigo)
+            ->where('cur_codigo', $estudiante->cur_codigo)
+            ->where('lista_gestion', $gestion)->value('lista_numero');
+
+        $fecha = now();
+
+        $pdf = Pdf::loadView('alertas.acta-conformidad-pdf', compact(
+            'estudiante', 'periodo', 'gestion', 'materiasObservadas', 'padre', 'numeroLista', 'fecha'
+        ))->setPaper('letter');
+
+        return $pdf->stream('acta-conformidad-' . $estudiante->est_codigo . '-T' . $periodo->periodo_numero . '.pdf');
+    }
+
     // ──────────────────────────────────────────────────────────────────
     // DOC 3 — Reporte para docente (hoja con casilleros numerados por curso)
     // ──────────────────────────────────────────────────────────────────
@@ -388,14 +444,46 @@ class AlertaParcialController extends Controller
         $areas = $asignaciones->pluck('materia')->filter()->unique('mat_codigo')
             ->pluck('mat_nombre')->implode(' / ');
 
+        $periodo = $request->filled('periodo_id')
+            ? NotaPeriodo::find($request->periodo_id)
+            : NotaPeriodo::activo()->gestion($gestion)->orderBy('periodo_numero')->first();
+
         // Filas: por curso → cantidad de estudiantes (para los casilleros 1..N)
+        // y qué números marcó ESTE docente, para imprimirlos en naranja. Antes la
+        // hoja salía siempre en blanco: sólo se contaban los alumnos.
         $filas = [];
         foreach ($asignaciones->pluck('curso')->filter()->unique('cur_codigo') as $curso) {
             $cant = Estudiante::where('cur_codigo', $curso->cur_codigo)->count();
-            $filas[] = ['curso' => $curso->cur_nombre, 'cantidad' => $cant];
-        }
 
-        $periodo = NotaPeriodo::activo()->gestion($gestion)->orderBy('periodo_numero')->first();
+            // nota_alerta_parcial no guarda el docente: la marca es por materia.
+            // Se filtra por las materias que este docente dicta en ese curso.
+            $matsDelDocente = $asignaciones
+                ->where('cur_codigo', $curso->cur_codigo)
+                ->pluck('mat_codigo')->filter()->unique()->values();
+
+            $marcados = [];
+            if ($periodo && $matsDelDocente->isNotEmpty()) {
+                $estMarcados = AlertaParcial::where('cur_codigo', $curso->cur_codigo)
+                    ->where('periodo_id', $periodo->periodo_id)
+                    ->whereIn('mat_codigo', $matsDelDocente)
+                    ->where('marcado_docente', 1)
+                    ->pluck('est_codigo')->unique();
+
+                if ($estMarcados->isNotEmpty()) {
+                    // El casillero es el número de lista, no el orden de la consulta.
+                    $marcados = ListaCurso::where('cur_codigo', $curso->cur_codigo)
+                        ->where('lista_gestion', $gestion)
+                        ->whereIn('est_codigo', $estMarcados)
+                        ->pluck('lista_numero')->map(fn($n) => (int) $n)->all();
+                }
+            }
+
+            $filas[] = [
+                'curso'     => $curso->cur_nombre,
+                'cantidad'  => $cant,
+                'marcados'  => $marcados,
+            ];
+        }
 
         $pdf = Pdf::loadView('alertas.hoja-docente-pdf', compact('docente', 'areas', 'filas', 'periodo', 'gestion'))
             ->setPaper('letter');

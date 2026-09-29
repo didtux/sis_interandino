@@ -23,6 +23,31 @@
             <div class="row">
                 {{-- Panel de registro --}}
                 <div class="col-lg-5">
+                    {{-- Categoría y tipo de marca: antes la categoría venía fija en la
+                         URL y sólo se podía registrar una marca por alumno --}}
+                    <div class="card modern-card mb-3">
+                        <div class="card-body py-3">
+                            <label class="small font-weight-bold mb-1">Categoría</label>
+                            <select id="selectCategoria" class="form-control form-control-sm">
+                                @foreach($categorias as $cat)
+                                    <option value="{{ $cat->actcat_id }}" {{ $cat->actcat_id == $categoria->actcat_id ? 'selected' : '' }}>
+                                        {{ $cat->actcat_nombre }}
+                                    </option>
+                                @endforeach
+                            </select>
+
+                            <label class="small font-weight-bold mb-1 mt-3 d-block">Tipo de marca</label>
+                            <div class="btn-group btn-block" role="group">
+                                <button type="button" id="btnIngreso" class="btn btn-success" onclick="setTipo('INGRESO')">
+                                    <i class="fas fa-sign-in-alt mr-1"></i>INGRESO
+                                </button>
+                                <button type="button" id="btnSalida" class="btn btn-outline-danger" onclick="setTipo('SALIDA')">
+                                    <i class="fas fa-sign-out-alt mr-1"></i>SALIDA
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
                     {{-- Escáner QR --}}
                     <div class="card modern-card mb-3">
                         <div class="card-header py-2"><h5 class="mb-0"><i class="fas fa-qrcode mr-2"></i>Escanear QR</h5></div>
@@ -59,13 +84,14 @@
                         </div>
                         <div class="card-body p-0">
                             <table class="modern-table" style="font-size:0.85rem;" id="tablaRegistros">
-                                <thead><tr><th>N°</th><th>Estudiante</th><th>Curso</th><th>Hora</th><th>Acc.</th></tr></thead>
+                                <thead><tr><th>N°</th><th>Estudiante</th><th>Curso</th><th>Tipo</th><th>Hora</th><th>Acc.</th></tr></thead>
                                 <tbody>
                                     @forelse($registros as $i => $r)
                                     <tr>
                                         <td>{{ $i + 1 }}</td>
                                         <td><strong>{{ $r->estudiante->est_apellidos ?? '' }} {{ $r->estudiante->est_nombres ?? '' }}</strong></td>
                                         <td><span class="badge badge-primary">{{ $r->estudiante->curso->cur_nombre ?? '' }}</span></td>
+                                        <td><span class="badge badge-{{ ($r->actreg_tipo ?? 'INGRESO') === 'SALIDA' ? 'danger' : 'success' }}">{{ $r->actreg_tipo ?? 'INGRESO' }}</span></td>
                                         <td>{{ $r->actreg_hora }}</td>
                                         <td>
                                             <form action="{{ route('actividades-asistencia.eliminar-registro', $r->actreg_id) }}" method="POST" style="display:inline;">@csrf @method('DELETE')
@@ -74,7 +100,7 @@
                                         </td>
                                     </tr>
                                     @empty
-                                    <tr id="filaVacia"><td colspan="5" class="text-center text-muted py-3">Escanee un QR o busque un estudiante</td></tr>
+                                    <tr id="filaVacia"><td colspan="6" class="text-center text-muted py-3">Escanee un QR o busque un estudiante</td></tr>
                                     @endforelse
                                 </tbody>
                             </table>
@@ -92,6 +118,19 @@
 <script>
 var catId = {{ $categoria->actcat_id }};
 var registroCount = {{ $registros->count() }};
+var tipoMarca = 'INGRESO';
+
+/** INGRESO / SALIDA, mismo criterio que el toggle del kardex del docente. */
+function setTipo(t) {
+    tipoMarca = t;
+    $('#btnIngreso').toggleClass('btn-success', t === 'INGRESO').toggleClass('btn-outline-success', t !== 'INGRESO');
+    $('#btnSalida').toggleClass('btn-danger', t === 'SALIDA').toggleClass('btn-outline-danger', t !== 'SALIDA');
+}
+
+/** Cambiar de categoría sin salir de la pantalla de escaneo. */
+$(document).on('change', '#selectCategoria', function() {
+    window.location.href = '{{ url("actividades-asistencia/registrar") }}/' + $(this).val();
+});
 
 $(document).ready(function() {
     $('#selectEstudiante').select2({ theme: 'bootstrap4', width: '100%', placeholder: 'Buscar estudiante...' });
@@ -115,16 +154,17 @@ function registrarAsistencia(codigo, origen) {
     $.ajax({
         url: '{{ route("actividades-asistencia.guardar-registro") }}',
         method: 'POST',
-        data: { _token: '{{ csrf_token() }}', actcat_id: catId, est_codigo: codigo, observacion: $('#inputObservacion').val() },
+        data: { _token: '{{ csrf_token() }}', actcat_id: catId, est_codigo: codigo, actreg_tipo: tipoMarca, observacion: $('#inputObservacion').val() },
         success: function(data) {
             if (data.success) {
                 var est = data.estudiante;
                 $('#filaVacia').remove();
                 registroCount++;
                 $('#totalRegistros').text(registroCount);
-                var fila = '<tr style="animation:fadeIn .5s;"><td>' + registroCount + '</td><td><strong>' + est.nombre + '</strong></td><td><span class="badge badge-primary">' + est.curso + '</span></td><td>' + est.hora + '</td><td>-</td></tr>';
+                var badgeTipo = '<span class="badge badge-' + (est.tipo === 'SALIDA' ? 'danger' : 'success') + '">' + est.tipo + '</span>';
+                var fila = '<tr style="animation:fadeIn .5s;"><td>' + registroCount + '</td><td><strong>' + est.nombre + '</strong></td><td><span class="badge badge-primary">' + est.curso + '</span></td><td>' + badgeTipo + '</td><td>' + est.hora + '</td><td>-</td></tr>';
                 $('#tablaRegistros tbody').prepend(fila);
-                mostrarNotificacion(est.nombre, 'success');
+                mostrarNotificacion(est.nombre + ' - ' + est.tipo, 'success');
                 $('#selectEstudiante').val('').trigger('change');
                 $('#inputObservacion').val('');
             } else {

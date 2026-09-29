@@ -118,17 +118,33 @@ class ActividadAsistenciaController extends Controller
         $categoria = ActividadCategoria::with('actividad')->findOrFail($catId);
         $registros = ActividadRegistro::with('estudiante.curso')->where('actcat_id', $catId)->orderBy('actreg_fecha_registro', 'desc')->get();
         $estudiantes = Estudiante::visible()->orderBy('est_apellidos')->get();
-        return view('actividades-asistencia.registrar', compact('categoria', 'registros', 'estudiantes'));
+        // Las demás categorías de la misma actividad: la categoría venía fija en la
+        // URL, así que para cambiarla había que salir de la pantalla de escaneo.
+        $categorias = ActividadCategoria::where('act_id', $categoria->act_id)
+            ->orderBy('actcat_nombre')->get();
+        return view('actividades-asistencia.registrar', compact('categoria', 'registros', 'estudiantes', 'categorias'));
     }
 
     // Guardar registro (AJAX - búsqueda o QR)
     public function guardarRegistro(Request $request)
     {
-        $request->validate(['actcat_id' => 'required', 'est_codigo' => 'required']);
+        $request->validate([
+            'actcat_id'   => 'required',
+            'est_codigo'  => 'required',
+            'actreg_tipo' => 'nullable|in:INGRESO,SALIDA',
+        ]);
 
-        $existe = ActividadRegistro::where('actcat_id', $request->actcat_id)->where('est_codigo', $request->est_codigo)->exists();
+        // INGRESO / SALIDA: el mismo alumno puede marcar las dos, pero no dos
+        // veces la misma. Antes sólo había una marca por categoría y el segundo
+        // escaneo se rechazaba, así que la salida no se podía registrar.
+        $tipo = $request->input('actreg_tipo', 'INGRESO');
+
+        $existe = ActividadRegistro::where('actcat_id', $request->actcat_id)
+            ->where('est_codigo', $request->est_codigo)
+            ->where('actreg_tipo', $tipo)
+            ->exists();
         if ($existe) {
-            return response()->json(['success' => false, 'message' => 'Este estudiante ya fue registrado en esta categoría']);
+            return response()->json(['success' => false, 'message' => 'Este estudiante ya tiene ' . $tipo . ' en esta categoría']);
         }
 
         $est = Estudiante::where('est_codigo', $request->est_codigo)->with('curso')->first();
@@ -140,6 +156,7 @@ class ActividadAsistenciaController extends Controller
             'actcat_id' => $request->actcat_id,
             'est_codigo' => $request->est_codigo,
             'actreg_hora' => now()->format('H:i:s'),
+            'actreg_tipo' => $tipo,
             'actreg_observacion' => $request->observacion,
             'actreg_registrado_por' => auth()->user()->us_id,
         ]);
@@ -152,6 +169,7 @@ class ActividadAsistenciaController extends Controller
                 'nombre' => $est->est_nombres . ' ' . $est->est_apellidos,
                 'curso' => $est->curso->cur_nombre ?? 'N/A',
                 'hora' => now()->format('H:i:s'),
+                'tipo' => $tipo,
             ]
         ]);
     }

@@ -106,6 +106,9 @@
                                         <span class="est-num">{{ $loop->iteration }}</span>
                                         {{ mb_strtoupper($r->estudiante->est_apellidos ?? '', 'UTF-8') }} {{ $r->estudiante->est_nombres ?? '' }}
                                         <span class="est-hora">{{ $r->actreg_hora }}</span>
+                                        @if(($r->actreg_tipo ?? 'INGRESO') === 'SALIDA')
+                                            <span class="est-cat">[SALIDA]</span>
+                                        @endif
                                         @if($porCat->count() > 1)
                                             <span class="est-cat">[{{ $r->categoria->actcat_nombre ?? '' }}]</span>
                                         @endif

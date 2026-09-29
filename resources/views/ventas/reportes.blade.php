@@ -19,11 +19,21 @@
                                 <div class="card-body">
                                     <form id="formProducto" method="GET" target="_blank">
                                         <div class="form-group">
-                                            <label>Producto *</label>
-                                            <select name="prod_codigo" class="form-control select2" required>
-                                                <option value="">Seleccione un producto...</option>
+                                            <label>Categoría</label>
+                                            <select name="categ_codigo" class="form-control select2">
+                                                <option value="">Todas / no aplica</option>
+                                                @foreach($categorias ?? [] as $cat)
+                                                    <option value="{{ $cat->categ_codigo }}">{{ $cat->categ_nombre }}</option>
+                                                @endforeach
+                                            </select>
+                                            <small class="text-muted">Si elegís sólo la categoría, el reporte sale con el total y el desglose por producto.</small>
+                                        </div>
+                                        <div class="form-group">
+                                            <label>Producto</label>
+                                            <select name="prod_codigo" class="form-control select2">
+                                                <option value="">Todos los de la categoría</option>
                                                 @foreach($productos as $p)
-                                                    <option value="{{ $p->prod_codigo }}">{{ $p->prod_nombre }}</option>
+                                                    <option value="{{ $p->prod_codigo }}" data-categ="{{ $p->categ_codigo }}">{{ $p->prod_nombre }}</option>
                                                 @endforeach
                                             </select>
                                         </div>
@@ -34,6 +44,13 @@
                                         <div class="form-group">
                                             <label>Fecha Fin</label>
                                             <input type="date" name="fecha_fin" class="form-control">
+                                        </div>
+                                        <div class="form-group">
+                                            <div class="btn-group btn-group-sm btn-block" role="group">
+                                                <button type="button" class="btn btn-outline-secondary" onclick="presetVentas('formProducto','hoy')">Hoy</button>
+                                                <button type="button" class="btn btn-outline-secondary" onclick="presetVentas('formProducto','mes')">Este mes</button>
+                                                <button type="button" class="btn btn-outline-secondary" onclick="presetVentas('formProducto','gestion')">Gestión</button>
+                                            </div>
                                         </div>
                                         <button type="button" class="btn btn-danger btn-block" onclick="generarReporteProducto('pdf')">
                                             <i class="fas fa-file-pdf"></i> Generar PDF
@@ -62,6 +79,13 @@
                                             <label>Fecha Fin *</label>
                                             <input type="date" name="fecha_fin" class="form-control" required>
                                         </div>
+                                        <div class="form-group">
+                                            <div class="btn-group btn-group-sm btn-block" role="group">
+                                                <button type="button" class="btn btn-outline-secondary" onclick="presetVentas('formArqueo','hoy')">Hoy</button>
+                                                <button type="button" class="btn btn-outline-secondary" onclick="presetVentas('formArqueo','mes')">Este mes</button>
+                                                <button type="button" class="btn btn-outline-secondary" onclick="presetVentas('formArqueo','gestion')">Gestión</button>
+                                            </div>
+                                        </div>
                                         <button type="button" class="btn btn-danger btn-block" onclick="generarReporteArqueo('pdf')">
                                             <i class="fas fa-file-pdf"></i> Generar PDF
                                         </button>
@@ -88,10 +112,41 @@ $('.select2').select2({
     allowClear: true
 });
 
+/** Presets de rango Hoy / Este mes / Gestión sobre cualquiera de los dos formularios. */
+function presetVentas(formId, tipo) {
+    const form = document.getElementById(formId);
+    const hoy = new Date();
+    const p = n => ('0' + n).slice(-2);
+    const fmt = d => d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+    let desde, hasta = fmt(hoy);
+
+    if (tipo === 'hoy')      desde = fmt(hoy);
+    else if (tipo === 'mes') desde = fmt(new Date(hoy.getFullYear(), hoy.getMonth(), 1));
+    else { desde = hoy.getFullYear() + '-01-01'; hasta = hoy.getFullYear() + '-12-31'; }
+
+    form.querySelector('[name="fecha_inicio"]').value = desde;
+    form.querySelector('[name="fecha_fin"]').value = hasta;
+}
+
+/** Al elegir categoría, la lista de productos se limita a esa categoría. */
+$('select[name="categ_codigo"]').on('change', function() {
+    const cat = $(this).val();
+    const $prod = $('select[name="prod_codigo"]');
+    $prod.val('').trigger('change');
+    $prod.find('option').each(function() {
+        if (!$(this).val()) return;
+        $(this).prop('disabled', cat && $(this).data('categ') != cat);
+    });
+});
+
 function generarReporteProducto(formato = 'pdf') {
     const form = document.getElementById('formProducto');
     if (!form.checkValidity()) {
         form.reportValidity();
+        return;
+    }
+    if (!form.prod_codigo.value && !form.categ_codigo.value) {
+        swal('Falta un filtro', 'Elegí un producto o una categoría.', 'warning');
         return;
     }
     

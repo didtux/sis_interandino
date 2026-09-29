@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <title>Venta de {{ $producto->prod_nombre }}</title>
+    <title>{{ $titulo ?? ('Venta de ' . $producto->prod_nombre) }}</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: Arial, sans-serif; font-size: 11px; padding: 20px; }
@@ -49,7 +49,7 @@
     </div>
 
     <div class="title-section">
-        <h2>VENTA DE {{ strtoupper($producto->prod_nombre) }}</h2>
+        <h2>{{ $titulo ?? ('VENTA DE ' . strtoupper($producto->prod_nombre)) }}</h2>
         <p>DEL {{ \Carbon\Carbon::parse($fechaInicio)->format('d/m/Y') }} AL {{ \Carbon\Carbon::parse($fechaFin)->format('d/m/Y') }}</p>
     </div>
 
@@ -75,6 +75,28 @@
             </tr>
         </tbody>
     </table>
+
+    @if(!empty($porProducto) && count($porProducto))
+        {{-- Desglose por ítem: sólo en el reporte por categoría --}}
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 55%;">PRODUCTO</th>
+                    <th style="width: 15%;">CANTIDAD</th>
+                    <th style="width: 30%;">TOTAL</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach($porProducto as $fila)
+                    <tr>
+                        <td style="text-align:left;">{{ strtoupper($fila['nombre']) }}</td>
+                        <td>{{ $fila['cantidad'] }}</td>
+                        <td>Bs. {{ number_format($fila['total'], 2) }}</td>
+                    </tr>
+                @endforeach
+            </tbody>
+        </table>
+    @endif
 
     <div class="footer">
         <div style="display: table; width: 100%; margin-top: 40px;">

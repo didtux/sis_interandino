@@ -15,7 +15,7 @@
                     <form method="GET" class="mb-4">
                         <div class="row">
                             <div class="col-md-4">
-                                <label>Mes</label>
+                                <label>Mes de corte (deuda acumulada hasta)</label>
                                 <select name="mes" class="form-control">
                                     @for($m = 2; $m <= 11; $m++)
                                         <option value="{{ $m }}" {{ $mesActual == $m ? 'selected' : '' }}>
@@ -52,8 +52,10 @@
 
                     <div class="alert alert-warning">
                         <i class="fas fa-info-circle mr-2"></i>
-                        <strong>Mostrando estudiantes que NO han pagado {{ $mesesNombres[$mesActual] }}</strong>
-                        <br>Total: {{ $estudiantesEnMora->count() }} estudiante(s)
+                        <strong>Estudiantes con al menos un mes impago hasta {{ $mesesNombres[$mesActual] }}</strong>
+                        <br>La deuda es <strong>acumulada</strong>: incluye a quien debe un mes anterior aunque haya pagado los siguientes.
+                        <br>Total: {{ $estudiantesEnMora->count() }} estudiante(s) &nbsp;|&nbsp;
+                        Deuda acumulada: <strong class="text-danger">Bs. {{ number_format($deudaTotal, 2) }}</strong>
                     </div>
 
                     <div class="table-responsive-modern">
@@ -66,35 +68,17 @@
                                     <th>Monto Mensualidad</th>
                                     <th>Meses Pagados</th>
                                     <th>Meses Pendientes</th>
+                                    <th>Deuda Acumulada</th>
                                     <th>Acciones</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 @forelse($estudiantesEnMora as $index => $estudiante)
                                     @php
-                                        $mesesPagados = [];
-                                        foreach($estudiante->pagos as $pago) {
-                                            $mesesPagados = array_merge($mesesPagados, $pago->meses_cubiertos);
-                                        }
-                                        $mesesPagados = array_unique($mesesPagados);
-                                        sort($mesesPagados);
-                                        
-                                        $mesesPendientes = [];
-                                        for($m = 2; $m <= $mesActual; $m++) {
-                                            if(!in_array($m, $mesesPagados)) {
-                                                $mesesPendientes[] = $m;
-                                            }
-                                        }
-                                        
-                                        // Calcular monto mensualidad (con o sin inscripción)
-                                        if ($estudiante->inscripcion) {
-                                            $montoMensualidad = $estudiante->inscripcion->insc_monto_final / 10;
-                                        } else {
-                                            // Estimar monto basado en pagos anteriores (promedio)
-                                            $montoMensualidad = $estudiante->pagos->count() > 0 
-                                                ? $estudiante->pagos->sum('pagos_precio') / $estudiante->pagos->count() 
-                                                : 475; // Monto por defecto
-                                        }
+                                        // Calculados en PagoController::calcularMora()
+                                        $mesesPagados     = $estudiante->mora_meses_pagados;
+                                        $mesesPendientes  = $estudiante->mora_meses_pendientes;
+                                        $montoMensualidad = $estudiante->mora_mensualidad;
                                     @endphp
                                     <tr>
                                         <td data-label="N°">{{ $index + 1 }}</td>
@@ -121,6 +105,10 @@
                                                 <span class="badge badge-danger">{{ $mesesNombres[$mes] }}</span>
                                             @endforeach
                                         </td>
+                                        <td data-label="Deuda Acumulada">
+                                            <strong class="text-danger">Bs. {{ number_format($estudiante->mora_deuda, 2) }}</strong>
+                                            <br><small class="text-muted">{{ count($mesesPendientes) }} mes(es)</small>
+                                        </td>
                                         <td data-label="Acciones">
                                             <a href="{{ route('pagos.create') }}?est_codigo={{ $estudiante->est_codigo }}" class="btn btn-sm btn-primary">
                                                 <i class="fas fa-money-bill"></i> Registrar Pago
@@ -129,7 +117,7 @@
                                     </tr>
                                 @empty
                                     <tr>
-                                        <td colspan="7">
+                                        <td colspan="8">
                                             <div class="empty-state">
                                                 <i class="fas fa-check-circle text-success"></i>
                                                 <h5>No hay estudiantes en mora</h5>

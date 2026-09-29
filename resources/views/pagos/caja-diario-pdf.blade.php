@@ -13,7 +13,7 @@ table.det th,table.det td{border:1px solid #444;padding:4px;font-size:9px;}
 table.det th{background:#1c4789;color:#fff;}
 .r{text-align:right;} .c{text-align:center;}
 </style></head><body>
-<h2>REPORTE DE CAJA — MENSUALIDADES</h2>
+<h2>REPORTE DE CAJA DIARIA</h2>
 <div class="muted">Fecha: {{ \Carbon\Carbon::parse($fecha)->format('d/m/Y') }} · Impreso: {{ now()->format('d/m/Y H:i') }}</div>
 
 <table class="cards">
@@ -21,7 +21,6 @@ table.det th{background:#1c4789;color:#fff;}
         <td><div class="lbl">TOTAL COBRADO</div><div class="val">Bs. {{ number_format($resumen['total'],2) }}</div></td>
         <td><div class="lbl">EFECTIVO</div><div class="val">Bs. {{ number_format($resumen['efectivo'],2) }}</div></td>
         <td><div class="lbl">QR</div><div class="val">Bs. {{ number_format($resumen['qr'],2) }}</div></td>
-        <td><div class="lbl">MIXTO (incluye)</div><div class="val">Bs. {{ number_format($resumen['mixto'],2) }}</div></td>
         <td><div class="lbl">ESTUDIANTES COBRADOS</div><div class="val">{{ $resumen['estudiantes'] }}</div></td>
     </tr>
 </table>

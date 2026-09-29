@@ -89,13 +89,27 @@
                                 </div>
                             </div>
                             <div class="mt-2">
-                                <button type="button" class="btn btn-success btn-sm" onclick="excelLic('mensual')">
+                                <div class="small text-muted mb-1"><i class="fas fa-file-excel mr-1"></i>Excel</div>
+                                <button type="button" class="btn btn-success btn-sm" onclick="reporteLic('mensual', 'excel')">
                                     <i class="fas fa-calendar-alt mr-1"></i>Mensual (días × curso)
                                 </button>
-                                <button type="button" class="btn btn-success btn-sm" onclick="excelLic('anual-est')">
+                                <button type="button" class="btn btn-success btn-sm" onclick="reporteLic('anual-est', 'excel')">
                                     <i class="fas fa-user-graduate mr-1"></i>Anual × estudiante
                                 </button>
-                                <button type="button" class="btn btn-outline-success btn-sm" onclick="excelLic('anual-curso')">
+                                <button type="button" class="btn btn-outline-success btn-sm" onclick="reporteLic('anual-curso', 'excel')">
+                                    <i class="fas fa-layer-group mr-1"></i>Anual × curso
+                                </button>
+                            </div>
+                            {{-- Los mismos tres reportes en PDF, para firmar y archivar --}}
+                            <div class="mt-2">
+                                <div class="small text-muted mb-1"><i class="fas fa-file-pdf mr-1"></i>PDF</div>
+                                <button type="button" class="btn btn-danger btn-sm" onclick="reporteLic('mensual', 'pdf')">
+                                    <i class="fas fa-calendar-alt mr-1"></i>Mensual (días × curso)
+                                </button>
+                                <button type="button" class="btn btn-danger btn-sm" onclick="reporteLic('anual-est', 'pdf')">
+                                    <i class="fas fa-user-graduate mr-1"></i>Anual × estudiante
+                                </button>
+                                <button type="button" class="btn btn-outline-danger btn-sm" onclick="reporteLic('anual-curso', 'pdf')">
                                     <i class="fas fa-layer-group mr-1"></i>Anual × curso
                                 </button>
                             </div>
@@ -520,7 +534,12 @@ function generarReportePermisos() {
     window.open('{{ route("asistencia-config.permisos.reporte-pdf") }}?' + params.toString(), '_blank');
 }
 
-function excelLic(tipo) {
+/**
+ * Reportes de licencias. formato: 'excel' | 'pdf'. Los dos usan los mismos
+ * filtros de la pantalla; el PDF se agregó porque el Excel no sirve para
+ * firmar ni archivar.
+ */
+function reporteLic(tipo, formato) {
     var gestion = document.getElementById('lic_gestion').value || {{ date('Y') }};
     var mes     = document.getElementById('lic_mes').value;
     var turno   = document.getElementById('lic_turno').value;
@@ -529,18 +548,26 @@ function excelLic(tipo) {
     p.append('gestion', gestion);
     if (turno) p.append('turno', turno);
 
-    var url;
+    var rutas = {
+        'excel': {
+            'mensual':     '{{ route("asistencia-config.licencias.excel-mensual") }}',
+            'anual-est':   '{{ route("asistencia-config.licencias.excel-anual-est") }}',
+            'anual-curso': '{{ route("asistencia-config.licencias.excel-anual-curso") }}'
+        },
+        'pdf': {
+            'mensual':     '{{ route("asistencia-config.licencias.pdf-mensual") }}',
+            'anual-est':   '{{ route("asistencia-config.licencias.pdf-anual-est") }}',
+            'anual-curso': '{{ route("asistencia-config.licencias.pdf-anual-curso") }}'
+        }
+    };
+
     if (tipo === 'mensual') {
         p.append('mes', mes);
-        url = '{{ route("asistencia-config.licencias.excel-mensual") }}';
     } else if (tipo === 'anual-est') {
         if (!curso) { alert('Seleccione un curso para el reporte anual por estudiante.'); return; }
         p.append('cur_codigo', curso);
-        url = '{{ route("asistencia-config.licencias.excel-anual-est") }}';
-    } else {
-        url = '{{ route("asistencia-config.licencias.excel-anual-curso") }}';
     }
-    window.open(url + '?' + p.toString(), '_blank');
+    window.open(rutas[formato][tipo] + '?' + p.toString(), '_blank');
 }
 </script>
 @endsection

@@ -20,7 +20,10 @@ class ProductoController extends Controller
     public function create()
     {
         $categorias = Categoria::visible()->get();
-        return view('productos.create', compact('categorias'));
+        // El producto tiene prov_codigo y el reporte de stock muestra la columna
+        // Proveedor, pero el formulario no ofrecía dónde elegirlo.
+        $proveedores = \App\Models\Proveedor::activo()->orderBy('prov_nombre')->get();
+        return view('productos.create', compact('categorias', 'proveedores'));
     }
 
     public function store(Request $request)
@@ -36,12 +39,16 @@ class ProductoController extends Controller
             'prod_codigo' => 'PROD' . time(),
             'prod_item' => $request->prod_item,
             'categ_codigo' => $request->categ_codigo,
+            // Faltaba guardarlo, así que el reporte de stock mostraba siempre el
+            // proveedor vacío aunque se lo hubiera elegido en el formulario.
+            'prov_codigo' => $request->prov_codigo,
             'prod_nombre' => $request->prod_nombre,
             'prod_detalles' => $request->prod_detalles,
             'prod_cantidad' => $request->prod_cantidad,
             'prod_precioreal' => $request->prod_precioreal ?? $request->prod_preciounitario,
             'prod_preciounitario' => $request->prod_preciounitario,
-            'prod_preciodescuento' => $request->prod_preciodescuento ?? 0
+            'prod_preciodescuento' => $request->prod_preciodescuento ?? 0,
+            'prod_visible' => 1,
         ]);
 
         return redirect()->route('productos.index')->with('success', 'Producto creado');

@@ -7,9 +7,13 @@ use Illuminate\Http\Request;
 
 class ProveedorController extends Controller
 {
+    /**
+     * destroy() da de baja lógica (prov_estado = 0), pero acá no se filtraba por
+     * estado: el proveedor volvía a aparecer igual y parecía que "no elimina".
+     */
     public function index()
     {
-        $proveedores = Proveedor::orderBy('prov_nombre')->paginate(50);
+        $proveedores = Proveedor::activo()->orderBy('prov_nombre')->paginate(50);
         return view('proveedores.index', compact('proveedores'));
     }
 
@@ -56,7 +60,20 @@ class ProveedorController extends Controller
 
     public function destroy($id)
     {
-        Proveedor::findOrFail($id)->update(['prov_estado' => 0]);
+        $proveedor = Proveedor::findOrFail($id);
+
+        // La baja es lógica, así que la base nunca se queja. Se avisa acá para
+        // que no desaparezca un proveedor que todavía respalda stock o compras.
+        $productos    = $proveedor->productos()->count();
+        $movimientos  = $proveedor->movimientos()->count();
+        if ($productos > 0 || $movimientos > 0) {
+            return redirect()->route('proveedores.index')->with(
+                'error',
+                "No se dio de baja «{$proveedor->prov_nombre}»: tiene {$productos} producto(s) y {$movimientos} movimiento(s) asociados."
+            );
+        }
+
+        $proveedor->update(['prov_estado' => 0]);
         return redirect()->route('proveedores.index')->with('success', 'Proveedor eliminado');
     }
 }

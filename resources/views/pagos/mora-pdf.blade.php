@@ -49,55 +49,33 @@
 
     <div class="title-section">
         <h2>REPORTE DE ESTUDIANTES EN MORA</h2>
-        <p>Mes: {{ $mesesNombres[$mesActual] }} {{ $year }}</p>
+        <p>Deuda acumulada hasta {{ $mesesNombres[$mesActual] }} de {{ $year }}</p>
     </div>
 
     <div class="alert-box">
-        <strong>Total de estudiantes en mora: {{ $estudiantesEnMora->count() }}</strong>
+        <strong>Total de estudiantes en mora: {{ $estudiantesEnMora->count() }}</strong> &nbsp;|&nbsp;
+        <strong>Deuda acumulada: Bs. {{ number_format($deudaTotal, 2) }}</strong>
     </div>
 
     <table>
         <thead>
             <tr>
-                <th width="5%">N°</th>
-                <th width="25%">ESTUDIANTE</th>
-                <th width="15%">CURSO</th>
-                <th width="12%">MONTO MENSUAL</th>
-                <th width="20%">MESES PAGADOS</th>
-                <th width="23%">MESES PENDIENTES</th>
+                <th width="4%">N°</th>
+                <th width="22%">ESTUDIANTE</th>
+                <th width="12%">CURSO</th>
+                <th width="10%">MENSUAL</th>
+                <th width="17%">MESES PAGADOS</th>
+                <th width="20%">MESES PENDIENTES</th>
+                <th width="15%">DEUDA ACUMULADA</th>
             </tr>
         </thead>
         <tbody>
-            @php
-                $totalDeuda = 0;
-            @endphp
             @foreach($estudiantesEnMora as $index => $estudiante)
                 @php
-                    $mesesPagados = [];
-                    foreach($estudiante->pagos as $pago) {
-                        $mesesPagados = array_merge($mesesPagados, $pago->meses_cubiertos);
-                    }
-                    $mesesPagados = array_unique($mesesPagados);
-                    sort($mesesPagados);
-                    
-                    $mesesPendientes = [];
-                    for($m = 2; $m <= $mesActual; $m++) {
-                        if(!in_array($m, $mesesPagados)) {
-                            $mesesPendientes[] = $m;
-                        }
-                    }
-                    
-                    // Calcular monto mensualidad (con o sin inscripción)
-                    if ($estudiante->inscripcion) {
-                        $montoMensualidad = $estudiante->inscripcion->insc_monto_final / 10;
-                    } else {
-                        $montoMensualidad = $estudiante->pagos->count() > 0 
-                            ? $estudiante->pagos->sum('pagos_precio') / $estudiante->pagos->count() 
-                            : 475;
-                    }
-                    
-                    $deudaTotal = $montoMensualidad * count($mesesPendientes);
-                    $totalDeuda += $deudaTotal;
+                    // Calculados en PagoController::calcularMora()
+                    $mesesPagados     = $estudiante->mora_meses_pagados;
+                    $mesesPendientes  = $estudiante->mora_meses_pendientes;
+                    $montoMensualidad = $estudiante->mora_mensualidad;
                 @endphp
                 <tr>
                     <td class="centro">{{ $index + 1 }}</td>
@@ -118,6 +96,7 @@
                             <span class="badge badge-danger">{{ substr($mesesNombres[$mes], 0, 3) }}</span>
                         @endforeach
                     </td>
+                    <td class="numero"><strong>Bs. {{ number_format($estudiante->mora_deuda, 2) }}</strong></td>
                 </tr>
             @endforeach
         </tbody>
@@ -126,7 +105,7 @@
     <div class="resumen">
         <strong>RESUMEN:</strong><br>
         Total estudiantes en mora: {{ $estudiantesEnMora->count() }}<br>
-        Deuda total estimada: Bs. {{ number_format($totalDeuda, 2) }}
+        Deuda acumulada total: Bs. {{ number_format($deudaTotal, 2) }}
     </div>
 
     <div class="footer">

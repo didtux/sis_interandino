@@ -58,6 +58,10 @@
         <div class="parrafo">
             Señor Padre de familia: Concluidas las evaluaciones parciales su hija(o)
             <strong>{{ mb_strtoupper(trim($est->est_apellidos.' '.$est->est_nombres), 'UTF-8') }}</strong>
+            @if(($est->est_visible ?? 1) == 0)
+                {{-- No se filtran los retirados a proposito, pero tienen que verse como tales. --}}
+                <span style="background:#c0392b;color:#fff;padding:1px 5px;font-weight:bold;">RETIRADO</span>
+            @endif
             a la fecha <span class="neg">TIENE NOTA DE REPROBACIÓN</span> en las siguientes materias:
             <span class="it">(TOMAR EN CUENTA SOLAMENTE LO RESALTADO)</span>
         </div>

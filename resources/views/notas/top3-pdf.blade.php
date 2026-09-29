@@ -25,7 +25,7 @@ th{background:#f0f0f0;}
             <thead><tr><th>Posición</th><th>Estudiante</th><th>Suma</th><th>Promedio</th></tr></thead>
             <tbody>
                 @foreach($g['rows'] as $i => $r)
-                    <tr><td class="pos">{{ $i + 1 }}°</td><td>{{ $r->nombre }}</td><td class="num">{{ number_format($r->suma,1,'.',',') }}</td><td class="num">{{ number_format($r->promedio,1,'.',',') }}</td></tr>
+                    <tr><td class="pos">{{ $i + 1 }}°</td><td>{{ $r->nombre }}</td><td class="num">{{ number_format($r->suma,0,'.',',') }}</td><td class="num">{{ number_format($r->promedio,1,'.',',') }}</td></tr>
                 @endforeach
             </tbody>
         </table>

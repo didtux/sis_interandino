@@ -50,7 +50,7 @@
                     <button class="btn btn-sm btn-primary mb-2" data-toggle="modal" data-target="#mKardex"><i class="fas fa-plus"></i> Nuevo documento</button>
                     <table class="table table-sm table-striped" style="font-size:13px;">
                         <thead>
-                            <tr><th>Tipo</th><th>Título</th><th>Solicitado</th><th>Entrega</th><th>Estado</th><th>Archivo</th><th></th></tr>
+                            <tr><th>Tipo</th><th>Título</th><th>Solicitado</th><th>Entrega</th><th>Estado</th><th>Adjunto dirección</th><th>Entrega del docente</th><th></th></tr>
                         </thead>
                         <tbody>
                             @forelse($kardex as $k)
@@ -67,6 +67,15 @@
                                     <td>
                                         @if($k->kdx_archivo)
                                             <a href="{{ asset('uploads/kardex-docente/'.$k->kdx_archivo) }}" target="_blank" class="btn btn-sm btn-outline-primary"><i class="fas fa-file"></i></a>
+                                        @endif
+                                    </td>
+                                    {{-- Lo que subió el docente desde su bandeja --}}
+                                    <td>
+                                        @if($k->kdx_archivo_docente)
+                                            <a href="{{ asset('uploads/kardex-docente/'.$k->kdx_archivo_docente) }}" target="_blank" class="btn btn-sm btn-outline-success"><i class="fas fa-file-download"></i></a>
+                                            <small class="d-block text-muted">{{ $k->kdx_fecha_entrega_docente ? $k->kdx_fecha_entrega_docente->format('d/m/Y H:i') : '' }}</small>
+                                        @else
+                                            <span class="badge badge-secondary">sin entregar</span>
                                         @endif
                                     </td>
                                     <td>
@@ -99,7 +108,7 @@
                                     </div>
                                 </div>
                             @empty
-                                <tr><td colspan="7" class="text-center text-muted">Sin registros</td></tr>
+                                <tr><td colspan="8" class="text-center text-muted">Sin registros</td></tr>
                             @endforelse
                         </tbody>
                     </table>

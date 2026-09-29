@@ -18,8 +18,16 @@
     table.sec { width:100%; border-collapse:collapse; margin-bottom:8px; }
     table.sec td { border:1px solid #000; height:22px; text-align:center; font-size:10px; }
     td.lbl { width:90px; font-weight:bold; background:#dbe5f1; font-size:9px; line-height:1.1; }
-    .firma { margin-top:40px; text-align:center; font-size:10px; }
-    .firma .l { display:inline-block; border-top:1px solid #000; min-width:240px; padding-top:2px; }
+    /* Naranja = el docente reporto a ese estudiante en la advertencia parcial,
+       mismo color que usa la matriz en pantalla y el PDF de lote. */
+    td.marc { background:#f6a623; color:#000; font-weight:bold; }
+
+    .cierre { width:100%; margin-top:45px; border-collapse:collapse; }
+    .cierre td { width:33.33%; text-align:center; vertical-align:bottom; padding:0 10px; border:none; }
+    .cierre .linea { border-top:1px solid #000; margin-top:34px; }
+    .cierre .cap { font-size:9px; padding-top:3px; }
+    .cierre .recuadro-sello { border:1px dashed #999; color:#aaa; font-size:9px;
+        height:70px; line-height:70px; }
 </style>
 </head>
 <body>
@@ -65,7 +73,7 @@
                 @if($ci === 0)
                     <td class="lbl" rowspan="{{ count($chunks) }}">{{ mb_strtoupper($fila['curso'], 'UTF-8') }}</td>
                 @endif
-                @foreach($chunk as $n)<td>{{ $n }}</td>@endforeach
+                @foreach($chunk as $n)<td class="{{ in_array($n, $fila['marcados'] ?? []) ? 'marc' : '' }}">{{ $n }}</td>@endforeach
                 @for($k = count($chunk); $k < $maxCols; $k++)<td></td>@endfor
             </tr>
         @endforeach
@@ -74,8 +82,14 @@
     <p style="text-align:center;color:#777;">El docente no tiene cursos asignados.</p>
 @endforelse
 
-<div class="firma">
-    <span class="l">FIRMA/SELLO MAESTRA(O)</span>
-</div>
+{{-- Firma y sello separados: antes compartian una sola linea y no habia
+     lugar para estampar el sello. --}}
+<table class="cierre">
+    <tr>
+        <td><div class="linea"></div><div class="cap">FIRMA MAESTRA(O)</div></td>
+        <td><div class="recuadro-sello">SELLO</div></td>
+        <td><div class="linea"></div><div class="cap">RECIBIDO — DIRECCIÓN</div></td>
+    </tr>
+</table>
 </body>
 </html>

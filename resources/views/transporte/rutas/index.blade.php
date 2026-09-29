@@ -205,9 +205,14 @@ function verMapa(codigo, nombre, coordenadas) {
 
 function verDetalle(rutaId) {
     $('#modalDetalle').modal('show');
+    cargarDetalleRuta(rutaId);
+}
+
+/** Recarga el detalle de la ruta; el mes elige de qué mes se muestran los pagos. */
+function cargarDetalleRuta(rutaId, mes) {
     $('#contenidoDetalle').html('<div class="text-center"><i class="fas fa-spinner fa-spin fa-2x"></i></div>');
-    
-    $.get('{{ url("/rutas") }}/' + rutaId + '/detalle', function(data) {
+
+    $.get('{{ url("/rutas") }}/' + rutaId + '/detalle', mes ? { mes: mes } : {}, function(data) {
         $('#contenidoDetalle').html(data);
     }).fail(function() {
         $('#contenidoDetalle').html('<div class="alert alert-danger">Error al cargar los datos</div>');

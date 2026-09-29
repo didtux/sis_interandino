@@ -87,6 +87,7 @@
                                 @foreach($datos['materias'] as $m)
                                     <th class="mat"><div>{{ mb_strtoupper($m->mat_nombre, 'UTF-8') }}</div></th>
                                 @endforeach
+                                <th style="width:60px;">ACTA</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -110,10 +111,18 @@
                                             <span class="nota">{{ $nota !== null ? $nota : '' }}</span>
                                         </td>
                                     @endforeach
+                                    {{-- Acta de conformidad que firma el padre por este trimestre --}}
+                                    <td class="text-center">
+                                        <a target="_blank" class="btn btn-sm btn-outline-dark py-0 px-1"
+                                           title="Acta de conformidad para firma del padre"
+                                           href="{{ route('alertas.acta-conformidad', ['est_codigo'=>$est->est_codigo,'periodo_id'=>$periodoId,'gestion'=>$gestion]) }}">
+                                            <i class="fas fa-file-signature"></i>
+                                        </a>
+                                    </td>
                                 </tr>
                             @endforeach
                             @if($datos['estudiantes']->isEmpty())
-                                <tr><td colspan="{{ 2 + $datos['materias']->count() }}" class="text-center text-muted py-3">Sin estudiantes en el curso.</td></tr>
+                                <tr><td colspan="{{ 3 + $datos['materias']->count() }}" class="text-center text-muted py-3">Sin estudiantes en el curso.</td></tr>
                             @endif
                         </tbody>
                     </table>

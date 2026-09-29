@@ -430,25 +430,91 @@ class NotaReporteController extends Controller
         return $pdf->stream('centralizador-anual-'.$cursoCod.'-'.$gestion.'.pdf');
     }
 
+    /**
+     * Puntajes de cuadro de honor de los estudiantes de los cursos dados: la
+     * SUMA y el PROMEDIO que imprime el centralizador (BoletinNotasService).
+     *
+     * Antes cada variante del cuadro tenía su consulta SQL: promediaba el
+     * decimal, contaba notas sin aprobar y de asignaciones inactivas, y el
+     * top 3 mezclaba gestiones. El puesto no se podía verificar con el boletín.
+     *
+     * Devuelve filas ordenadas por promedio y, a igual promedio, por suma.
+     * Los estudiantes sin ninguna nota aprobada quedan afuera.
+     */
+    private function puntajesHonor($cursos, $periodos, ?int $periodoNumero): array
+    {
+        $service = new \App\Services\BoletinNotasService();
+        $cursosPorCodigo = collect($cursos)->keyBy('cur_codigo');
+
+        $estudiantes = Estudiante::whereIn('cur_codigo', $cursosPorCodigo->keys())
+            ->where('est_visible', 1)
+            ->get(['est_codigo', 'est_apellidos', 'est_nombres', 'cur_codigo']);
+
+        $rows = [];
+        foreach ($estudiantes as $e) {
+            $c = $cursosPorCodigo->get($e->cur_codigo);
+            $pt = $service->puntaje($e->est_codigo, $e->cur_codigo, $periodos, $periodoNumero);
+            if ($pt['materias'] === 0) continue;
+            $rows[] = (object) [
+                'est_codigo' => $e->est_codigo,
+                'nombre'     => trim($e->est_apellidos . ' ' . $e->est_nombres),
+                'cur_codigo' => $c->cur_codigo,
+                'cur_nombre' => $c->cur_nombre,
+                'cur_nivel'  => $c->cur_nivel,
+                'cur_orden'  => $c->cur_orden,
+                'suma'       => $pt['suma'],
+                'promedio'   => $pt['promedio'],
+                'exacto'     => $pt['exacto'],
+                'materias'   => $pt['materias'],
+            ];
+        }
+
+        usort($rows, fn($a, $b) => [$b->exacto, $b->suma, $a->nombre] <=> [$a->exacto, $a->suma, $b->nombre]);
+        return $rows;
+    }
+
+    /** Ranking de cursos: promedio de los puntajes de sus estudiantes. */
+    private function rankingCursosHonor(array $rows): array
+    {
+        $ranking = [];
+        foreach (collect($rows)->groupBy('cur_codigo') as $cur => $ests) {
+            $f = $ests->first();
+            $ranking[] = (object) [
+                'cur_codigo'     => $cur,
+                'cur_nombre'     => $f->cur_nombre,
+                'cur_nivel'      => $f->cur_nivel,
+                'cur_orden'      => $f->cur_orden,
+                'promedio_curso' => round($ests->avg('promedio'), 2),
+                'estudiantes'    => $ests->count(),
+            ];
+        }
+        usort($ranking, fn($a, $b) => $b->promedio_curso <=> $a->promedio_curso);
+        return $ranking;
+    }
+
     /** Cuadro de Honor: por curso, nivel o colegio */
     public function cuadroHonor(Request $request)
     {
-        $tipo      = $request->input('tipo', 'curso'); // curso | nivel | colegio
+        $tipo      = $request->input('tipo', 'curso'); // curso | nivel | colegio | ue | ue-nivel
         $cursoCod  = $request->input('curso');
         $nivelIn   = $request->input('nivel');
         $periodoId = $request->input('periodo_id'); // opcional: trimestre específico
         $gestion   = (int) $request->input('gestion', date('Y'));
         $config    = DB::table('sistema_configuracion')->first();
 
+        $periodos = NotaPeriodo::activo()->gestion($gestion)->orderBy('periodo_numero')->get();
+
         // Etiqueta del trimestre para el título
-        $trimestreLabel = '';
+        $periodoNumero   = null;
+        $trimestreLabel  = ' — ANUAL';
+        $trimestreNombre = 'ANUAL';
         if ($periodoId) {
-            $per = DB::table('notas_config_periodos')->where('periodo_id', $periodoId)->first();
+            $per = NotaPeriodo::find($periodoId);
             if ($per) {
-                $trimestreLabel = ' — ' . ($per->periodo_nombre ?? ($per->periodo_numero.'° TRIMESTRE'));
+                $periodoNumero   = (int) $per->periodo_numero;
+                $trimestreNombre = $per->periodo_nombre ?: ($per->periodo_numero . '° TRIMESTRE');
+                $trimestreLabel  = ' — ' . $trimestreNombre;
             }
-        } else {
-            $trimestreLabel = ' — ANUAL';
         }
 
         // Si llega tipo=nivel sin nivel explícito pero con curso, deriva el nivel del curso
@@ -456,28 +522,13 @@ class NotaReporteController extends Controller
             $nivelIn = Curso::where('cur_codigo', $cursoCod)->value('cur_nivel');
         }
 
+        $todosLosCursos = Curso::orderBy('cur_orden')->orderBy('cur_nombre')->get();
+
         // ── tipo = ue / ue-nivel: ranking de CURSOS por promedio del curso ──
         if (in_array($tipo, ['ue', 'ue-nivel'])) {
-            $sqlUE = "
-                SELECT c.cur_codigo, c.cur_nombre, c.cur_nivel, c.cur_orden,
-                       ROUND(AVG(COALESCE(n.nota_promedio_decimal, n.nota_promedio_trimestral)), 1) AS promedio_curso,
-                       COUNT(DISTINCT e.est_codigo) AS estudiantes
-                FROM colegio_estudiantes e
-                JOIN colegio_cursos c ON c.cur_codigo COLLATE utf8mb4_unicode_ci = e.cur_codigo COLLATE utf8mb4_unicode_ci
-                JOIN colegio_notas n ON n.est_codigo COLLATE utf8mb4_unicode_ci = e.est_codigo COLLATE utf8mb4_unicode_ci
-                JOIN notas_config_periodos p ON p.periodo_id = n.periodo_id
-                WHERE e.est_visible = 1
-                  AND p.periodo_gestion = ?
-            ";
-            $paramsUE = [$gestion];
-            if ($periodoId) { $sqlUE .= " AND n.periodo_id = ? "; $paramsUE[] = $periodoId; }
-            $sqlUE .= " GROUP BY c.cur_codigo, c.cur_nombre, c.cur_nivel, c.cur_orden
-                        ORDER BY promedio_curso DESC ";
-            $rankingCursos = DB::select($sqlUE, $paramsUE);
-
-            $trimestreNombre = $periodoId
-                ? (DB::table('notas_config_periodos')->where('periodo_id', $periodoId)->value('periodo_nombre') ?? '')
-                : 'ANUAL';
+            $rankingCursos = $this->rankingCursosHonor(
+                $this->puntajesHonor($todosLosCursos, $periodos, $periodoNumero)
+            );
 
             if ($tipo === 'ue-nivel') {
                 // Agrupar por nivel manteniendo el ranking dentro de cada nivel.
@@ -506,45 +557,9 @@ class NotaReporteController extends Controller
 
         // ── tipo = colegio: top 3 por curso, agrupado por curso ordenado ──
         if ($tipo === 'colegio') {
-            $sqlCol = "
-                SELECT t.* FROM (
-                    SELECT e.est_codigo,
-                           CONCAT(e.est_apellidos, ' ', e.est_nombres) AS nombre,
-                           c.cur_codigo, c.cur_nombre, c.cur_nivel, c.cur_orden,
-                           ROUND(SUM(COALESCE(n.nota_promedio_decimal, n.nota_promedio_trimestral)), 2) AS suma,
-                           ROUND(AVG(COALESCE(n.nota_promedio_decimal, n.nota_promedio_trimestral)), 2) AS promedio
-                    FROM colegio_estudiantes e
-                    JOIN colegio_cursos c ON c.cur_codigo COLLATE utf8mb4_unicode_ci = e.cur_codigo COLLATE utf8mb4_unicode_ci
-                    JOIN colegio_notas n ON n.est_codigo COLLATE utf8mb4_unicode_ci = e.est_codigo COLLATE utf8mb4_unicode_ci
-                    JOIN notas_config_periodos p ON p.periodo_id = n.periodo_id
-                    WHERE e.est_visible = 1
-                      AND p.periodo_gestion = ?
-            ";
-            $paramsCol = [$gestion];
-            if ($periodoId) { $sqlCol .= " AND n.periodo_id = ? "; $paramsCol[] = $periodoId; }
-            $sqlCol .= "
-                    GROUP BY e.est_codigo, e.est_apellidos, e.est_nombres, c.cur_codigo, c.cur_nombre, c.cur_nivel, c.cur_orden
-                ) t
-                ORDER BY t.cur_orden ASC, t.cur_nombre ASC, t.promedio DESC, t.suma DESC
-            ";
-            $allRows = DB::select($sqlCol, $paramsCol);
-
-            // Agrupar por curso y tomar top 3 de cada uno
-            $porCurso = [];
-            foreach ($allRows as $r) {
-                $key = $r->cur_codigo;
-                if (!isset($porCurso[$key])) {
-                    $porCurso[$key] = [
-                        'cur_nombre' => $r->cur_nombre,
-                        'cur_nivel'  => $r->cur_nivel,
-                        'cur_orden'  => $r->cur_orden,
-                        'rows'       => [],
-                    ];
-                }
-                if (count($porCurso[$key]['rows']) < 3) {
-                    $porCurso[$key]['rows'][] = $r;
-                }
-            }
+            $porCurso = $this->top3PorCursoHonor(
+                $this->puntajesHonor($todosLosCursos, $periodos, $periodoNumero), $todosLosCursos
+            );
             $titulo = 'CUADRO DE HONOR — INSTITUCIÓN' . $trimestreLabel;
             $pdf = Pdf::loadView('notas.cuadro-honor-institucional-pdf', compact('porCurso','titulo','config','gestion'))
                 ->setPaper('letter');
@@ -552,52 +567,22 @@ class NotaReporteController extends Controller
         }
 
         // ── tipo = curso o nivel: ranking lineal ──
-        $sql = "
-            SELECT e.est_codigo,
-                   CONCAT(e.est_apellidos, ' ', e.est_nombres) AS nombre,
-                   c.cur_nombre, c.cur_nivel,
-                   ROUND(SUM(COALESCE(n.nota_promedio_decimal, n.nota_promedio_trimestral)), 2) AS suma,
-                   ROUND(AVG(COALESCE(n.nota_promedio_decimal, n.nota_promedio_trimestral)), 2) AS promedio
-            FROM colegio_estudiantes e
-            JOIN colegio_cursos c ON c.cur_codigo COLLATE utf8mb4_unicode_ci = e.cur_codigo COLLATE utf8mb4_unicode_ci
-            JOIN colegio_notas n ON n.est_codigo COLLATE utf8mb4_unicode_ci = e.est_codigo COLLATE utf8mb4_unicode_ci
-            JOIN notas_config_periodos p ON p.periodo_id = n.periodo_id
-            WHERE e.est_visible = 1
-              AND p.periodo_gestion = ?
-        ";
-        $params = [$gestion];
-        if ($periodoId) { $sql .= " AND n.periodo_id = ? "; $params[] = $periodoId; }
-
+        $cursosFiltro = $todosLosCursos;
         if ($tipo === 'curso' && $cursoCod) {
-            $sql .= " AND e.cur_codigo = ? ";
-            $params[] = $cursoCod;
+            $cursosFiltro = $todosLosCursos->where('cur_codigo', $cursoCod);
         } elseif ($tipo === 'nivel' && $nivelIn) {
-            $sql .= " AND c.cur_nivel = ? ";
-            $params[] = $nivelIn;
+            $cursosFiltro = $todosLosCursos->where('cur_nivel', $nivelIn);
         }
-        $sql .= " GROUP BY e.est_codigo, e.est_apellidos, e.est_nombres, c.cur_nombre, c.cur_nivel
-                  ORDER BY promedio DESC, suma DESC ";
 
-        $rows = DB::select($sql, $params);
-
-        // ── Si tipo=curso: calcular ranking comparativo del curso vs otros ──
+        // Para el curso hace falta el ranking contra los demás, así que se
+        // calcula el colegio entero una sola vez y se filtra de ahí.
         $rankingCursos = [];
         if ($tipo === 'curso' && $cursoCod) {
-            $sqlRank = "
-                SELECT c.cur_codigo, c.cur_nombre, c.cur_nivel, c.cur_orden,
-                       ROUND(AVG(COALESCE(n.nota_promedio_decimal, n.nota_promedio_trimestral)), 2) AS promedio_curso,
-                       COUNT(DISTINCT e.est_codigo) AS estudiantes
-                FROM colegio_estudiantes e
-                JOIN colegio_cursos c ON c.cur_codigo COLLATE utf8mb4_unicode_ci = e.cur_codigo COLLATE utf8mb4_unicode_ci
-                JOIN colegio_notas n ON n.est_codigo COLLATE utf8mb4_unicode_ci = e.est_codigo COLLATE utf8mb4_unicode_ci
-                JOIN notas_config_periodos p ON p.periodo_id = n.periodo_id
-                WHERE e.est_visible = 1 AND p.periodo_gestion = ?
-            ";
-            $paramsRank = [$gestion];
-            if ($periodoId) { $sqlRank .= " AND n.periodo_id = ? "; $paramsRank[] = $periodoId; }
-            $sqlRank .= " GROUP BY c.cur_codigo, c.cur_nombre, c.cur_nivel, c.cur_orden
-                          ORDER BY promedio_curso DESC ";
-            $rankingCursos = DB::select($sqlRank, $paramsRank);
+            $todas = $this->puntajesHonor($todosLosCursos, $periodos, $periodoNumero);
+            $rankingCursos = $this->rankingCursosHonor($todas);
+            $rows = array_values(array_filter($todas, fn($r) => $r->cur_codigo === $cursoCod));
+        } else {
+            $rows = $this->puntajesHonor($cursosFiltro, $periodos, $periodoNumero);
         }
 
         $titulo = match($tipo) {
@@ -606,13 +591,6 @@ class NotaReporteController extends Controller
         };
 
         $cursoActual = $cursoCod ? Curso::where('cur_codigo', $cursoCod)->first() : null;
-        $trimestreNombre = '';
-        if ($periodoId) {
-            $per = DB::table('notas_config_periodos')->where('periodo_id', $periodoId)->first();
-            $trimestreNombre = $per->periodo_nombre ?? (($per->periodo_numero ?? '') . '° TRIMESTRE');
-        } else {
-            $trimestreNombre = 'ANUAL';
-        }
 
         $pdf = Pdf::loadView('notas.cuadro-honor-pdf', compact(
             'rows','rankingCursos','cursoCod','cursoActual','titulo','config','gestion','tipo','trimestreNombre'
@@ -620,37 +598,35 @@ class NotaReporteController extends Controller
         return $pdf->stream('cuadro-honor-'.$tipo.'-'.$gestion.'.pdf');
     }
 
-    /** Top 3 por curso */
+    /** Agrupa puntajes por curso (en orden de curso) y deja los 3 primeros. */
+    private function top3PorCursoHonor(array $rows, $cursos): array
+    {
+        $porCurso = [];
+        foreach ($cursos as $c) {
+            $top = array_slice(array_values(array_filter($rows, fn($r) => $r->cur_codigo === $c->cur_codigo)), 0, 3);
+            if (!$top) continue;
+            $porCurso[$c->cur_codigo] = [
+                'cur_nombre' => $c->cur_nombre,
+                'nombre'     => $c->cur_nombre,
+                'cur_nivel'  => $c->cur_nivel,
+                'cur_orden'  => $c->cur_orden,
+                'rows'       => $top,
+            ];
+        }
+        return $porCurso;
+    }
+
+    /** Top 3 por curso (anual) */
     public function top3PorCurso(Request $request)
     {
-        $gestion = (int) $request->input('gestion', date('Y'));
-        $config  = DB::table('sistema_configuracion')->first();
+        $gestion  = (int) $request->input('gestion', date('Y'));
+        $config   = DB::table('sistema_configuracion')->first();
+        $periodos = NotaPeriodo::activo()->gestion($gestion)->orderBy('periodo_numero')->get();
+        $cursos   = Curso::orderBy('cur_orden')->orderBy('cur_nombre')->get();
 
-        $sql = "
-            SELECT cc.cur_codigo, cc.cur_nombre, cc.cur_orden,
-                   e.est_codigo,
-                   CONCAT(e.est_apellidos, ' ', e.est_nombres) AS nombre,
-                   ROUND(SUM(COALESCE(n.nota_promedio_decimal, n.nota_promedio_trimestral)), 2) AS suma,
-                   ROUND(AVG(COALESCE(n.nota_promedio_decimal, n.nota_promedio_trimestral)), 2) AS promedio
-            FROM colegio_lista_curso lc
-            JOIN colegio_estudiantes e ON e.est_codigo COLLATE utf8mb4_unicode_ci = lc.est_codigo COLLATE utf8mb4_unicode_ci AND e.est_visible = 1
-            JOIN colegio_cursos cc      ON cc.cur_codigo COLLATE utf8mb4_unicode_ci = lc.cur_codigo COLLATE utf8mb4_unicode_ci
-            JOIN colegio_notas n        ON n.est_codigo COLLATE utf8mb4_unicode_ci = e.est_codigo COLLATE utf8mb4_unicode_ci
-            WHERE lc.lista_gestion = ?
-            GROUP BY cc.cur_codigo, cc.cur_nombre, cc.cur_orden, e.est_codigo, e.est_apellidos, e.est_nombres
-            ORDER BY cc.cur_orden ASC, suma DESC
-        ";
-        $rows = DB::select($sql, [$gestion]);
-
-        $porCurso = [];
-        foreach ($rows as $r) {
-            $porCurso[$r->cur_codigo]['nombre'] = $r->cur_nombre;
-            $porCurso[$r->cur_codigo]['rows'][] = $r;
-        }
-        foreach ($porCurso as &$g) {
-            $g['rows'] = array_slice($g['rows'], 0, 3);
-        }
-        unset($g);
+        // Antes sumaba las notas de TODAS las gestiones: el filtro de gestión
+        // estaba sólo en la lista del curso, no en las notas.
+        $porCurso = $this->top3PorCursoHonor($this->puntajesHonor($cursos, $periodos, null), $cursos);
 
         $pdf = Pdf::loadView('notas.top3-pdf', compact('porCurso','config','gestion'))->setPaper('letter');
         return $pdf->stream('top3-cursos-'.$gestion.'.pdf');

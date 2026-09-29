@@ -14,8 +14,11 @@ table.grid td{
     vertical-align:top;
     page-break-inside:avoid;
 }
-.qr-card img{width:90px;height:90px;}
-.qr-card .ph{width:90px;height:90px;border:1px dashed #999;line-height:90px;display:inline-block;font-size:8px;}
+/* Sin width/height: el PNG se imprime a su tamano nativo. Forzarlo a 90px
+   sobre un bitmap de otro tamano hacia un reescalado no entero y los
+   modulos del QR quedaban con bordes irregulares (lectura fallida). */
+.qr-card img{display:inline-block;}
+.qr-card .ph{width:145px;height:145px;border:1px dashed #999;line-height:145px;display:inline-block;font-size:8px;}
 .qr-card .name{font-weight:bold;font-size:8.5px;margin-top:3px;line-height:1.15;}
 .qr-card .code{color:#555;font-size:8px;}
 </style></head><body>
@@ -25,10 +28,16 @@ table.grid td{
 @php
     $cols = 3;
     $filas = $estudiantes->chunk($cols);
+    // scale 3 daba un bitmap de ~87px que ademas se reescalaba a 90px en el PDF:
+    // modulos de ancho irregular y QR que no leen. Con scale 5 el modulo mide
+    // 5px exactos (29 modulos = 145px ~ 38mm impresos, contra los ~24mm de
+    // antes) y la hoja sigue entrando en pocas paginas. ECC_Q (25%) aguanta el
+    // desgaste de una hoja plastificada o manoseada; con ECC_H el codigo
+    // saltaria a version 2 y creceria sin necesidad.
     $qrOpts = new \chillerlan\QRCode\QROptions([
         'outputType' => \chillerlan\QRCode\QRCode::OUTPUT_IMAGE_PNG,
-        'eccLevel'   => \chillerlan\QRCode\QRCode::ECC_M,
-        'scale'      => 3,
+        'eccLevel'   => \chillerlan\QRCode\QRCode::ECC_Q,
+        'scale'      => 5,
         'imageBase64'=> true,
     ]);
     $qrInstance = new \chillerlan\QRCode\QRCode($qrOpts);

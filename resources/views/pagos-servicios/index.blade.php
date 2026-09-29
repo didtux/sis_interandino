@@ -101,6 +101,11 @@
                                                 <button class="btn btn-sm btn-info" onclick="generarReciboServicio('{{ $pago->pserv_codigo }}', '{{ addslashes($pago->estudiante->est_nombres ?? '') }} {{ addslashes($pago->estudiante->est_apellidos ?? '') }}', '{{ addslashes($pago->padreFamilia->pfam_nombres ?? '') }}', '{{ addslashes($pago->estudiante->curso->cur_nombre ?? '') }}', '{{ addslashes($pago->servicio->serv_nombre ?? '') }}', {{ $pago->pserv_total }}, '{{ $pago->pserv_fecha->format('d/m/Y') }}')">
                                                     <i class="fas fa-receipt"></i>
                                                 </button>
+                                                {{-- Comprobante para la impresora termica de caja. --}}
+                                                <a class="btn btn-sm btn-secondary" target="_blank" title="Recibo térmico 80mm"
+                                                   href="{{ route('pagos-servicios.recibo', $pago->pserv_id) }}?formato=termica">
+                                                    <i class="fas fa-print"></i>
+                                                </a>
                                                 <button class="btn btn-sm btn-danger" onclick="anularPago({{ $pago->pserv_id }})">
                                                     <i class="fas fa-ban"></i>
                                                 </button>

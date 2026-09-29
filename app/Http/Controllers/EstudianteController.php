@@ -228,30 +228,15 @@ class EstudianteController extends Controller
             $estudiantes = $estudiantes->sortBy(fn($e) => $lista[$e->est_codigo] ?? 9999)->values();
         }
 
-        $filename = 'estudiantes-'.($cursoCod ?: 'todos').'-'.date('Y-m-d').'.csv';
-        $headers  = [
-            'Content-Type'        => 'text/csv; charset=UTF-8',
-            'Content-Disposition' => 'attachment; filename="'.$filename.'"',
-        ];
-        return response()->stream(function() use ($estudiantes, $lista) {
-            $out = fopen('php://output', 'w');
-            // BOM UTF-8 para Excel
-            fwrite($out, chr(0xEF).chr(0xBB).chr(0xBF));
-            fputcsv($out, ['#','Codigo','Apellidos','Nombres','CI','Curso','Sexo','FechaNac','Telefono','Padre/Tutor','Tel.Padre','Estado']);
-            foreach ($estudiantes as $e) {
-                $padre = $e->padres->first();
-                $num   = $lista[$e->est_codigo] ?? '';
-                fputcsv($out, [
-                    $num,
-                    $e->est_codigo, $e->est_apellidos, $e->est_nombres, $e->est_ci,
-                    $e->curso->cur_nombre ?? '', $e->est_sexo ?? '', $e->est_fechanac ?? '',
-                    $e->est_celular ?? '',
-                    $padre->pfam_nombres ?? '', $padre->pfam_numeroscelular ?? '',
-                    ($e->est_visible == 0 ? 'RETIRADO' : 'ACTIVO'),
-                ]);
-            }
-            fclose($out);
-        }, 200, $headers);
+        // .xlsx de verdad: el CSV anterior usaba coma como separador y Excel en
+        // es-BO espera punto y coma, así que todo el archivo caía en una columna.
+        $titulo   = $cursoCod ? (optional($estudiantes->first())->curso->cur_nombre ?? $cursoCod) : 'Todos los cursos';
+        $filename = 'estudiantes-'.($cursoCod ?: 'todos').'-'.date('Y-m-d').'.xlsx';
+
+        return \Maatwebsite\Excel\Facades\Excel::download(
+            new \App\Exports\EstudiantesExport($estudiantes, $lista, $titulo),
+            $filename
+        );
     }
 
     public function create()
@@ -284,14 +269,42 @@ class EstudianteController extends Controller
             'est_foto' => 'nullable|image|max:2048'
         ]);
 
-        $data = $request->except('est_foto');
-        
+        // Lista negra de observados: hasta ahora sólo se consultaba al inscribir,
+        // así que secretaría cargaba la ficha completa y recién ahí se enteraba
+        // del bloqueo. Se compara por CI porque el código todavía no existe.
+        if ($obs = $this->observadoBloqueante($request->est_ci)) {
+            return back()->withErrors(['error' =>
+                'ESTUDIANTE OBSERVADO (gestión ' . $obs->obs_gestion . '). Motivo (' . $obs->obs_motivo_tipo . '): ' .
+                $obs->obs_motivo . '. Solo la dirección puede registrarlo.'
+            ])->withInput();
+        }
+
+        $data = $request->except(['est_foto', 'override_observado']);
+
         if ($request->hasFile('est_foto')) {
             $data['est_foto'] = $request->file('est_foto')->store('estudiantes', 'public');
         }
 
         Estudiante::create($data);
         return redirect()->route('estudiantes.index')->with('success', 'Estudiante creado exitosamente');
+    }
+
+    /**
+     * Devuelve la observación vigente que impide registrar a este CI, o null.
+     * Dirección (Admin / Director General / Directora Académica) puede levantar
+     * el bloqueo enviando override_observado=1, igual que en InscripcionController.
+     */
+    private function observadoBloqueante(?string $ci)
+    {
+        $obs = \App\Models\EstudianteObservado::vigentePorCi($ci, (int) date('Y'));
+        if (!$obs) {
+            return null;
+        }
+        $esDireccion = in_array(auth()->user()->rol_id ?? 0, [1, 9, 10]);
+        if ($esDireccion && request()->boolean('override_observado')) {
+            return null;
+        }
+        return $obs;
     }
 
     public function show($id)
@@ -325,6 +338,18 @@ class EstudianteController extends Controller
         }
 
         $estudiante->update($data);
+
+        // En edición no se bloquea (hay que poder corregir la ficha de un
+        // observado), pero sí se avisa: el dato estaba invisible desde acá.
+        $obs = \App\Models\EstudianteObservado::vigentePara($estudiante->est_codigo, (int) date('Y'))
+            ?: \App\Models\EstudianteObservado::vigentePorCi($estudiante->est_ci, (int) date('Y'));
+        if ($obs) {
+            return redirect()->route('estudiantes.index')
+                ->with('success', 'Estudiante actualizado exitosamente')
+                ->with('warning', 'Atención: este estudiante está en la lista de observados desde la gestión ' .
+                    $obs->obs_gestion . ' (' . $obs->obs_motivo_tipo . '). No podrá inscribirse sin autorización de dirección.');
+        }
+
         return redirect()->route('estudiantes.index')->with('success', 'Estudiante actualizado exitosamente');
     }
 

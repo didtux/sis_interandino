@@ -22,7 +22,7 @@
     </div>
     
     <div class="info">
-        <div class="info-row"><span class="label">Producto:</span><br>{{ $producto->prod_nombre }}</div>
+        <div class="info-row"><span class="label">{{ !empty($porProducto) ? 'Categoría' : 'Producto' }}:</span><br>{{ $producto->prod_nombre }}</div>
         <div class="info-row"><span class="label">Período:</span><br>{{ \Carbon\Carbon::parse($fechaInicio)->format('d/m/Y') }} - {{ \Carbon\Carbon::parse($fechaFin)->format('d/m/Y') }}</div>
     </div>
 

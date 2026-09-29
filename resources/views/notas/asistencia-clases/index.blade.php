@@ -158,6 +158,13 @@
                                                         {{ $activo ? 'Registrar' : 'Ver' }}
                                                     @endif
                                                 </a>
+                                                {{-- Toma de asistencia por QR: sólo tiene sentido dentro del periodo --}}
+                                                @if($activo)
+                                                    <a href="{{ route('asistencia-clases.qr', [$a->curmatdoc_id, $p->periodo_id]) }}"
+                                                       class="btn btn-sm btn-outline-dark mt-1" style="min-width:110px;" title="Tomar asistencia escaneando QR">
+                                                        <i class="fas fa-qrcode mr-1"></i>QR
+                                                    </a>
+                                                @endif
                                                 @if($totalReg > 0)
                                                     <div style="font-size:10px;margin-top:3px;">
                                                         <span class="text-success" title="Presentes">P:{{ $stats['P'] ?? 0 }}</span>

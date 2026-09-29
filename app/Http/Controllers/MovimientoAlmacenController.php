@@ -85,6 +85,19 @@ class MovimientoAlmacenController extends Controller
     {
         $query = Producto::with(['categoria', 'proveedor'])->visible();
 
+        // Categoría / proveedor / producto: el reporte sólo permitía filtrar por
+        // nivel de stock y texto libre, así que no había forma de sacar "todo lo
+        // de un proveedor" ni "todo lo de una categoría".
+        if ($request->filled('categ_codigo')) {
+            $query->where('categ_codigo', $request->categ_codigo);
+        }
+        if ($request->filled('prov_codigo')) {
+            $query->where('prov_codigo', $request->prov_codigo);
+        }
+        if ($request->filled('prod_codigo')) {
+            $query->where('prod_codigo', $request->prod_codigo);
+        }
+
         if ($request->filled('estado')) {
             switch ($request->estado) {
                 case 'sin_stock':
@@ -111,7 +124,10 @@ class MovimientoAlmacenController extends Controller
         }
 
         $productos = $query->orderBy('prod_cantidad', 'asc')->get();
-        return view('movimientos.reporte-stock', compact('productos'));
+        $categorias  = \App\Models\Categoria::orderBy('categ_nombre')->get();
+        $proveedores = \App\Models\Proveedor::activo()->orderBy('prov_nombre')->get();
+        $catalogo    = Producto::visible()->orderBy('prod_nombre')->get(['prod_codigo', 'prod_nombre']);
+        return view('movimientos.reporte-stock', compact('productos', 'categorias', 'proveedores', 'catalogo'));
     }
 
     public function reporteStockPdf(Request $request)
@@ -119,6 +135,20 @@ class MovimientoAlmacenController extends Controller
         $query = Producto::with(['categoria', 'proveedor'])->visible();
 
         $filtros = [];
+        // Mismos filtros que la pantalla (ver reporteStock).
+        if ($request->filled('categ_codigo')) {
+            $filtros['categoria'] = optional(\App\Models\Categoria::where('categ_codigo', $request->categ_codigo)->first())->categ_nombre ?? $request->categ_codigo;
+            $query->where('categ_codigo', $request->categ_codigo);
+        }
+        if ($request->filled('prov_codigo')) {
+            $filtros['proveedor'] = optional(\App\Models\Proveedor::where('prov_codigo', $request->prov_codigo)->first())->prov_nombre ?? $request->prov_codigo;
+            $query->where('prov_codigo', $request->prov_codigo);
+        }
+        if ($request->filled('prod_codigo')) {
+            $filtros['producto'] = optional(\App\Models\Producto::where('prod_codigo', $request->prod_codigo)->first())->prod_nombre ?? $request->prod_codigo;
+            $query->where('prod_codigo', $request->prod_codigo);
+        }
+
         if ($request->filled('estado')) {
             $filtros['estado'] = $request->estado;
             switch ($request->estado) {

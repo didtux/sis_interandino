@@ -285,6 +285,15 @@ $(document).ready(function() {
         }, 250);
     });
 
+    // Si se llegó desde el listado de mora (?est_codigo=...), se deja el alumno
+    // ya elegido para no obligar al cajero a buscarlo de nuevo.
+    @if(!empty($estPreseleccionado))
+    var estDesdeMora = @json($estPreseleccionado);
+    if ($('#buscar-estudiante option[value="' + estDesdeMora + '"]').length) {
+        $('#buscar-estudiante').val(estDesdeMora).trigger('change');
+    }
+    @endif
+
     $('#checkOtroPadre').on('change', function() {
         var esOtro = $(this).is(':checked');
         $('#divPadreSelect').toggle(!esOtro);

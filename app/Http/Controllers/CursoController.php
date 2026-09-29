@@ -42,6 +42,43 @@ class CursoController extends Controller
         return view('cursos.index', compact('cursos', 'q', 'nivel', 'estado'));
     }
 
+    /**
+     * Cursos con su cantidad de estudiantes, imprimible. El withCount de index()
+     * ya tenía el dato pero no había forma de sacarlo en papel.
+     * Respeta los mismos filtros de la pantalla.
+     */
+    public function reportePdf(Request $request)
+    {
+        $nivel  = $request->input('nivel', '');
+        $estado = $request->input('estado', 'activos');
+
+        $query = Curso::query()->withCount(['estudiantes' => function($q2) {
+            $q2->where('est_visible', 1);
+        }]);
+
+        if ($estado === 'activos')       $query->where('cur_visible', 1);
+        elseif ($estado === 'inactivos') $query->where('cur_visible', 0);
+        if ($nivel !== '')               $query->where('cur_nivel', $nivel);
+
+        $cursos = $query->ordenado()->get();
+        // Agrupado en PHP: las colaciones mezcladas de este esquema hacen que
+        // agrupar/ordenar en SQL entre tablas no sea confiable.
+        $porNivel = $cursos->groupBy(fn($c) => $c->cur_nivel ?: 'SIN NIVEL');
+
+        $etiquetaEstado = [
+            'activos'   => 'Cursos activos',
+            'inactivos' => 'Cursos inactivos',
+        ][$estado] ?? 'Todos los cursos';
+        if ($nivel !== '') $etiquetaEstado .= ' — Nivel ' . $nivel;
+
+        $gestion = date('Y');
+
+        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('cursos.reporte-pdf',
+                compact('porNivel', 'etiquetaEstado', 'gestion'))
+            ->setPaper('letter', 'portrait');
+        return $pdf->stream('cursos-cantidad-estudiantes-' . date('Y-m-d') . '.pdf');
+    }
+
     public function create()
     {
         return view('cursos.create');

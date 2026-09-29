@@ -15,6 +15,10 @@ th{background:#e8e8e8;}
 .tag-doc{background:#f39c12;color:#fff;padding:1px 4px;border-radius:2px;font-size:8px;font-weight:bold;margin-right:2px;}
 .tag-dir{background:#e91e63;color:#fff;padding:1px 4px;border-radius:2px;font-size:8px;font-weight:bold;margin-right:2px;}
 .felicit{color:#27ae60;font-weight:bold;font-style:italic;}
+/* Mismo tratamiento que los PDF de notas: fila roja y badge RETIRADO. */
+.fila-ret{background:#ffe6e6;}
+.fila-ret .nombre{color:#c0392b;}
+.tag-ret{background:#c0392b;color:#fff;padding:1px 5px;border-radius:2px;font-size:8px;font-weight:bold;}
 .foot{margin-top:10px;font-size:7.5px;color:#666;text-align:right;}
 .legend{font-size:8px;margin-bottom:6px;}
 .legend span{padding:1px 5px;border-radius:2px;color:#fff;font-weight:bold;margin-right:6px;}
@@ -55,12 +59,18 @@ th{background:#e8e8e8;}
     </thead>
     <tbody>
         @foreach($estudiantes as $i => $est)
-            @php $mats = $porEst[$est->est_codigo] ?? []; @endphp
-            <tr>
+            @php
+                $mats = $porEst[$est->est_codigo] ?? [];
+                // Un retirado sin materias observadas salia felicitado.
+                $retirado = ($est->est_visible ?? 1) == 0;
+            @endphp
+            <tr class="{{ $retirado ? 'fila-ret' : '' }}">
                 <td>{{ (isset($lista) && isset($lista[$est->est_codigo])) ? $lista[$est->est_codigo] : $i + 1 }}</td>
                 <td class="nombre">{{ mb_strtoupper($est->est_apellidos.' '.$est->est_nombres, 'UTF-8') }}</td>
                 <td>
-                    @if(empty($mats))
+                    @if($retirado)
+                        <span class="tag-ret">RETIRADO</span>
+                    @elseif(empty($mats))
                         <span class="felicit">FELICITACIONES</span>
                     @else
                         @foreach($mats as $matCod => $info)

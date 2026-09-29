@@ -1,7 +1,6 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
-use Illuminate\Support\Facades\Artisan;
 /*
 |--------------------------------------------------------------------------
 | Web Routes
@@ -18,10 +17,9 @@ Route::get('/nosotros', [App\Http\Controllers\LandingController::class, 'nosotro
 Route::get('/niveles', [App\Http\Controllers\LandingController::class, 'niveles'])->name('landing.niveles');
 Route::get('/historia', [App\Http\Controllers\LandingController::class, 'historia'])->name('landing.historia');
 Route::get('/contacto', [App\Http\Controllers\LandingController::class, 'contacto'])->name('landing.contacto');
-Route::get('/cmd/{command}', function($command) {
-    Artisan::call($command);
-    dd(Artisan::output());
-});
+// Acá había un `GET /cmd/{command}` que ejecutaba cualquier comando de Artisan
+// sin autenticación (un `/cmd/migrate:fresh` vaciaba la base). Se eliminó.
+// Para tareas de mantenimiento se usa la consola del servidor.
 
 // Validación pública de boletines vía QR
 Route::get('/boletin/validar/{token}', [App\Http\Controllers\NotaController::class, 'validarBoletin'])->name('boletin.validar');
@@ -76,6 +74,7 @@ Route::middleware(['auth', 'permiso', 'auditoria', 'reportes:600,1024M', 'aviso-
     Route::post('cursos/{id}/asignar-materias', [App\Http\Controllers\CursoController::class, 'asignarMaterias'])->name('cursos.asignar-materias');
     Route::post('cursos/{id}/asignar-docente', [App\Http\Controllers\CursoController::class, 'asignarDocente'])->name('cursos.asignar-docente');
     Route::delete('cursos/{id}/quitar-docente/{matCodigo}', [App\Http\Controllers\CursoController::class, 'quitarDocente'])->name('cursos.quitar-docente');
+    Route::get('cursos-reporte-pdf', [App\Http\Controllers\CursoController::class, 'reportePdf'])->name('cursos.reporte-pdf');
     Route::resource('cursos', App\Http\Controllers\CursoController::class);
 
     // Parametrización: Niveles y Gestiones
@@ -100,6 +99,7 @@ Route::middleware(['auth', 'permiso', 'auditoria', 'reportes:600,1024M', 'aviso-
     Route::get('api/estudiantes-por-curso/{curso}', [App\Http\Controllers\AsistenciaController::class, 'estudiantesPorCurso']);
     Route::get('asistencias-reporte-trimestral', [App\Http\Controllers\AsistenciaController::class, 'reporteTrimestral'])->name('asistencias.reporte-trimestral');
     Route::get('asistencias-reporte-anual', [App\Http\Controllers\AsistenciaController::class, 'reporteAnual'])->name('asistencias.reporte-anual');
+    Route::get('asistencias-reporte-mensual-semanas', [App\Http\Controllers\AsistenciaController::class, 'reporteMensualSemanas'])->name('asistencias.reporte-mensual-semanas');
     Route::get('asistencias-reporte-trimestral-excel', [App\Http\Controllers\AsistenciaController::class, 'reporteTrimestralExcel'])->name('asistencias.reporte-trimestral-excel');
     Route::get('asistencias-reporte-anual-excel', [App\Http\Controllers\AsistenciaController::class, 'reporteAnualExcel'])->name('asistencias.reporte-anual-excel');
     Route::get('asistencias-reporte-atrasos', [App\Http\Controllers\AsistenciaController::class, 'reporteAtrasos'])->name('asistencias.reporte-atrasos');
@@ -136,6 +136,7 @@ Route::middleware(['auth', 'permiso', 'auditoria', 'reportes:600,1024M', 'aviso-
     Route::get('notas/calificar/{curmatdoc}/{periodo}', [App\Http\Controllers\NotaController::class, 'calificar'])->name('notas.calificar');
     Route::get('notas/reporte-valoracion/{curmatdoc}/{periodo}', [App\Http\Controllers\NotaController::class, 'reporteValoracion'])->name('notas.reporte-valoracion');
     Route::post('notas/guardar', [App\Http\Controllers\NotaController::class, 'guardar'])->name('notas.guardar');
+    Route::post('notas/etiquetas', [App\Http\Controllers\NotaController::class, 'guardarEtiquetas'])->name('notas.etiquetas');
     Route::post('notas/aprobar/{curmatdoc}/{periodo}', [App\Http\Controllers\NotaController::class, 'aprobar'])->name('notas.aprobar');
     Route::post('notas/aprobar-masivo', [App\Http\Controllers\NotaController::class, 'aprobarMasivo'])->name('notas.aprobar-masivo');
 
@@ -158,6 +159,7 @@ Route::middleware(['auth', 'permiso', 'auditoria', 'reportes:600,1024M', 'aviso-
     Route::get('alertas-parcial/hoja-docente', [App\Http\Controllers\AlertaParcialController::class, 'hojaDocente'])->name('alertas.hoja-docente');
     Route::get('alertas-parcial/curso',       [App\Http\Controllers\AlertaParcialController::class, 'reporteCurso'])->name('alertas.curso');
     Route::get('alertas-parcial/estudiante',  [App\Http\Controllers\AlertaParcialController::class, 'reporteEstudiante'])->name('alertas.estudiante');
+    Route::get('alertas-parcial/acta-conformidad', [App\Http\Controllers\AlertaParcialController::class, 'actaConformidad'])->name('alertas.acta-conformidad');
 
     // ── Kardex Docentes ──
     Route::get('kardex-docente', [App\Http\Controllers\KardexDocenteController::class, 'index'])->name('kardex-docente.index');
@@ -177,6 +179,8 @@ Route::middleware(['auth', 'permiso', 'auditoria', 'reportes:600,1024M', 'aviso-
     Route::get('comunicados/{id}/reporte',     [App\Http\Controllers\ComunicadoController::class, 'reportePdf'])->name('comunicados.reporte');
     Route::get('mis-comunicados',              [App\Http\Controllers\ComunicadoController::class, 'misComunicados'])->name('comunicados.docente');
     Route::post('mis-comunicados/{cdId}/subir',[App\Http\Controllers\ComunicadoController::class, 'subirArchivo'])->name('comunicados.subir');
+    // El docente entrega desde su bandeja la documentación que le pidió dirección por kardex.
+    Route::post('mis-documentos/{id}/entregar', [App\Http\Controllers\KardexDocenteController::class, 'entregarDocumento'])->name('kardex-docente.entregar');
 
     // ── Kardex de Estudiantes (anotaciones del docente sobre alumnos) ──
     Route::get('kardex-estudiante',                    [App\Http\Controllers\EstudianteKardexController::class, 'index'])->name('kardex-estudiante.index');
@@ -198,6 +202,9 @@ Route::middleware(['auth', 'permiso', 'auditoria', 'reportes:600,1024M', 'aviso-
     Route::get('asistencia-clases', [App\Http\Controllers\AsistenciaClaseController::class, 'index'])->name('asistencia-clases.index');
     Route::get('asistencia-clases/{curmatdoc}/{periodo}/general', [App\Http\Controllers\AsistenciaClaseController::class, 'vistaGeneral'])->name('asistencia-clases.vista-general');
     Route::get('asistencia-clases/{curmatdoc}/{periodo}/reporte-pdf', [App\Http\Controllers\AsistenciaClaseController::class, 'reportePdf'])->name('asistencia-clases.reporte-pdf');
+    // QR de asistencia por clase (docente). Va ANTES de la ruta genérica {curmatdoc}/{periodo}.
+    Route::get('asistencia-clases/{curmatdoc}/{periodo}/qr', [App\Http\Controllers\AsistenciaClaseController::class, 'qr'])->name('asistencia-clases.qr');
+    Route::post('asistencia-clases/qr-marcar', [App\Http\Controllers\AsistenciaClaseController::class, 'qrMarcar'])->name('asistencia-clases.qr-marcar');
     Route::get('asistencia-clases/{curmatdoc}/{periodo}', [App\Http\Controllers\AsistenciaClaseController::class, 'registrar'])->name('asistencia-clases.registrar');
     Route::post('asistencia-clases/guardar', [App\Http\Controllers\AsistenciaClaseController::class, 'guardar'])->name('asistencia-clases.guardar');
 
@@ -214,6 +221,7 @@ Route::middleware(['auth', 'permiso', 'auditoria', 'reportes:600,1024M', 'aviso-
     
     // Agenda
     Route::get('agenda/padres-estudiante/{est_codigo}', [App\Http\Controllers\AgendaController::class, 'padresPorEstudiante'])->name('agenda.padres-estudiante');
+    Route::get('agenda-reporte-pdf', [App\Http\Controllers\AgendaController::class, 'reportePdf'])->name('agenda.reporte-pdf');
     Route::resource('agenda', App\Http\Controllers\AgendaController::class);
     
     // Pagos
@@ -251,6 +259,10 @@ Route::middleware(['auth', 'permiso', 'auditoria', 'reportes:600,1024M', 'aviso-
         Route::get('/licencias/excel-mensual',    [App\Http\Controllers\ReporteLicenciaController::class, 'mensualExcel'])->name('licencias.excel-mensual');
         Route::get('/licencias/excel-anual-est',  [App\Http\Controllers\ReporteLicenciaController::class, 'anualEstudianteExcel'])->name('licencias.excel-anual-est');
         Route::get('/licencias/excel-anual-curso',[App\Http\Controllers\ReporteLicenciaController::class, 'anualCursoExcel'])->name('licencias.excel-anual-curso');
+        // Versiones PDF de los mismos tres reportes (el colegio los necesita para firmar/archivar).
+        Route::get('/licencias/pdf-mensual',      [App\Http\Controllers\ReporteLicenciaController::class, 'mensualPdf'])->name('licencias.pdf-mensual');
+        Route::get('/licencias/pdf-anual-est',    [App\Http\Controllers\ReporteLicenciaController::class, 'anualEstudiantePdf'])->name('licencias.pdf-anual-est');
+        Route::get('/licencias/pdf-anual-curso',  [App\Http\Controllers\ReporteLicenciaController::class, 'anualCursoPdf'])->name('licencias.pdf-anual-curso');
         
         // Horarios especiales por rango de fechas (horario de invierno, recesos)
         Route::get('/horarios-especiales', [App\Http\Controllers\HorarioEspecialController::class, 'index'])->name('horarios-especiales');
@@ -299,6 +311,7 @@ Route::middleware(['auth', 'permiso', 'auditoria', 'reportes:600,1024M', 'aviso-
     Route::get('inscripciones-reporte-pdf', [App\Http\Controllers\InscripcionController::class, 'reportePdf'])->name('inscripciones.reporte-pdf');
     
     // Módulo de Descuentos
+    Route::get('descuentos-estudiantes', [App\Http\Controllers\DescuentoController::class, 'estudiantes'])->name('descuentos.estudiantes');
     Route::resource('descuentos', App\Http\Controllers\DescuentoController::class);
     
     // Módulo de Transporte

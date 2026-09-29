@@ -34,19 +34,22 @@ class EstudianteObservado extends Model
 
     /**
      * ¿El estudiante está bloqueado para inscribirse en la gestión indicada?
+     *
+     * La observación arrastra: se compara con "<=" y no con "=", porque un
+     * observado de 2025 que nunca fue liberado sigue observado en 2026. Con
+     * igualdad exacta el bloqueo se caía solo al cambiar de año.
      */
     public static function estaBloqueado(string $estCodigo, int $gestion): bool
     {
-        return self::where('est_codigo', $estCodigo)
-            ->where('obs_gestion', $gestion)
-            ->where('obs_activo', 1)->exists();
+        return self::vigentePara($estCodigo, $gestion) !== null;
     }
 
     public static function vigentePara(string $estCodigo, int $gestion)
     {
         return self::where('est_codigo', $estCodigo)
-            ->where('obs_gestion', $gestion)
-            ->where('obs_activo', 1)->first();
+            ->where('obs_gestion', '<=', $gestion)
+            ->where('obs_activo', 1)
+            ->orderBy('obs_gestion', 'desc')->first();
     }
 
     /**
@@ -58,7 +61,8 @@ class EstudianteObservado extends Model
         $ci = trim((string) $ci);
         if ($ci === '') return null;
         return self::where('obs_estudiante_ci', $ci)
-            ->where('obs_gestion', $gestion)
-            ->where('obs_activo', 1)->first();
+            ->where('obs_gestion', '<=', $gestion)
+            ->where('obs_activo', 1)
+            ->orderBy('obs_gestion', 'desc')->first();
     }
 }

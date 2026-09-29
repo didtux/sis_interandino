@@ -199,6 +199,32 @@
         </tbody>
     </table>
 
+    {{--
+        Referencia de los casilleros. En la cabecera de la tabla no entra el
+        nombre (la celda mide 18px), así que va acá: el docente lo carga desde
+        "Nombrar casilleros" en la pantalla de calificación.
+    --}}
+    @if(!empty($etiquetas))
+        <div style="margin-top:8px;font-size:7px;border-top:1px solid #999;padding-top:4px;">
+            <strong>REFERENCIA DE LAS COLUMNAS:</strong>
+            @foreach($dimensiones as $dim)
+                @php
+                    $items = [];
+                    for ($c = 1; $c <= $dim->dimension_columnas; $c++) {
+                        if (!empty($etiquetas[$dim->dimension_id . '-' . $c])) {
+                            $items[] = $c . ') ' . $etiquetas[$dim->dimension_id . '-' . $c];
+                        }
+                    }
+                @endphp
+                @if($items)
+                    <span style="margin-right:10px;">
+                        <strong>{{ $dim->dimension_nombre }}:</strong> {{ implode(' · ', $items) }}
+                    </span>
+                @endif
+            @endforeach
+        </div>
+    @endif
+
     <div class="footer">
         Impreso: {{ now()->format('d/m/Y H:i:s') }} | {{ $asignacion->curso->cur_nombre }} | {{ $asignacion->materia->mat_nombre }} | {{ $periodo->periodo_nombre }} | Gestión {{ $gestion }}
     </div>

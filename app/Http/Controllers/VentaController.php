@@ -71,6 +71,7 @@ class VentaController extends Controller
 
         $venCodigo = 'VEN' . time();
         $totalGeneral = 0;
+        $primeraVenta = null;   // para poder abrir el ticket al cerrar la venta
 
         foreach ($request->productos as $item) {
             $producto = Producto::where('prod_codigo', $item['prod_codigo'])->first();
@@ -79,7 +80,7 @@ class VentaController extends Controller
                 return response()->json(['success' => false, 'message' => 'Stock insuficiente para ' . $producto->prod_nombre]);
             }
 
-            Venta::create([
+            $filaVenta = Venta::create([
                 'ven_codigo' => $venCodigo,
                 'prod_codigo' => $item['prod_codigo'],
                 'ven_cliente' => $request->ven_cliente,
@@ -93,11 +94,20 @@ class VentaController extends Controller
                 'venta_usuario' => auth()->user()->us_codigo
             ]);
 
+            $primeraVenta = $primeraVenta ?: $filaVenta;
             $producto->decrement('prod_cantidad', $item['cantidad']);
             $totalGeneral += $item['subtotal'];
         }
 
-        return response()->json(['success' => true, 'total' => $totalGeneral]);
+        // Se devuelve el id para que la pantalla abra el ticket sola: antes el
+        // backend no devolvía nada y había que ir a buscar la venta en el
+        // listado para poder imprimir el comprobante.
+        return response()->json([
+            'success'    => true,
+            'total'      => $totalGeneral,
+            'ven_codigo' => $venCodigo,
+            'recibo_url' => $primeraVenta ? route('ventas.recibo', $primeraVenta->ven_id) : null,
+        ]);
     }
 
     public function reportePdf(Request $request)
@@ -206,8 +216,9 @@ class VentaController extends Controller
 
     public function reportes()
     {
-        $productos = Producto::visible()->get();
-        return view('ventas.reportes', compact('productos'));
+        $productos  = Producto::visible()->get();
+        $categorias = \App\Models\Categoria::orderBy('categ_nombre')->get();
+        return view('ventas.reportes', compact('productos', 'categorias'));
     }
 
     public function reporteProductoPdf(Request $request)
@@ -216,14 +227,28 @@ class VentaController extends Controller
             ini_set('memory_limit', '1024M');
             ini_set('max_execution_time', 600);
             
-            $request->validate([
-                'prod_codigo' => 'required'
-            ]);
+            // Se puede pedir por producto o por categoría entera. Antes sólo
+            // existía por producto, así que para saber cuánto se vendió de
+            // "Refrigerios" había que sacar un reporte por cada ítem y sumar.
+            if (!$request->filled('prod_codigo') && !$request->filled('categ_codigo')) {
+                return back()->with('error', 'Elegí un producto o una categoría para el reporte.');
+            }
 
-            $producto = Producto::where('prod_codigo', $request->prod_codigo)->firstOrFail();
-            
-            $query = Venta::where('prod_codigo', $request->prod_codigo)
-                ->where('venta_estado', 'completado');
+            $porProducto = null;
+            $query = Venta::where('venta_estado', 'completado');
+
+            if ($request->filled('prod_codigo')) {
+                $producto = Producto::where('prod_codigo', $request->prod_codigo)->firstOrFail();
+                $titulo   = 'VENTA DE ' . strtoupper($producto->prod_nombre);
+                $query->where('prod_codigo', $request->prod_codigo);
+            } else {
+                $categoria = \App\Models\Categoria::where('categ_codigo', $request->categ_codigo)->firstOrFail();
+                $codigos   = Producto::where('categ_codigo', $request->categ_codigo)->pluck('prod_codigo');
+                $titulo    = 'VENTAS DE LA CATEGORÍA ' . strtoupper($categoria->categ_nombre);
+                // El formato térmico imprime un solo nombre; le pasamos el de la categoría.
+                $producto  = new Producto(['prod_nombre' => $categoria->categ_nombre]);
+                $query->whereIn('prod_codigo', $codigos);
+            }
             
             $fechaInicio = $request->fecha_inicio ?? now()->subMonth()->format('Y-m-d');
             $fechaFin = $request->fecha_fin ?? now()->format('Y-m-d');
@@ -238,6 +263,19 @@ class VentaController extends Controller
             })->map(function($items) {
                 return $items->sum('venta_preciototal');
             });
+
+            // En el reporte por categoría interesa además el desglose por ítem.
+            if ($request->filled('categ_codigo') && !$request->filled('prod_codigo')) {
+                $nombres = Producto::whereIn('prod_codigo', $ventasData->pluck('prod_codigo')->unique())
+                    ->pluck('prod_nombre', 'prod_codigo');
+                $porProducto = $ventasData->groupBy('prod_codigo')->map(function($items, $cod) use ($nombres) {
+                    return [
+                        'nombre'   => $nombres[$cod] ?? $cod,
+                        'cantidad' => $items->sum('venta_cantidad'),
+                        'total'    => $items->sum('venta_preciototal'),
+                    ];
+                })->sortByDesc('total')->values();
+            }
             
             $formato = $request->formato ?? 'pdf';
             $vista = $formato == 'termica' ? 'ventas.reporte-producto-termica' : 'ventas.reporte-producto-pdf';
@@ -252,11 +290,11 @@ class VentaController extends Controller
                 $papel = 'letter';
             }
             
-            $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView($vista, compact('producto', 'ventas', 'fechaInicio', 'fechaFin'))
+            $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView($vista, compact('producto', 'ventas', 'fechaInicio', 'fechaFin', 'titulo', 'porProducto'))
                 ->setPaper($papel, 'portrait')
                 ->setOption('isHtml5ParserEnabled', true)
                 ->setOption('isRemoteEnabled', true);
-            return $pdf->stream('venta-producto-' . $producto->prod_codigo . '.pdf');
+            return $pdf->stream('ventas-' . \Illuminate\Support\Str::slug($producto->prod_nombre) . '.pdf');
         } catch (\Exception $e) {
             return back()->with('error', 'Error al generar reporte: ' . $e->getMessage());
         }

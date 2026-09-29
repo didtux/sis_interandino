@@ -7,11 +7,16 @@
             <div class="card modern-card">
                 <div class="card-header d-flex justify-content-between align-items-center flex-wrap">
                     <h4><i class="fas fa-school mr-2"></i>Cursos</h4>
-                    @puede('cursos', 'crear')
-                    <a href="{{ route('cursos.create') }}" class="btn btn-primary-modern">
-                        <i class="fas fa-plus mr-1"></i>Nuevo Curso
-                    </a>
-                    @endpuede
+                    <div>
+                        <a href="{{ route('cursos.reporte-pdf', request()->only(['nivel', 'estado'])) }}" class="btn btn-danger" target="_blank">
+                            <i class="fas fa-file-pdf mr-1"></i>PDF cursos y estudiantes
+                        </a>
+                        @puede('cursos', 'crear')
+                        <a href="{{ route('cursos.create') }}" class="btn btn-primary-modern">
+                            <i class="fas fa-plus mr-1"></i>Nuevo Curso
+                        </a>
+                        @endpuede
+                    </div>
                 </div>
                 <div class="card-body">
                     @if(session('success'))

@@ -32,6 +32,7 @@
                 </div>
                 <div class="card-body">
                     @if(session('success'))<div class="alert alert-success-modern"><i class="fas fa-check-circle mr-2"></i>{{ session('success') }}</div>@endif
+                    @if(session('warning'))<div class="alert alert-warning"><i class="fas fa-exclamation-triangle mr-2"></i>{{ session('warning') }}</div>@endif
                     @if(session('error'))<div class="alert alert-danger"><i class="fas fa-exclamation-circle mr-2"></i>{{ session('error') }}</div>@endif
 
                     <form method="GET" class="mb-4">

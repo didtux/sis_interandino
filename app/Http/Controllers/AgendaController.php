@@ -47,6 +47,14 @@ class AgendaController extends Controller
         if ($request->filled('tipo')) {
             $query->where('age_tipo', $request->tipo);
         }
+        // Rango de fechas: el mismo que usa reportePdf, para que lo impreso
+        // coincida con lo que se está viendo en pantalla.
+        if ($request->filled('fecha_inicio')) {
+            $query->whereDate('age_fechahora', '>=', $request->fecha_inicio);
+        }
+        if ($request->filled('fecha_fin')) {
+            $query->whereDate('age_fechahora', '<=', $request->fecha_fin);
+        }
 
         $agendas = $query->orderBy('age_fechahora', 'desc')->paginate(20)->appends($request->query());
 
@@ -60,6 +68,59 @@ class AgendaController extends Controller
         ]);
 
         return view('agenda.index', compact('agendas', 'eventos'));
+    }
+
+    /**
+     * Agenda imprimible. El módulo sólo existía en pantalla: no había ningún
+     * método de PDF, así que la agenda no se podía llevar a una reunión ni
+     * pegar en la sala de profesores.
+     *
+     * Respeta los filtros de la pantalla y agrega rango de fechas y curso.
+     */
+    public function reportePdf(Request $request)
+    {
+        $query = Agenda::activo()->with('estudiante.curso');
+
+        $partes = [];
+
+        if ($request->filled('buscar')) {
+            $buscar = $request->buscar;
+            $query->where(function ($q) use ($buscar) {
+                $q->where('age_titulo', 'like', "%$buscar%")
+                  ->orWhereHas('estudiante', fn($e) => $e->where('est_nombres', 'like', "%$buscar%")->orWhere('est_apellidos', 'like', "%$buscar%"));
+            });
+            $partes[] = 'Búsqueda: ' . $buscar;
+        }
+        if ($request->filled('tipo')) {
+            $query->where('age_tipo', $request->tipo);
+            $partes[] = 'Tipo: ' . ($request->tipo == 1 ? 'Evento' : 'Aviso');
+        }
+        if ($request->filled('curso_codigo')) {
+            $query->where('curso_codigo', $request->curso_codigo);
+            $partes[] = 'Curso: ' . (Curso::where('cur_codigo', $request->curso_codigo)->value('cur_nombre') ?? $request->curso_codigo);
+        }
+        if ($request->filled('fecha_inicio')) {
+            $query->whereDate('age_fechahora', '>=', $request->fecha_inicio);
+        }
+        if ($request->filled('fecha_fin')) {
+            $query->whereDate('age_fechahora', '<=', $request->fecha_fin);
+        }
+        if ($request->filled('fecha_inicio') || $request->filled('fecha_fin')) {
+            $partes[] = 'Del ' . ($request->fecha_inicio ?: '…') . ' al ' . ($request->fecha_fin ?: '…');
+        }
+
+        $agendas = $query->orderBy('age_fechahora', 'asc')->get();
+
+        // Agrupado en PHP por el día, que es como se lee la agenda en papel.
+        $porDia = $agendas->groupBy(fn($a) => $a->age_fechahora ? $a->age_fechahora->format('Y-m-d') : 'sin-fecha');
+        $cursos = Curso::pluck('cur_nombre', 'cur_codigo');
+        $total  = $agendas->count();
+        $subtitulo = $partes ? implode('  —  ', $partes) : 'Todos los registros activos';
+
+        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('agenda.reporte-pdf',
+                compact('porDia', 'cursos', 'total', 'subtitulo'))
+            ->setPaper('letter', 'portrait');
+        return $pdf->stream('agenda-' . date('Y-m-d') . '.pdf');
     }
 
     public function create()

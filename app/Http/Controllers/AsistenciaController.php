@@ -398,6 +398,32 @@ class AsistenciaController extends Controller
         return $this->horariosEspeciales ??= new \App\Services\HorarioEspecialService();
     }
 
+    /**
+     * Ventana horaria de un turno, con el mismo criterio que el escaneo QR
+     * (ver EscaneoAsistenciaController::registrar): Mañana 07:00-12:59,
+     * Tarde 13:00-22:00.
+     *
+     * Todas las consultas de un día tienen que acotarse con esto. Filtrar sólo
+     * por fecha hacía que cargar la tarde pisara la marca de la mañana, y que
+     * una falta de la tarde borrara la asistencia del día entero.
+     *
+     * Sólo hay dos ventanas porque son las que reconoce el escáner. Las
+     * configuraciones de turno "Noche" (reuniones de PPFF) caen en la de la
+     * mañana, igual que antes de este cambio.
+     */
+    private static function ventanaTurno(?string $turno): array
+    {
+        return strcasecmp(trim((string) $turno), 'Tarde') === 0
+            ? ['13:00:00', '22:00:00']
+            : ['07:00:00', '12:59:59'];
+    }
+
+    /** Turno al que pertenece una hora. */
+    private static function turnoDeHora(?string $hora): string
+    {
+        $h = (int) substr((string) $hora, 0, 2);
+        return ($h >= 13 && $h <= 22) ? 'Tarde' : 'Mañana';
+    }
 
     public function create()
     {
@@ -410,7 +436,14 @@ class AsistenciaController extends Controller
         $request->validate([
             'cur_codigo' => 'required|exists:colegio_cursos,cur_codigo',
             'asis_fecha' => 'required|date',
+            'turno'      => 'nullable|in:Mañana,Tarde',
         ]);
+
+        // El turno acota todo lo que se toca de ese día, para no pisar ni borrar
+        // las marcas del otro turno. Si la pantalla no lo manda (página vieja en
+        // cache), se deduce de la hora actual: nunca se vuelve al día completo.
+        $turno = $request->input('turno') ?: self::turnoDeHora(date('H:i:s'));
+        $rango = self::ventanaTurno($turno);
 
         // Solo se procesan los marcados explícitamente en cada tab.
         $presentes = array_values((array) $request->input('estudiantes', []));
@@ -423,12 +456,21 @@ class AsistenciaController extends Controller
             return back()->withInput()->with('error', 'No se marcó ningún estudiante (ni presente ni con falta).');
         }
 
-        $regP = 0; $regF = 0;
+        $regP = 0; $regF = 0; $fueraDeTurno = 0;
         foreach ($presentes as $estCodigo) {
             $hora = $request->input('hora_' . $estCodigo, date('H:i:s'));
 
+            // Una marca fuera de la ventana del turno quedaría invisible para
+            // esta misma pantalla (y se duplicaría en la próxima carga), así que
+            // se rechaza en vez de guardarla mal.
+            if (self::turnoDeHora($hora) !== $turno) {
+                $fueraDeTurno++;
+                continue;
+            }
+
             $existente = Asistencia::where('estud_codigo', $estCodigo)
                 ->whereDate('asis_fecha', $request->asis_fecha)
+                ->whereRaw('TIME(asis_hora) BETWEEN ? AND ?', $rango)
                 ->first();
 
             if ($existente) {
@@ -448,21 +490,27 @@ class AsistenciaController extends Controller
         }
 
         // Faltas: en lugar de crear un registro 'F', simplemente eliminamos la asistencia
-        // de ese día para el estudiante (también limpiamos el atraso si lo hubiera).
+        // de ese turno para el estudiante (también limpiamos el atraso si lo hubiera).
         // Así se mantiene la lógica histórica donde "sin registro = falta", compatible con
         // el flujo de asistencia vía QR del otro sistema.
         foreach ($faltantes as $estCodigo) {
             $borradas = Asistencia::where('estud_codigo', $estCodigo)
                 ->whereDate('asis_fecha', $request->asis_fecha)
+                ->whereRaw('TIME(asis_hora) BETWEEN ? AND ?', $rango)
                 ->delete();
-            // Quitar atraso del día (si se había generado por la presencia anterior)
+            // Quitar atraso del turno (si se había generado por la presencia anterior)
             Atraso::where('estud_codigo', $estCodigo)
                 ->whereDate('atraso_fecha', $request->asis_fecha)
+                ->whereRaw('TIME(atraso_hora) BETWEEN ? AND ?', $rango)
                 ->delete();
             $regF++;
         }
 
-        $msg = "Registrados: {$regP} presentes, {$regF} faltas (asistencia quitada del día).";
+        $msg = "Turno {$turno} — registrados: {$regP} presentes, {$regF} faltas (asistencia quitada del turno).";
+        if ($fueraDeTurno > 0) {
+            [$desde, $hasta] = $rango;
+            $msg .= " Se omitieron {$fueraDeTurno} con hora fuera del turno {$turno} ({$desde} a {$hasta}).";
+        }
         return redirect()->route('asistencias.index')->with('success', $msg);
     }
     
@@ -567,6 +615,9 @@ class AsistenciaController extends Controller
     {
         $gestion = date('Y');
         $fecha = request()->query('fecha');
+        // La grilla tiene que mostrar sólo las marcas del turno que se está
+        // cargando; si no, la tarde lista como presentes a los de la mañana.
+        $rango = self::ventanaTurno(request()->query('turno'));
         $presentes = [];
         $horas = [];
         $permisos = []; // est_codigo => ['tipo'=>..., 'motivo'=>..., 'codigo'=>...]
@@ -575,6 +626,7 @@ class AsistenciaController extends Controller
 
             $rows = Asistencia::whereDate('asis_fecha', $fecha)
                 ->whereIn('estud_codigo', $estudiantesCurso)
+                ->whereRaw('TIME(asis_hora) BETWEEN ? AND ?', $rango)
                 ->get(['estud_codigo', 'asis_hora']);
             foreach ($rows as $r) {
                 $presentes[] = $r->estud_codigo;
@@ -649,11 +701,17 @@ class AsistenciaController extends Controller
 
         $estCodigos = $estudiantes->pluck('est_codigo')->all();
 
-        // Presencias por (estudiante, fecha) — solo turno mañana (07:00-13:00).
+        // Presencias por (estudiante, fecha), acotadas al turno filtrado. Antes
+        // estaba cableado a la mañana, así que el reporte de faltas daba a todo
+        // el turno tarde por ausente.
+        $turnoNombre = $request->filled('turno')
+            ? (ConfiguracionAsistencia::where('config_id', $request->turno)->value('config_turno') ?: $request->turno)
+            : 'Mañana';
+
         $presSet = DB::table('colegio_asistencia')
             ->whereIn('estud_codigo', $estCodigos)
             ->whereBetween('asis_fecha', [$fechaInicio, $fechaFin])
-            ->whereRaw('TIME(asis_hora) BETWEEN ? AND ?', ['07:00:00', '13:00:00'])
+            ->whereRaw('TIME(asis_hora) BETWEEN ? AND ?', self::ventanaTurno($turnoNombre))
             ->selectRaw("CONCAT(estud_codigo,'|',DATE_FORMAT(asis_fecha,'%Y-%m-%d')) AS k")
             ->pluck('k')->flip();
 
@@ -730,6 +788,108 @@ class AsistenciaController extends Controller
     }
 
 
+
+    /**
+     * Reporte MENSUAL por semanas, con totales por curso, en una sola hoja.
+     *
+     * Lo que existía era trimestral y anual, y los dos son por estudiante: para
+     * saber cómo venía el mes por curso había que sacar un reporte por curso y
+     * sumar a mano. Acá cada fila es un curso y cada columna una semana del mes.
+     *
+     * Los números salen de AsistenciaResumenService, el mismo que usan el
+     * trimestral y el anual, para que no se abran dos criterios distintos de
+     * qué es una falta.
+     */
+    public function reporteMensualSemanas(Request $request)
+    {
+        $gestion = (int) $request->input('gestion', date('Y'));
+        $mes     = (int) $request->input('mes', date('n'));
+        $mes     = max(1, min(12, $mes));
+
+        $turnoNombre = 'Mañana';
+        if ($request->filled('turno')) {
+            $turnoNombre = ConfiguracionAsistencia::where('config_id', $request->turno)->value('config_turno') ?: $request->turno;
+        }
+
+        $inicioMes = Carbon::create($gestion, $mes, 1)->startOfMonth();
+        $finMes    = (clone $inicioMes)->endOfMonth();
+
+        // Semanas lunes-viernes que tocan el mes, recortadas al mes.
+        $semanas = [];
+        $cursor  = $inicioMes->copy()->startOfWeek(Carbon::MONDAY);
+        while ($cursor <= $finMes) {
+            $ini = $cursor->copy()->max($inicioMes);
+            $fin = $cursor->copy()->addDays(4)->min($finMes);   // viernes
+            if ($ini <= $fin) {
+                $semanas[] = [
+                    'etiqueta' => $ini->format('d/m') . ' - ' . $fin->format('d/m'),
+                    'inicio'   => $ini->format('Y-m-d'),
+                    'fin'      => $fin->format('Y-m-d'),
+                    'habiles'  => $this->diasHabilesRango($ini->format('Y-m-d'), $fin->format('Y-m-d'), $gestion),
+                ];
+            }
+            $cursor->addWeek();
+        }
+
+        // Cursos del turno (si se pidió uno) o todos.
+        $cursos = Curso::visible()->orderBy('cur_orden')->orderBy('cur_nombre')->get();
+        if ($request->filled('turno')) {
+            $pivote = \DB::table('asistencia_configuracion_cursos')
+                ->where('config_id', $request->turno)->pluck('cur_codigo')->all();
+            if (!empty($pivote)) {
+                $cursos = $cursos->whereIn('cur_codigo', $pivote)->values();
+            }
+        }
+
+        $servicio = $this->resumenService($turnoNombre);
+
+        $filas = [];
+        $totalesSemana = [];
+        $granTotal = ['pres' => 0, 'fal' => 0, 'atr' => 0, 'lic' => 0];
+
+        foreach ($cursos as $curso) {
+            $estudiantes = Estudiante::visible()->where('cur_codigo', $curso->cur_codigo)
+                ->pluck('est_codigo');
+            if ($estudiantes->isEmpty()) continue;
+
+            $porSemana = [];
+            $totalCurso = ['pres' => 0, 'fal' => 0, 'atr' => 0, 'lic' => 0];
+
+            foreach ($semanas as $i => $sem) {
+                $acum = ['pres' => 0, 'fal' => 0, 'atr' => 0, 'lic' => 0];
+                foreach ($estudiantes as $cod) {
+                    $r = $servicio->resumen($cod, $sem['inicio'], $sem['fin']);
+                    $acum['pres'] += $r['presencias'];
+                    $acum['fal']  += $r['faltas'];
+                    $acum['atr']  += $r['atrasos'];
+                    $acum['lic']  += $r['licencias_dias'];
+                }
+                $porSemana[$i] = $acum;
+                foreach ($acum as $k => $v) {
+                    $totalCurso[$k] += $v;
+                    $totalesSemana[$i][$k] = ($totalesSemana[$i][$k] ?? 0) + $v;
+                    $granTotal[$k] += $v;
+                }
+            }
+
+            $filas[] = [
+                'curso'       => $curso->cur_nombre,
+                'nivel'       => $curso->cur_nivel,
+                'estudiantes' => $estudiantes->count(),
+                'semanas'     => $porSemana,
+                'total'       => $totalCurso,
+            ];
+        }
+
+        $nombresMes = [1=>'ENERO',2=>'FEBRERO',3=>'MARZO',4=>'ABRIL',5=>'MAYO',6=>'JUNIO',
+                       7=>'JULIO',8=>'AGOSTO',9=>'SEPTIEMBRE',10=>'OCTUBRE',11=>'NOVIEMBRE',12=>'DICIEMBRE'];
+        $mesNombre = $nombresMes[$mes];
+
+        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('asistencias.reporte-mensual-semanas-pdf',
+            compact('filas', 'semanas', 'totalesSemana', 'granTotal', 'mesNombre', 'gestion', 'turnoNombre'))
+            ->setPaper('letter', 'landscape');
+        return $pdf->stream('asistencia-mensual-semanas-' . strtolower($mesNombre) . '-' . $gestion . '.pdf');
+    }
 
     public function reporteTrimestral(Request $request)
     {
@@ -836,6 +996,13 @@ class AsistenciaController extends Controller
             'mejor_total'   => $mejor ? ($datosEstudiantes[$mejor->est_codigo]['total'] ?? 0) : 0,
             'perfectos'     => $perfectos,
         ];
+
+        // El cuadro estadístico va precedido de un salto de página, así que el
+        // reporte nunca entraba en una sola hoja. Ahora es opcional y por
+        // defecto no se imprime, que es lo que pidió el colegio.
+        if (!$request->boolean('stats')) {
+            $stats = null;
+        }
 
         $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('asistencias.reporte-trimestral-pdf',
             compact('curso', 'estudiantes', 'trimestre', 'lista', 'year', 'periodo', 'datosEstudiantes', 'mesesConfig', 'datosMensuales', 'stats', 'turnoNombre', 'turnoNoAplica'))

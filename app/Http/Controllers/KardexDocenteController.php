@@ -11,10 +11,18 @@ use Illuminate\Http\Request;
 
 class KardexDocenteController extends Controller
 {
+    /**
+     * Dirección / administración: Admin(1), Director General(9), Directora
+     * Académica(10), Secretaría(11) — el mismo criterio que
+     * ComunicadoController::esDireccion().
+     *
+     * Antes decía [1, 4] y el rol 4 es Chofer, así que la Directora y el
+     * Director General recibían 403 en su propio módulo.
+     */
     private function soloDireccion()
     {
         $user = auth()->user();
-        if (!in_array($user->rol_id, [1, 4])) {
+        if (!in_array($user->rol_id, [1, 9, 10, 11])) {
             abort(403, 'Solo dirección puede gestionar este módulo.');
         }
     }
@@ -124,6 +132,54 @@ class KardexDocenteController extends Controller
         $row->kdx_fecha_recibido = $request->kdx_estado === 'ENTREGADO' ? now()->toDateString() : null;
         $row->save();
         return back()->with('success', 'Estado actualizado.');
+    }
+
+    /**
+     * El docente entrega el documento que le pidió dirección, desde su propia
+     * bandeja. Su archivo va a kdx_archivo_docente y no pisa el que haya
+     * adjuntado dirección (modelo, formulario, instructivo).
+     *
+     * No pasa por soloDireccion(): acá el que actúa es el docente, y sólo sobre
+     * sus propias filas.
+     */
+    public function entregarDocumento(Request $request, $id)
+    {
+        $user = auth()->user();
+        if (!$user || $user->us_entidad_tipo !== 'docente') {
+            abort(403, 'Solo docentes.');
+        }
+
+        $request->validate([
+            'kdx_archivo_docente' => 'required|file|mimes:pdf,jpg,jpeg,png,doc,docx,xls,xlsx|max:8192',
+        ]);
+
+        $row = DocenteKardex::findOrFail($id);
+        if ($row->doc_codigo !== $user->us_entidad_id) {
+            abort(403, 'Ese documento no es tuyo.');
+        }
+
+        // El nombre del anterior se guarda ANTES de mover el nuevo: si el docente
+        // reemplaza dos veces en el mismo segundo el nombre coincide y borrar
+        // después eliminaría el archivo recién subido.
+        $anterior = $row->kdx_archivo_docente;
+
+        $file = $request->file('kdx_archivo_docente');
+        $name = 'kdxdoc_' . $row->kdx_id . '_' . time() . '.' . $file->getClientOriginalExtension();
+        $file->move(public_path('uploads/kardex-docente'), $name);
+
+        if ($anterior && $anterior !== $name) {
+            $previo = public_path('uploads/kardex-docente/' . $anterior);
+            if (is_file($previo)) @unlink($previo);
+        }
+
+        $row->kdx_archivo_docente       = $name;
+        $row->kdx_fecha_entrega_docente = now();
+        // Queda ENTREGADO; si dirección no lo acepta, lo pasa a OBSERVADO o
+        // RECHAZADO desde su pantalla y el docente lo vuelve a ver pendiente.
+        $row->kdx_estado = 'ENTREGADO';
+        $row->save();
+
+        return back()->with('success', 'Documento entregado. Dirección lo va a revisar.');
     }
 
     // ─── Disciplinario ───

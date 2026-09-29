@@ -195,17 +195,49 @@ class PadrePortalController extends Controller
         $estudiantes = $this->getEstudiantes();
         $estSeleccionado = $request->est_codigo ? $estudiantes->firstWhere('est_codigo', $request->est_codigo) : $estudiantes->first();
 
+        $gestion = (int) date('Y');
         $mensualidades = collect();
         $inscripcion = null;
         $pagosTransporte = collect();
+        $totalMensualidades = 0;
+        $saldoInscripcion = 0;
 
         if ($estSeleccionado) {
-            $mensualidades = Pago::where('est_codigo', $estSeleccionado->est_codigo)->where('pagos_estado', 1)->orderBy('pagos_fecha', 'desc')->get();
-            $inscripcion = Inscripcion::where('est_codigo', $estSeleccionado->est_codigo)->where('insc_estado', 1)->where('insc_gestion', date('Y'))->first();
-            $pagosTransporte = PagoTransporte::where('est_codigo', $estSeleccionado->est_codigo)->orderBy('tpago_fecha_pago', 'desc')->get();
+            // Acotado a la gestión: la grilla de la vista se titula con el año en
+            // curso, y sin este filtro un pago de "Marzo" del año pasado marcaba
+            // marzo de este año como pagado (meses_cubiertos sólo mira el texto
+            // del concepto, no la fecha).
+            $mensualidades = Pago::where('est_codigo', $estSeleccionado->est_codigo)
+                ->where('pagos_estado', 1)
+                ->whereYear('pagos_fecha', $gestion)
+                ->orderBy('pagos_fecha', 'desc')
+                ->get();
+
+            $inscripcion = Inscripcion::where('est_codigo', $estSeleccionado->est_codigo)
+                ->where('insc_estado', 1)
+                ->where('insc_gestion', $gestion)
+                ->first();
+
+            // Los recibos anulados no son pagos: al padre le aparecían igual.
+            $pagosTransporte = PagoTransporte::where('est_codigo', $estSeleccionado->est_codigo)
+                ->where('tpago_estado', '!=', 'cancelado')
+                ->orderBy('tpago_fecha_pago', 'desc')
+                ->get();
+
+            // Saldo con la misma fórmula que caja (PagoController::create, "única
+            // fuente de verdad"): monto_final − (inscripción + mensualidades).
+            // insc_saldo sólo lo bajan los pagos de inscripción, así que el padre
+            // veía una cifra distinta a la de secretaría.
+            $totalMensualidades = (float) $mensualidades->sum('pagos_precio');
+            $montoFinal   = (float) ($inscripcion->insc_monto_final ?? $inscripcion->insc_monto_total ?? 0);
+            $pagadoInscr  = (float) ($inscripcion->insc_monto_pagado ?? 0);
+            $saldoInscripcion = max(0, $montoFinal - ($pagadoInscr + $totalMensualidades));
         }
 
-        return view('padre-portal.pagos', compact('estudiantes', 'estSeleccionado', 'mensualidades', 'inscripcion', 'pagosTransporte'));
+        return view('padre-portal.pagos', compact(
+            'estudiantes', 'estSeleccionado', 'mensualidades', 'inscripcion',
+            'pagosTransporte', 'totalMensualidades', 'saldoInscripcion', 'gestion'
+        ));
     }
 
     // ── Enfermería ─────────────────────────────────────────────────

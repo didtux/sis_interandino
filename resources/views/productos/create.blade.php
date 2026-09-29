@@ -31,6 +31,17 @@
                             </div>
                             <div class="col-md-6">
                                 <div class="form-group">
+                                    <label>Proveedor</label>
+                                    <select name="prov_codigo" class="form-control select2">
+                                        <option value="">Sin proveedor</option>
+                                        @foreach($proveedores as $p)
+                                            <option value="{{ $p->prov_codigo }}" {{ old('prov_codigo') == $p->prov_codigo ? 'selected' : '' }}>{{ $p->prov_nombre }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
                                     <label>Item/SKU</label>
                                     <div class="input-group">
                                         <input type="text" name="prod_item" id="prod_item" class="form-control" placeholder="Escanee el código de barras aquí">

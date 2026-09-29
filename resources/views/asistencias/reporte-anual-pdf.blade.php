@@ -5,7 +5,7 @@
     <title>Reporte de Asistencia Anual</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: Arial, sans-serif; font-size: 7px; padding: 10px; }
+        body { font-family: Arial, sans-serif; font-size: 9px; padding: 10px; }
         .header { display: table; width: 100%; margin-bottom: 10px; }
         .logo { display: table-cell; width: 70px; vertical-align: middle; }
         .logo img { width: 60px; height: auto; }
@@ -16,10 +16,12 @@
         .title-section { text-align: center; margin: 10px 0; border-bottom: 2px solid #000; padding-bottom: 5px; }
         .title-section h2 { font-size: 12px; font-weight: bold; margin: 2px 0; }
         .title-section p { font-size: 8px; margin: 2px 0; }
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        /* table-layout:fixed + ancho explicito del nombre: sin esto DomPDF repartia
+   el ancho entre ~27 columnas y el apellido quedaba comprimido a 6px. */
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; table-layout: fixed; }
         th, td { border: 1px solid #000; padding: 2px; text-align: center; }
-        th { background-color: #2c3e50; color: white; font-size: 6px; font-weight: bold; }
-        .estudiante { text-align: left; font-size: 6px; }
+        th { background-color: #2c3e50; color: white; font-size: 8px; font-weight: bold; }
+        .estudiante { text-align: left; font-size: 9px; width: 22%; word-wrap: break-word; }
         .total-col { background-color: #ffeb3b; font-weight: bold; }
         .leyenda { margin-top: 10px; font-size: 8px; }
         .footer { position: fixed; bottom: 10px; left: 10px; font-size: 7px; color: #666; }

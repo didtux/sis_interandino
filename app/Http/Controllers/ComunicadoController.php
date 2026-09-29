@@ -124,6 +124,16 @@ class ComunicadoController extends Controller
     }
 
     // ── Lado DOCENTE ─────────────────────────────────────────────────
+
+    /**
+     * Bandeja única del docente: comunicados + documentación del kardex.
+     *
+     * Eran dos canales paralelos que nunca se tocaban: dirección registraba los
+     * pedidos de documentación en Kardex Docente (docente_kardex) y el docente
+     * sólo veía Comunicados, así que lo que le pedían por kardex no le llegaba
+     * nunca. Ahora las dos cosas caen en la misma pantalla y el docente entrega
+     * desde acá en los dos casos.
+     */
     public function misComunicados()
     {
         if (!$this->esDocente()) abort(403, 'Solo docentes.');
@@ -136,7 +146,17 @@ class ComunicadoController extends Controller
             ->sortByDesc(fn($d) => $d->comunicado->com_fecha)
             ->values();
 
-        return view('comunicados.docente', compact('items'));
+        // Documentación pedida por dirección. Se muestra todo, incluso lo ya
+        // entregado, para que el docente tenga el respaldo de lo que subió.
+        $kardex = \App\Models\DocenteKardex::where('doc_codigo', $docCodigo)
+            ->orderByRaw("FIELD(kdx_estado, 'OBSERVADO', 'PENDIENTE', 'RECHAZADO', 'ENTREGADO')")
+            ->orderByDesc('kdx_fecha_solicitud')
+            ->get();
+
+        $pendientes = $kardex->whereIn('kdx_estado', ['PENDIENTE', 'OBSERVADO'])->count()
+            + $items->where('cd_estado', 'PENDIENTE')->count();
+
+        return view('comunicados.docente', compact('items', 'kardex', 'pendientes'));
     }
 
     public function subirArchivo(Request $request, $cdId)

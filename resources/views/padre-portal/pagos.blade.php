@@ -50,9 +50,11 @@
                                 <span class="ml-2">Monto: <strong>{{ number_format($inscripcion->insc_monto_final ?? $inscripcion->insc_monto_total, 2) }} Bs</strong></span>
                             </div>
                             <div>
-                                Pagado: <strong class="text-success">{{ number_format($inscripcion->insc_monto_pagado, 2) }} Bs</strong>
-                                @if($inscripcion->insc_saldo > 0)
-                                    — Saldo: <strong class="text-danger">{{ number_format($inscripcion->insc_saldo, 2) }} Bs</strong>
+                                {{-- Pagado y saldo con la misma fórmula que caja:
+                                     inscripción + mensualidades del año. --}}
+                                Pagado: <strong class="text-success">{{ number_format($inscripcion->insc_monto_pagado + $totalMensualidades, 2) }} Bs</strong>
+                                @if($saldoInscripcion > 0)
+                                    — Saldo: <strong class="text-danger">{{ number_format($saldoInscripcion, 2) }} Bs</strong>
                                 @else
                                     <span class="badge badge-success ml-1">Completo</span>
                                 @endif

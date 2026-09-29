@@ -53,6 +53,9 @@
         @if($filtros)
             <p>
                 @if(isset($filtros['buscar'])) Búsqueda: {{ $filtros['buscar'] }} | @endif
+                @if(isset($filtros['categoria'])) Categoría: {{ $filtros['categoria'] }} | @endif
+                @if(isset($filtros['proveedor'])) Proveedor: {{ $filtros['proveedor'] }} | @endif
+                @if(isset($filtros['producto'])) Producto: {{ $filtros['producto'] }} | @endif
                 @if(isset($filtros['estado'])) Estado: {{ ucfirst(str_replace('_', ' ', $filtros['estado'])) }} @endif
             </p>
         @endif

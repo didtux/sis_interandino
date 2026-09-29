@@ -12,22 +12,22 @@
         .h-logo-cell { width:80px; text-align:center; }
         .h-logo-cell img { width:64px; height:auto; }
         .h-info-cell { text-align:center; }
-        .h-info-cell .ue-nombre { font-weight:700; font-size:14px; letter-spacing:0.5px; }
-        .h-info-cell .ue-dir    { font-size:8px; color:#333; line-height:1.3; }
-        .h-info-cell .titulo-banda { display:inline-block; margin-top:4px; padding:2px 0; font-weight:700; font-size:13px; letter-spacing:1px; }
+        .h-info-cell .ue-nombre { font-weight:700; font-size:17px; letter-spacing:0.5px; }
+        .h-info-cell .ue-dir    { font-size:8.5px; color:#333; line-height:1.3; }
+        .h-info-cell .titulo-banda { display:inline-block; margin-top:4px; padding:2px 0; font-weight:700; font-size:21px; letter-spacing:1.5px; }
         .h-qr-cell { width:90px; text-align:center; }
         .h-qr-cell img { width:75px; height:75px; }
         .h-qr-cell .qr-label { font-size:6px; color:#555; text-transform:uppercase; letter-spacing:0.5px; margin-top:2px; }
         .h-qr-cell .copia-tag { display:inline-block; margin-top:2px; padding:1px 6px; border:1px solid #000; font-size:7px; font-weight:700; }
-        .fecha-box { position: absolute; top: 8mm; right: 10mm; border:1.5px solid #000; padding: 3px 9px; font-weight: bold; font-size: 7px; text-align: center; background:#fff; color:#000; }
+        .fecha-box { position: absolute; top: 8mm; right: 10mm; border:1.5px solid #000; padding: 4px 10px; font-weight: bold; font-size: 10px; text-align: center; background:#fff; color:#000; }
 
         /* Info estudiante */
         .info-table { width: 100%; border: none; border-collapse: collapse; margin-bottom: 6px; }
         .info-table td { padding: 3px 8px; font-size: 9px; border: none; }
-        .info-label { font-weight: bold; font-size: 8px; width: 18%; }
-        .info-value { font-weight: bold; font-size: 11px; }
+        .info-label { font-weight: bold; font-size: 10px; width: 20%; }
+        .info-value { font-weight: bold; font-size: 15px; }
         .nro-lista-cell { text-align: center; width: 15%; vertical-align: middle; border: none; }
-        .nro-lista-label { font-size: 7px; font-weight: bold; }
+        .nro-lista-label { font-size: 9px; font-weight: bold; }
         .nro-lista-num { font-size: 32px; font-weight: bold; line-height: 1; }
 
         /* Título */
@@ -119,7 +119,7 @@
         </tr>
         <tr>
             <td class="info-label">AÑO DE ESCOLARIDAD:</td>
-            <td style="font-weight:bold;font-size:10px;">{{ $curso->cur_nombre }}</td>
+            <td style="font-weight:bold;font-size:13px;">{{ $curso->cur_nombre }}</td>
         </tr>
     </table>
 

@@ -318,11 +318,66 @@ class NotaController extends Controller
             $aprobadoPor = \App\Models\User::find($notaInfo->nota_aprobado_por);
         }
 
+        // Nombre de cada casillero ("Examen parcial", "Tema 1"...). Si no hay
+        // etiqueta cargada, la vista sigue mostrando "Nota N" como antes.
+        $etiquetas = \App\Models\NotaColumnaEtiqueta::mapaDe($curmatdocId, $periodoId);
+
         return view('notas.calificar', compact(
             'asignacion', 'periodo', 'dimensiones', 'estudiantes',
             'notasExistentes', 'estadoNotas', 'enRango', 'esEditable', 'esAdmin',
-            'observacionAdmin', 'fechaAprobacion', 'aprobadoPor'
+            'observacionAdmin', 'fechaAprobacion', 'aprobadoPor', 'etiquetas'
         ));
+    }
+
+    /**
+     * Guarda los nombres de los casilleros de notas de una clase+periodo.
+     *
+     * Se guarda aparte de las notas para que ponerle nombre a una columna no
+     * dependa de que el periodo esté abierto ni de que las notas estén en
+     * borrador: es rótulo, no calificación.
+     */
+    public function guardarEtiquetas(Request $request)
+    {
+        $request->validate([
+            'curmatdoc_id' => 'required',
+            'periodo_id'   => 'required',
+            'etiquetas'    => 'array',
+        ]);
+
+        $asignacion = CursoMateriaDocente::findOrFail($request->curmatdoc_id);
+        $user = auth()->user();
+        if ($user->us_entidad_tipo === 'docente' && $user->us_entidad_id
+            && $user->us_entidad_id !== $asignacion->doc_codigo) {
+            abort(403);
+        }
+
+        foreach ((array) $request->input('etiquetas', []) as $clave => $nombre) {
+            // clave = "dimensionId-columnaNum"
+            [$dimId, $col] = array_pad(explode('-', $clave), 2, null);
+            if (!is_numeric($dimId) || !is_numeric($col)) continue;
+
+            $nombre = trim(mb_substr((string) $nombre, 0, 60));
+            $filtro = [
+                'curmatdoc_id' => $request->curmatdoc_id,
+                'periodo_id'   => $request->periodo_id,
+                'dimension_id' => (int) $dimId,
+                'columna_num'  => (int) $col,
+            ];
+
+            if ($nombre === '') {
+                // Vaciar el campo borra la etiqueta y la columna vuelve a "Nota N".
+                \App\Models\NotaColumnaEtiqueta::where($filtro)->delete();
+                continue;
+            }
+
+            \App\Models\NotaColumnaEtiqueta::updateOrCreate($filtro, [
+                'colet_nombre'  => $nombre,
+                'colet_usuario' => $user->us_id,
+                'colet_fecha'   => now(),
+            ]);
+        }
+
+        return back()->with('success', 'Nombres de los casilleros guardados.');
     }
 
     public function guardar(Request $request)
@@ -697,8 +752,12 @@ class NotaController extends Controller
             $data[] = $fila;
         }
 
+        // Nombres de los casilleros: en la tabla no entran (la celda mide 18px),
+        // así que van como referencia al pie del reporte.
+        $etiquetas = \App\Models\NotaColumnaEtiqueta::mapaDe($asignacion->curmatdoc_id, $periodo->periodo_id);
+
         $pdf = Pdf::loadView('notas.reporte-valoracion-pdf', compact(
-            'asignacion', 'periodo', 'dimensiones', 'data', 'gestion'
+            'asignacion', 'periodo', 'dimensiones', 'data', 'gestion', 'etiquetas'
         ))->setPaper('legal', 'landscape');
 
         return $pdf->stream('valoracion-' . $asignacion->cur_codigo . '-' . $asignacion->mat_codigo . '-T' . $periodo->periodo_numero . '.pdf');
@@ -1049,70 +1108,26 @@ class NotaController extends Controller
         return [$estudiantes, $lista];
     }
 
-    private function getMateriasDelCurso($curCodigo)
+    /**
+     * Lectura de notas del boletín. Vive en BoletinNotasService para que el
+     * cuadro de honor use exactamente los mismos números; se conserva una
+     * instancia por request para aprovechar su caché por curso y periodo.
+     */
+    private ?\App\Services\BoletinNotasService $boletinNotas = null;
+
+    private function boletinNotas(): \App\Services\BoletinNotasService
     {
-        // Orden por config POR CURSO (matc_orden); fallback al mat_orden global.
-        $orden = (new \App\Services\MateriaCursoService())->ordenMinisterial($curCodigo);
-        return CursoMateriaDocente::with('materia')
-            ->where('cur_codigo', $curCodigo)->where('curmatdoc_estado', 1)
-            ->get()
-            ->sortBy(function($cmd) use ($orden) {
-                return $orden[$cmd->mat_codigo] ?? ($cmd->materia->mat_orden ?? 999);
-            })
-            ->unique('mat_codigo')
-            ->values();
+        return $this->boletinNotas ??= new \App\Services\BoletinNotasService();
     }
 
-    /**
-     * Notas aprobadas de un curso y periodo: [est_codigo][mat_codigo] => promedio.
-     *
-     * Los centralizadores recorren estudiante x materia x trimestre, así que pedir
-     * la nota de a una era una consulta con subquery por celda: 444 consultas en
-     * un curso de 37 alumnos. Todo el curso entra en una sola.
-     *
-     * @var array<string, array<string, array<string, int>>>  "cur|periodo" => mapa
-     */
-    private array $notasCursoCache = [];
-
-    private function notasDelCurso($curCodigo, $periodoId): array
+    private function getMateriasDelCurso($curCodigo)
     {
-        $key = $curCodigo . '|' . $periodoId;
-        if (isset($this->notasCursoCache[$key])) return $this->notasCursoCache[$key];
-
-        // Materia de cada asignación del curso. Se cruza en PHP: colegio_materias
-        // es latin1 y colegio_notas utf8mb4, y unirlas en SQL da "Illegal mix of
-        // collations".
-        $materiaPorAsignacion = DB::table('colegio_curso_materia_docente')
-            ->where('cur_codigo', $curCodigo)
-            ->pluck('mat_codigo', 'curmatdoc_id')
-            ->all();
-
-        $mapa = [];
-        if (!empty($materiaPorAsignacion)) {
-            DB::table('colegio_notas')
-                ->whereIn('curmatdoc_id', array_keys($materiaPorAsignacion))
-                ->where('periodo_id', $periodoId)
-                ->where('nota_estado', 2)
-                ->select('est_codigo', 'curmatdoc_id', 'nota_promedio_trimestral')
-                ->orderBy('nota_id')
-                ->get()
-                ->each(function ($n) use (&$mapa, $materiaPorAsignacion) {
-                    $mat = $materiaPorAsignacion[$n->curmatdoc_id] ?? null;
-                    if ($mat === null) return;
-                    // Si una materia tiene más de una asignación en el curso se
-                    // conserva la primera, igual que hacía el first() anterior.
-                    if (!isset($mapa[$n->est_codigo][$mat])) {
-                        $mapa[$n->est_codigo][$mat] = (int) round($n->nota_promedio_trimestral);
-                    }
-                });
-        }
-
-        return $this->notasCursoCache[$key] = $mapa;
+        return $this->boletinNotas()->materiasDelCurso($curCodigo);
     }
 
     private function getNotaPromedio($estCodigo, $curCodigo, $matCodigo, $periodoId)
     {
-        return $this->notasDelCurso($curCodigo, $periodoId)[$estCodigo][$matCodigo] ?? 0;
+        return $this->boletinNotas()->notaPromedio($estCodigo, $curCodigo, $matCodigo, $periodoId);
     }
 
     /**
@@ -1242,19 +1257,8 @@ class NotaController extends Controller
         // Agrupar materias por campo
         $materiasPorCampo = $asignaciones->groupBy(fn($cmd) => $cmd->materia->mat_campo ?: 'SIN CAMPO');
 
-        // Notas por materia y periodo
-        $notasData = [];
-        foreach ($asignaciones as $cmd) {
-            $mat = $cmd->mat_codigo;
-            $notasData[$mat] = ['nombre' => $cmd->materia->mat_nombre, 'trimestres' => [], 'promedio' => 0];
-            $suma = 0; $count = 0;
-            foreach ($periodos as $p) {
-                $val = $this->getNotaPromedio($estudiante->est_codigo, $curso->cur_codigo, $mat, $p->periodo_id);
-                $notasData[$mat]['trimestres'][$p->periodo_numero] = $val;
-                if ($val > 0) { $suma += $val; $count++; }
-            }
-            $notasData[$mat]['promedio'] = $count > 0 ? round($suma / $count) : 0;
-        }
+        // Notas por materia y periodo (mismo cálculo que el cuadro de honor)
+        $notasData = $this->boletinNotas()->notasEstudiante($estudiante->est_codigo, $curso->cur_codigo, $periodos);
 
         // Configuración por curso (campo, orden, promediable). Si la pivote está vacía
         // para este curso cae al modo global automáticamente.
@@ -1403,26 +1407,14 @@ class NotaController extends Controller
         // Construir datos: por cada estudiante, por cada materia, los 3 trimestres + promedio
         $data = [];
         foreach ($estudiantes as $est) {
-            $fila = ['estudiante' => $est, 'materias' => [], 'suma' => 0, 'promedio' => 0];
-            $sumaGeneral = 0; $countGeneral = 0;
-
-            foreach ($asignaciones as $cmd) {
-                $mat = $cmd->mat_codigo;
-                $trimestres = [];
-                $sumaMat = 0; $countMat = 0;
-                foreach ($periodos as $p) {
-                    $val = $this->getNotaPromedio($est->est_codigo, $curso->cur_codigo, $mat, $p->periodo_id);
-                    $trimestres[$p->periodo_numero] = $val;
-                    if ($val > 0) { $sumaMat += $val; $countMat++; }
-                }
-                $promMat = $countMat > 0 ? round($sumaMat / $countMat, 1) : 0;
-                $fila['materias'][$mat] = ['trimestres' => $trimestres, 'promedio' => $promMat];
-                $sumaGeneral += $sumaMat;
-                if ($promMat > 0) $countGeneral++;
-            }
-
-            $fila['suma'] = $sumaGeneral;
-            $fila['promedio'] = $countGeneral > 0 ? round($sumaGeneral / ($countGeneral * $periodos->count()), 1) : 0;
+            // Mismo cálculo que usa el cuadro de honor (BoletinNotasService).
+            $calc = $this->boletinNotas()->filaCentralizador($est->est_codigo, $curso->cur_codigo, $periodos);
+            $fila = [
+                'estudiante' => $est,
+                'materias'   => $calc['materias'],
+                'suma'       => $calc['suma'],
+                'promedio'   => $calc['promedio'],
+            ];
 
             // Asistencia institucional (DT, TA, TL, TF)
             $asist = [];
@@ -1518,10 +1510,22 @@ class NotaController extends Controller
         // Grupos derivados de mat_campo: cada campo (área) es un grupo natural.
         [$gruposActivos, $gruposMap] = $this->buildGruposPorCampo($curso->cur_codigo ?? null);
 
+        // El trimestral entra en Carta apaisada; el anual no, porque cada materia
+        // pasa de 1 a 4 columnas (T1/T2/T3 + promedio) más 5 de asistencia por
+        // trimestre. Oficio apaisado da 27% más de ancho.
+        //
+        // Medido sobre 5toPRIM (37 alumnos, 12 materias, 65 columnas):
+        // Carta 7 hojas → Oficio 5 hojas, con la misma letra. Bajar la fuente
+        // llega a 3 hojas y ahí toca piso: "el anual en 1 sola hoja" no es
+        // alcanzable con texto legible para un curso de ese tamaño. Las palancas
+        // que quedan son A3 (3 hojas) o sacar el bloque de asistencia por
+        // trimestre; las dos son decisión del colegio.
+        $papel = $esTrimestre ? 'letter' : 'legal';
+
         $pdf = Pdf::loadView('notas.reporte-general-pdf', compact(
             'curso', 'periodos', 'asignaciones', 'data', 'lista', 'gestion',
             'esTrimestre', 'periodoNombre', 'gruposMap', 'gruposActivos'
-        ))->setPaper('letter', 'landscape');
+        ))->setPaper($papel, 'landscape');
 
         return $pdf->stream('notas-general-' . $curso->cur_codigo . '.pdf');
     }

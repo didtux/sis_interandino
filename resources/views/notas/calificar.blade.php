@@ -99,6 +99,10 @@
                                     @endif
                                 </button>
                             @endif
+                            {{-- Nombrar los casilleros no depende de que el periodo este abierto: es rotulo, no nota --}}
+                            <button type="button" class="btn btn-outline-light btn-sm" data-toggle="modal" data-target="#modalEtiquetas">
+                                <i class="fas fa-tags mr-1"></i>Nombrar casilleros
+                            </button>
                             @if($esEditable)
                                 <button type="submit" name="accion" value="guardar" class="btn btn-secondary btn-sm"><i class="fas fa-save mr-1"></i>Guardar Borrador</button>
                                 <button type="submit" name="accion" value="enviar" class="btn btn-primary-modern btn-sm" onclick="return confirm('¿Enviar notas para aprobación?')"><i class="fas fa-paper-plane mr-1"></i>Enviar</button>
@@ -126,7 +130,16 @@
                                     <tr style="background:#34495e;color:#fff;font-size:0.75rem;">
                                         @foreach($dimensiones as $dim)
                                             @for($c = 1; $c <= $dim->dimension_columnas; $c++)
-                                                <th style="text-align:center;width:60px;">Nota {{ $c }}</th>
+                                                {{-- Si el docente le puso nombre al casillero se muestra ese; si no, "Nota N" --}}
+                                                @php $rotulo = $etiquetas[$dim->dimension_id . '-' . $c] ?? null; @endphp
+                                                <th style="text-align:center;width:60px;" title="{{ $rotulo ?: ('Nota ' . $c) }}">
+                                                    @if($rotulo)
+                                                        {{ $rotulo }}
+                                                        <span style="display:block;font-weight:normal;opacity:.65;font-size:.65rem;">Nota {{ $c }}</span>
+                                                    @else
+                                                        Nota {{ $c }}
+                                                    @endif
+                                                </th>
                                             @endfor
                                             <th style="text-align:center;width:60px;background:rgba(0,0,0,0.2);color:#fff;">PROM.</th>
                                         @endforeach
@@ -300,6 +313,54 @@
 .input-nota:focus { border-color:#3498db;box-shadow:0 0 0 .15rem rgba(52,152,219,.25); }
 #tablaNotas td,#tablaNotas th { padding:4px 6px;vertical-align:middle; }
 </style>
+
+{{--
+    Nombres de los casilleros de nota. Se guardan en notas_columna_etiquetas,
+    por clase y periodo, y se editan en un formulario aparte del de notas para
+    que rotular no requiera que el periodo este abierto.
+--}}
+<div class="modal fade" id="modalEtiquetas" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <form action="{{ route('notas.etiquetas') }}" method="POST">
+            @csrf
+            <input type="hidden" name="curmatdoc_id" value="{{ $asignacion->curmatdoc_id }}">
+            <input type="hidden" name="periodo_id" value="{{ $periodo->periodo_id }}">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-tags mr-2"></i>Nombrar los casilleros de nota</h5>
+                    <button type="button" class="close" data-dismiss="modal">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <p class="small text-muted">
+                        Pone un nombre a cada columna ("Examen parcial", "Tema 1", "Practico 3").
+                        Dejar el campo vacio borra el nombre y la columna vuelve a llamarse "Nota N".
+                    </p>
+                    @foreach($dimensiones as $dim)
+                        <div class="mb-3">
+                            <h6 class="mb-2" style="font-weight:600;">{{ $dim->dimension_nombre }} / {{ $dim->dimension_valor_max }}</h6>
+                            <div class="form-row">
+                                @for($c = 1; $c <= $dim->dimension_columnas; $c++)
+                                    <div class="col-md-4 mb-2">
+                                        <label class="small mb-1">Nota {{ $c }}</label>
+                                        <input type="text" maxlength="60" class="form-control form-control-sm"
+                                               name="etiquetas[{{ $dim->dimension_id }}-{{ $c }}]"
+                                               value="{{ $etiquetas[$dim->dimension_id . '-' . $c] ?? '' }}"
+                                               placeholder="Sin nombre">
+                                    </div>
+                                @endfor
+                            </div>
+                        </div>
+                    @endforeach
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary"><i class="fas fa-save mr-1"></i>Guardar nombres</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
 @endsection
 
 @section('scripts')

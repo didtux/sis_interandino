@@ -48,8 +48,8 @@ td.num{text-align:right;width:80px;}
                     <tr class="{{ $cls }}">
                         <td class="pos">{{ $i + 1 }}°</td>
                         <td>{{ $r->nombre }}</td>
-                        <td class="num">{{ number_format($r->suma, 2, '.', ',') }}</td>
-                        <td class="num">{{ number_format($r->promedio, 2, '.', ',') }}</td>
+                        <td class="num">{{ number_format($r->suma, 0, '.', ',') }}</td>
+                        <td class="num">{{ number_format($r->promedio, 1, '.', ',') }}</td>
                     </tr>
                 @empty
                     <tr><td colspan="4" class="empty">Sin notas registradas en este curso.</td></tr>

@@ -73,6 +73,14 @@
                         </div>
                         <div class="row mt-2">
                             <div class="col-md-2">
+                                <select name="gestion" class="form-control select2" style="width: 100%">
+                                    @foreach($gestiones ?? [] as $g)
+                                        <option value="{{ $g }}" {{ (string) ($gestion ?? '') === (string) $g ? 'selected' : '' }}>Gestión {{ $g }}</option>
+                                    @endforeach
+                                    <option value="todas" {{ ($gestion ?? '') === 'todas' ? 'selected' : '' }}>Todas las gestiones</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
                                 <select name="descuento" class="form-control select2" style="width: 100%">
                                     <option value="">Todos los descuentos</option>
                                     <option value="con_descuento" {{ request('descuento') === 'con_descuento' ? 'selected' : '' }}>Con Descuento</option>
@@ -82,7 +90,7 @@
                                     @endforeach
                                 </select>
                             </div>
-                            <div class="col-md-10 text-right">
+                            <div class="col-md-8 text-right">
                                 <button class="btn btn-primary" type="submit"><i class="fas fa-search"></i> Buscar</button>
                                 <a href="{{ route('inscripciones.index') }}" class="btn btn-secondary"><i class="fas fa-redo"></i> Limpiar</a>
                             </div>
@@ -327,7 +335,7 @@
                         </tfoot>
                         </table>
                     </div>
-                    {{ $inscripciones->links() }}
+                    {{ $inscripciones->appends(request()->query())->links() }}
                 </div>
             </div>
         </div>

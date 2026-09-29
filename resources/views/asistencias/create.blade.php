@@ -31,12 +31,28 @@
                                     </select>
                                 </div>
                             </div>
-                            <div class="col-md-6">
+                            <div class="col-md-3">
                                 <div class="form-group">
                                     <label>Fecha <span class="text-danger">*</span></label>
                                     <input type="date" name="asis_fecha" class="form-control" value="{{ date('Y-m-d') }}" required>
                                 </div>
                             </div>
+                            <div class="col-md-3">
+                                <div class="form-group">
+                                    {{-- Acota el registro a un turno: lo que se carga acá no toca el otro. --}}
+                                    <label>Turno <span class="text-danger">*</span></label>
+                                    @php $turnoActual = (int) date('H') >= 13 ? 'Tarde' : 'Mañana'; @endphp
+                                    <select name="turno" id="turno" class="form-control" required>
+                                        <option value="Mañana" {{ $turnoActual === 'Mañana' ? 'selected' : '' }}>Mañana (07:00 - 12:59)</option>
+                                        <option value="Tarde"  {{ $turnoActual === 'Tarde'  ? 'selected' : '' }}>Tarde (13:00 - 22:00)</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="alert alert-light border">
+                            <i class="fas fa-info-circle text-primary mr-1"></i>
+                            Sólo se modifican las marcas del turno seleccionado. Las del otro turno quedan intactas.
                         </div>
 
                         <ul class="nav nav-tabs mt-3" id="tabsAsist" role="tablist">
@@ -238,7 +254,8 @@ $(document).ready(function() {
             actualizarConteos();
             return;
         }
-        $.get('{{ url("/api/estudiantes-por-curso") }}/' + curCodigo, { fecha: fecha }, function(resp) {
+        var turno = $('#turno').val();
+        $.get('{{ url("/api/estudiantes-por-curso") }}/' + curCodigo, { fecha: fecha, turno: turno }, function(resp) {
             var estudiantes = resp.estudiantes || resp;
             var presentesArr = resp.presentes || [];
             var horas = resp.horas || {};
@@ -264,6 +281,7 @@ $(document).ready(function() {
 
     $('#cur_codigo').on('change', cargarEstudiantes);
     $('input[name="asis_fecha"]').on('change', cargarEstudiantes);
+    $('#turno').on('change', cargarEstudiantes);
 
     // Exclusión mutua: si marco a un estudiante como presente, lo desmarco de faltas (y viceversa).
     $(document).on('change', '.chk-pres', function(){

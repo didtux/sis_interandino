@@ -15,18 +15,30 @@
                             <div class="col-md-4">
                                 <div class="form-group">
                                     <label>Chofer *</label>
-                                    <select name="chof_codigo" class="form-control select2" required>
+                                    <select name="chof_codigo" id="selChofer" class="form-control select2" required>
                                         <option value="">Seleccione...</option>
                                         @foreach($choferes as $c)
                                             <option value="{{ $c->chof_codigo }}">{{ $c->chof_nombres }} {{ $c->chof_apellidos }}</option>
                                         @endforeach
                                     </select>
+                                    <div class="form-check mt-1">
+                                        <input type="checkbox" class="form-check-input" id="chkNuevoChofer" name="nuevo_chofer" value="1">
+                                        <label class="form-check-label small" for="chkNuevoChofer">Registrar un chofer nuevo acá mismo</label>
+                                    </div>
+                                </div>
+                                {{-- Alta inline: antes había que ir al módulo Choferes y volver --}}
+                                <div id="boxNuevoChofer" style="display:none;">
+                                    <input type="text" name="chof_nombres"   class="form-control form-control-sm mb-1" placeholder="Nombres *">
+                                    <input type="text" name="chof_apellidos" class="form-control form-control-sm mb-1" placeholder="Apellidos *">
+                                    <input type="text" name="chof_ci"        class="form-control form-control-sm mb-1" placeholder="CI *">
+                                    <input type="text" name="chof_licencia"  class="form-control form-control-sm mb-1" placeholder="Licencia *">
+                                    <input type="text" name="chof_telefono"  class="form-control form-control-sm mb-1" placeholder="Teléfono">
                                 </div>
                             </div>
                             <div class="col-md-4">
                                 <div class="form-group">
                                     <label>Vehículo *</label>
-                                    <select name="veh_codigo" class="form-control select2" required>
+                                    <select name="veh_codigo" id="selVehiculo" class="form-control select2" required>
                                         <option value="">Seleccione...</option>
                                         @foreach($vehiculos as $v)
                                             <option value="{{ $v->veh_codigo }}">
@@ -34,6 +46,18 @@
                                             </option>
                                         @endforeach
                                     </select>
+                                    <div class="form-check mt-1">
+                                        <input type="checkbox" class="form-check-input" id="chkNuevoVehiculo" name="nuevo_vehiculo" value="1">
+                                        <label class="form-check-label small" for="chkNuevoVehiculo">Registrar un vehículo nuevo acá mismo</label>
+                                    </div>
+                                </div>
+                                <div id="boxNuevoVehiculo" style="display:none;">
+                                    <input type="text"   name="veh_numero_bus" class="form-control form-control-sm mb-1" placeholder="N° de bus">
+                                    <input type="text"   name="veh_placa"      class="form-control form-control-sm mb-1" placeholder="Placa *">
+                                    <input type="text"   name="veh_marca"      class="form-control form-control-sm mb-1" placeholder="Marca *">
+                                    <input type="text"   name="veh_modelo"     class="form-control form-control-sm mb-1" placeholder="Modelo">
+                                    <input type="number" name="veh_capacidad"  class="form-control form-control-sm mb-1" placeholder="Capacidad *" min="1">
+                                    <input type="text"   name="veh_color"      class="form-control form-control-sm mb-1" placeholder="Color">
                                 </div>
                             </div>
                             <div class="col-md-4">
@@ -86,6 +110,26 @@
 @endsection
 
 @section('scripts')
+<script>
+/**
+ * Alta inline de chofer y vehículo. Al marcar la casilla el <select> deja de
+ * ser obligatorio y se piden los datos del nuevo registro; el backend lo crea
+ * y lo asigna en la misma operación.
+ */
+function toggleAlta(chk, box, sel) {
+    var on = $(chk).is(':checked');
+    $(box).toggle(on);
+    $(sel).prop('required', !on).prop('disabled', on);
+    if (on) $(sel).val('').trigger('change');
+    $(box).find('input').prop('required', false);
+    if (on) {
+        $(box).find('input[placeholder$="*"]').prop('required', true);
+    }
+}
+$('#chkNuevoChofer').on('change',   function() { toggleAlta(this, '#boxNuevoChofer',   '#selChofer'); });
+$('#chkNuevoVehiculo').on('change', function() { toggleAlta(this, '#boxNuevoVehiculo', '#selVehiculo'); });
+</script>
+
 <script>
 $(document).ready(function() {
     $('.select2').select2({

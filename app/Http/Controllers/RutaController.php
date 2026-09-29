@@ -90,7 +90,7 @@ class RutaController extends Controller
         abort(404);
     }
 
-    public function detalle($id)
+    public function detalle($id, Request $request)
     {
         $ruta = Ruta::with([
             'estudiantes.estudiante.curso',
@@ -100,7 +100,25 @@ class RutaController extends Controller
             }
         ])->findOrFail($id);
 
-        return view('transporte.rutas.detalle', compact('ruta'));
+        // Mes a consultar: la lista mostraba siempre el pago vinculado a la
+        // asignación, sin importar de qué mes fuera, así que no había forma de
+        // saber quién pagó un mes concreto.
+        $meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+        $mes   = $request->input('mes', $meses[(int) date('n') - 1]);
+
+        // Pagos vigentes de ese mes, por estudiante (los cancelados no cuentan).
+        $codigos = $ruta->estudiantes->where('ter_estado', 1)->pluck('est_codigo')->filter()->all();
+        $pagosMes = collect();
+        if (!empty($codigos) && $mes !== 'todos') {
+            $pagosMes = \App\Models\PagoTransporte::whereIn('est_codigo', $codigos)
+                ->where('tpago_mes', $mes)
+                ->where('tpago_estado', '!=', 'cancelado')
+                ->get()
+                ->groupBy('est_codigo')
+                ->map(fn($g) => $g->sum('tpago_monto'));
+        }
+
+        return view('transporte.rutas.detalle', compact('ruta', 'meses', 'mes', 'pagosMes'));
     }
 
     public function reportePdf(Request $request)

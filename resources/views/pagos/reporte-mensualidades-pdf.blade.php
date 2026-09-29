@@ -59,10 +59,13 @@
         @php
             $curso = $pagosCurso->first()->estudiante->curso ?? null;
             if (!$curso) continue;
-            
+
             $pagosPorEstudiante = $pagosCurso->groupBy('est_codigo');
         @endphp
-        
+
+        {{-- Un curso por hoja: antes se partian a la mitad de la pagina. El
+             primero no lleva salto para no abrir con una hoja en blanco. --}}
+        <div class="bloque-curso" style="{{ $loop->first ? '' : 'page-break-before: always;' }}">
         <div class="curso-header">{{ $curso->cur_nombre }}</div>
         
         <table>
@@ -124,7 +127,7 @@
                 @endforeach
             </tbody>
         </table>
-        <br>
+        </div>
     @endforeach
 
     <div style="margin-top: 15px; font-size: 12px; font-weight: bold; text-align: right;">
