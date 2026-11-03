@@ -157,7 +157,7 @@
     <div class="container page-hero-banner-inner">
         <div class="page-tag">Oferta Académica</div>
         <h1>Niveles <span>Educativos</span></h1>
-        <p>Formación integral desde la infancia hasta el bachillerato en un ambiente comunitario y productivo.</p>
+        <p>{{ landing('niveles.hero_texto') }}</p>
         <div class="breadcrumb-nav">
             <a href="{{ route('landing') }}"><i class="fas fa-home" style="font-size:0.75rem"></i> Inicio</a>
             <span>/</span>
@@ -174,10 +174,7 @@
             <div class="section-label">Nuestra Propuesta Educativa</div>
             <h2 class="section-title">Tres Niveles de <span>Formación</span></h2>
             <div class="section-divider"></div>
-            <p class="section-desc">
-                Acompañamos cada etapa del desarrollo del estudiante con metodologías
-                actualizadas, docentes comprometidos y un enfoque sociocomunitario productivo.
-            </p>
+            <p class="section-desc">{{ landing('niveles.intro') }}</p>
         </div>
 
         <div class="nivel-grid">
@@ -191,23 +188,16 @@
                     <span class="sub">En Familia Comunitaria</span>
                 </div>
                 <div class="nivel-card-body">
-                    <p>
-                        Sembramos las bases del aprendizaje en los primeros años de vida, trabajando
-                        de la mano con la familia y la comunidad para estimular el desarrollo integral
-                        del niño en un ambiente seguro, cálido y creativo.
-                    </p>
+                    <p>{{ landing('niveles.inicial.descripcion') }}</p>
                     <ul class="nivel-features">
-                        <li><i class="fas fa-check-circle"></i> Estimulación temprana y desarrollo psicomotriz</li>
-                        <li><i class="fas fa-check-circle"></i> Desarrollo del lenguaje oral y expresivo</li>
-                        <li><i class="fas fa-check-circle"></i> Socialización y convivencia comunitaria</li>
-                        <li><i class="fas fa-check-circle"></i> Arte, música, juego y expresión creativa</li>
-                        <li><i class="fas fa-check-circle"></i> Aprestamiento para educación primaria</li>
-                        <li><i class="fas fa-check-circle"></i> Formación en valores y hábitos saludables</li>
+                        @foreach(\App\Support\Landing::lista('niveles.inicial.caracteristicas') as $item)
+                        <li><i class="fas fa-check-circle"></i> {{ $item }}</li>
+                        @endforeach
                     </ul>
                 </div>
                 <div class="nivel-card-footer">
                     <i class="fas fa-info-circle" style="color:var(--primary)"></i>
-                    Niños de 3 a 5 años · Ambiente lúdico y familiar
+                    {{ landing('niveles.inicial.nota') }}
                 </div>
             </div>
 
@@ -220,23 +210,16 @@
                     <span class="sub">Comunitaria Vocacional</span>
                 </div>
                 <div class="nivel-card-body">
-                    <p>
-                        Desarrollamos habilidades y conocimientos fundamentales integrando saberes
-                        culturales, científicos y vocacionales, construyendo la base académica sólida
-                        del estudiante de forma significativa y contextualizada.
-                    </p>
+                    <p>{{ landing('niveles.primaria.descripcion') }}</p>
                     <ul class="nivel-features">
-                        <li><i class="fas fa-check-circle"></i> Matemáticas, Comunicación y Lenguaje</li>
-                        <li><i class="fas fa-check-circle"></i> Ciencias Naturales, Sociales y Cosmos</li>
-                        <li><i class="fas fa-check-circle"></i> Educación física y artística integral</li>
-                        <li><i class="fas fa-check-circle"></i> Tecnología y emprendimiento básico</li>
-                        <li><i class="fas fa-check-circle"></i> Valores sociocomunitarios y ciudadanía</li>
-                        <li><i class="fas fa-check-circle"></i> Inglés y lengua originaria</li>
+                        @foreach(\App\Support\Landing::lista('niveles.primaria.caracteristicas') as $item)
+                        <li><i class="fas fa-check-circle"></i> {{ $item }}</li>
+                        @endforeach
                     </ul>
                 </div>
                 <div class="nivel-card-footer">
                     <i class="fas fa-info-circle" style="color:var(--accent2)"></i>
-                    De 1° a 6° de primaria · 6 a 12 años
+                    {{ landing('niveles.primaria.nota') }}
                 </div>
             </div>
 
@@ -249,23 +232,16 @@
                     <span class="sub">Comunitaria Productiva</span>
                 </div>
                 <div class="nivel-card-body">
-                    <p>
-                        Preparamos jóvenes para los retos del futuro con una formación productiva,
-                        científica y humanística, desarrollando el pensamiento crítico y la capacidad
-                        de contribuir activamente a su comunidad y al país.
-                    </p>
+                    <p>{{ landing('niveles.secundaria.descripcion') }}</p>
                     <ul class="nivel-features">
-                        <li><i class="fas fa-check-circle"></i> Ciencias exactas y experimentales</li>
-                        <li><i class="fas fa-check-circle"></i> Humanidades y Ciencias Sociales</li>
-                        <li><i class="fas fa-check-circle"></i> Técnica tecnológica productiva</li>
-                        <li><i class="fas fa-check-circle"></i> Proyecto sociocomunitario productivo</li>
-                        <li><i class="fas fa-check-circle"></i> Orientación hacia la educación superior</li>
-                        <li><i class="fas fa-check-circle"></i> Bachillerato técnico-humanístico</li>
+                        @foreach(\App\Support\Landing::lista('niveles.secundaria.caracteristicas') as $item)
+                        <li><i class="fas fa-check-circle"></i> {{ $item }}</li>
+                        @endforeach
                     </ul>
                 </div>
                 <div class="nivel-card-footer">
                     <i class="fas fa-info-circle" style="color:var(--green)"></i>
-                    De 1° a 6° de secundaria · 12 a 18 años
+                    {{ landing('niveles.secundaria.nota') }}
                 </div>
             </div>
 
@@ -273,17 +249,14 @@
 
         <!-- CTA -->
         <div class="cta-block fade-up">
-            <h3>¿Interesado en inscribir a tu hijo/a?</h3>
-            <p>
-                Visítanos o escríbenos para recibir información detallada sobre el proceso de
-                inscripción, calendario escolar y requisitos para cada nivel educativo.
-            </p>
+            <h3>{{ landing('niveles.cta_titulo') }}</h3>
+            <p>{{ landing('niveles.cta_texto') }}</p>
             <div class="cta-buttons">
-                <a href="{{ route('landing.contacto') }}" class="btn-cta btn-cta-primary">
+                <a href="{{ route('landing.contacto', ['motivo' => 'inscripcion']) }}#contactForm" class="btn-cta btn-cta-primary">
                     <i class="fas fa-user-plus"></i> Solicitar Inscripción
                 </a>
-                <a href="{{ route('landing.nosotros') }}" class="btn-cta btn-cta-outline">
-                    <i class="fas fa-info-circle"></i> Conocer Más
+                <a href="{{ route('landing.inscripciones') }}" class="btn-cta btn-cta-outline">
+                    <i class="fas fa-clipboard-check"></i> Ver Requisitos
                 </a>
             </div>
         </div>

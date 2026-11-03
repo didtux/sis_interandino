@@ -358,6 +358,9 @@
         <li><a href="{{ route('landing.historia') }}" class="{{ $currentRoute === 'landing.historia' ? 'nav-active' : '' }}">
             Historia
         </a></li>
+        <li><a href="{{ route('landing.inscripciones') }}" class="{{ $currentRoute === 'landing.inscripciones' ? 'nav-active' : '' }}">
+            Inscripciones
+        </a></li>
         <li><a href="{{ route('landing.contacto') }}" class="{{ $currentRoute === 'landing.contacto' ? 'nav-active' : '' }}">
             Contacto
         </a></li>
@@ -384,6 +387,7 @@
         <li><a href="{{ route('landing.nosotros') }}" class="{{ $currentRoute === 'landing.nosotros' ? 'nav-active' : '' }}"><i class="fas fa-users" style="margin-right:0.4rem"></i> Nosotros</a></li>
         <li><a href="{{ route('landing.niveles') }}" class="{{ $currentRoute === 'landing.niveles' ? 'nav-active' : '' }}"><i class="fas fa-graduation-cap" style="margin-right:0.4rem"></i> Niveles</a></li>
         <li><a href="{{ route('landing.historia') }}" class="{{ $currentRoute === 'landing.historia' ? 'nav-active' : '' }}"><i class="fas fa-history" style="margin-right:0.4rem"></i> Historia</a></li>
+        <li><a href="{{ route('landing.inscripciones') }}" class="{{ $currentRoute === 'landing.inscripciones' ? 'nav-active' : '' }}"><i class="fas fa-clipboard-check" style="margin-right:0.4rem"></i> Inscripciones</a></li>
         <li><a href="{{ route('landing.contacto') }}" class="{{ $currentRoute === 'landing.contacto' ? 'nav-active' : '' }}"><i class="fas fa-envelope" style="margin-right:0.4rem"></i> Contacto</a></li>
         @auth
             <li><a href="{{ route('home') }}" class="btn-nav"><i class="fas fa-th-large"></i> Panel de Control</a></li>
@@ -402,9 +406,9 @@
         <div class="footer-grid">
             <div class="footer-brand">
                 <img src="{{ ($sistemaConfig ?? null) && $sistemaConfig->config_logo ? asset('storage/'.$sistemaConfig->config_logo) : asset('img/logo.png') }}" alt="Logo">
-                <span class="name">Interandino Boliviano</span>
-                <p>Unidad Educativa Privada comprometida con la formación integral de estudiantes en El Alto, La Paz, Bolivia desde el año 2005.</p>
-                <div class="motto">"Contribuir, mejorar y desarrollar"</div>
+                <span class="name">{{ landing('general.nombre_corto') }}</span>
+                <p>{{ landing('general.descripcion') }}</p>
+                <div class="motto">"{{ landing('general.lema') }}"</div>
             </div>
 
             <div>
@@ -414,6 +418,7 @@
                     <li><a href="{{ route('landing.nosotros') }}"><i class="fas fa-chevron-right"></i> Nosotros</a></li>
                     <li><a href="{{ route('landing.niveles') }}"><i class="fas fa-chevron-right"></i> Niveles Educativos</a></li>
                     <li><a href="{{ route('landing.historia') }}"><i class="fas fa-chevron-right"></i> Historia</a></li>
+                    <li><a href="{{ route('landing.inscripciones') }}"><i class="fas fa-chevron-right"></i> Inscripciones</a></li>
                     <li><a href="{{ route('landing.contacto') }}"><i class="fas fa-chevron-right"></i> Contacto</a></li>
                     @auth
                         <li><a href="{{ route('home') }}"><i class="fas fa-chevron-right"></i> Panel de Control</a></li>
@@ -443,31 +448,33 @@
                 <ul class="footer-links" style="gap:1rem">
                     <li style="flex-direction:column;align-items:flex-start;gap:0.2rem">
                         <span style="font-size:0.72rem;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:0.5px">Ubicación</span>
-                        <span style="color:rgba(255,255,255,0.75)">El Alto, La Paz — Bolivia</span>
+                        <span style="color:rgba(255,255,255,0.75)">{{ landing('general.ubicacion') }}</span>
                     </li>
                     <li style="flex-direction:column;align-items:flex-start;gap:0.2rem">
                         <span style="font-size:0.72rem;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:0.5px">Fundación</span>
-                        <span style="color:rgba(255,255,255,0.75)">25 de Mayo de 2005</span>
+                        <span style="color:rgba(255,255,255,0.75)">{{ landing('general.fundacion') }}</span>
                     </li>
                     <li style="flex-direction:column;align-items:flex-start;gap:0.2rem">
                         <span style="font-size:0.72rem;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:0.5px">R.A.</span>
-                        <span style="color:rgba(255,255,255,0.75)">No. 311/2006</span>
+                        <span style="color:rgba(255,255,255,0.75)">{{ landing('general.resolucion') }}</span>
                     </li>
                 </ul>
+                {{-- Redes de Web pública → Redes y contacto; sin ninguna cargada no se muestran enlaces vacíos --}}
+                @if(($sistemaConfig ?? null) && ($redes = $sistemaConfig->redes()))
                 <div style="margin-top:1.5rem">
                     <div class="social-links">
-                        <a href="#" class="social-link" title="Facebook"><i class="fab fa-facebook-f"></i></a>
-                        <a href="#" class="social-link" title="WhatsApp"><i class="fab fa-whatsapp"></i></a>
-                        <a href="#" class="social-link" title="Instagram"><i class="fab fa-instagram"></i></a>
-                        <a href="#" class="social-link" title="YouTube"><i class="fab fa-youtube"></i></a>
+                        @foreach($redes as [$urlRed, $iconoRed, $nombreRed])
+                        <a href="{{ $urlRed }}" class="social-link" title="{{ $nombreRed }}" target="_blank" rel="noopener"><i class="{{ $iconoRed }}"></i></a>
+                        @endforeach
                     </div>
                 </div>
+                @endif
             </div>
         </div>
 
         <div class="footer-bottom">
             <p>&copy; {{ date('Y') }} Unidad Educativa Privada "Interandino Boliviano". Todos los derechos reservados.</p>
-            <p>R.A. No. 311/2006 &nbsp;·&nbsp; <a href="{{ route('login') }}">Acceso Docente</a></p>
+            <p>R.A. {{ landing('general.resolucion') }} &nbsp;·&nbsp; <a href="{{ route('login') }}">Acceso Docente</a></p>
         </div>
     </div>
 </footer>

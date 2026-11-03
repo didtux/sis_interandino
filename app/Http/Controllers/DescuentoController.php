@@ -24,7 +24,7 @@ class DescuentoController extends Controller
     {
         $gestiones = \App\Models\Inscripcion::select('insc_gestion')->distinct()
             ->orderBy('insc_gestion', 'desc')->pluck('insc_gestion')->filter()->values();
-        $gestion = $request->input('gestion', date('Y'));
+        $gestion = $request->input('gestion', gestion_actual());
 
         $query = \App\Models\Inscripcion::with(['estudiante.curso', 'padreFamilia', 'descuentos'])
             ->whereHas('descuentos')

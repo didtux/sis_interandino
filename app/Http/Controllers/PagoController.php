@@ -8,6 +8,7 @@ use App\Models\PadreFamilia;
 use App\Models\Curso;
 use App\Models\Inscripcion;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Barryvdh\DomPDF\Facade\Pdf;
 
 class PagoController extends Controller
@@ -78,9 +79,27 @@ class PagoController extends Controller
         return view('pagos.index', compact('pagos', 'estudiantes', 'cursos', 'pagosRecibo', 'codigosConjuntos', 'fechaInicio', 'fechaFin', 'sinFiltros'));
     }
 
+    /**
+     * Gestión que se cobra: la vigente o, si se pide, la anterior (para cobrar
+     * deudas del año que terminó después de pasar a la gestión nueva).
+     */
+    private function gestionCobro(Request $request): int
+    {
+        $vigente = gestion_actual();
+        $pedida = (int) $request->input('gestion', $vigente);
+        return $pedida === $vigente - 1 ? $pedida : $vigente;
+    }
+
     public function create(Request $request)
     {
-        $year = date('Y');
+        $year = $this->gestionCobro($request);
+        $esAnterior = $year < gestion_actual();
+        // En la gestión anterior ya terminada se deben todos los meses.
+        $mesCorte = $esAnterior ? 12 : mes_de_gestion();
+        $gestionesCobro = [gestion_actual()];
+        if (Inscripcion::where('insc_gestion', gestion_actual() - 1)->whereIn('insc_estado', [1, 2])->exists()) {
+            $gestionesCobro[] = gestion_actual() - 1;
+        }
 
         // El listado de mora enlaza con ?est_codigo=..., pero nadie lo leía y el
         // cajero tenía que volver a buscar al alumno a mano.
@@ -88,28 +107,30 @@ class PagoController extends Controller
 
         // Cargar padres que tienen estudiantes inscritos
         $padres = PadreFamilia::activo()
-            ->whereHas('estudiantes', function($q) use ($year) {
-                $q->where('est_visible', 1)
-                  ->whereHas('inscripcion', function($qi) use ($year) {
-                      $qi->where('insc_gestion', $year)->where('insc_estado', 1);
+            ->whereHas('estudiantes', function($q) use ($year, $esAnterior) {
+                // En la gestión anterior se incluye a los no reinscritos (ocultos): pueden deber.
+                if (!$esAnterior) $q->where('est_visible', 1);
+                $q->whereHas('inscripcion', function($qi) use ($year) {
+                      $qi->where('insc_gestion', $year)->whereIn('insc_estado', [1, 2]);
                   });
             })
             ->orderBy('pfam_nombres')
             ->get();
 
         // Preparar datos de estudiantes inscritos con su info de pagos
-        $estudiantes = Estudiante::visible()
+        $estudiantes = Estudiante::query()
+            ->when(!$esAnterior, fn($q) => $q->where('est_visible', 1))
             ->with([
                 'curso',
                 'padres',
                 'inscripcion' => function($q) use ($year) {
                     $q->where('insc_gestion', $year)
-                      ->where('insc_estado', 1)
+                      ->whereIn('insc_estado', [1, 2])
                       ->with(['descuentos', 'padreFamilia']);
                 }
             ])
             ->whereHas('inscripcion', function($q) use ($year) {
-                $q->where('insc_gestion', $year)->where('insc_estado', 1);
+                $q->where('insc_gestion', $year)->whereIn('insc_estado', [1, 2]);
             })
             ->get();
 
@@ -127,7 +148,7 @@ class PagoController extends Controller
 
             // Pagos activos del año
             $pagos = Pago::where('est_codigo', $est->est_codigo)
-                ->whereYear('pagos_fecha', $year)
+                ->deGestion($year)
                 ->where('pagos_estado', 1)
                 ->orderBy('pagos_fecha', 'asc')
                 ->get();
@@ -162,7 +183,7 @@ class PagoController extends Controller
             })->toArray();
 
             // Saldo pendiente: solo meses disponibles (no vencidos) × mensualidad - pagado
-            $mesActualNum = intval(date('n'));
+            $mesActualNum = $mesCorte;
             // Caso especial: el periodo arranca en insc_mes_inicio; los meses anteriores no cuentan.
             $mesInicioCasoEspecial = ($insc->insc_caso_especial ?? 0) == 1
                 ? (int) $insc->insc_mes_inicio
@@ -217,7 +238,7 @@ class PagoController extends Controller
             ];
         }
 
-        return view('pagos.create', compact('padres', 'estudiantesData', 'estPreseleccionado'));
+        return view('pagos.create', compact('padres', 'estudiantesData', 'estPreseleccionado', 'year', 'mesCorte', 'gestionesCobro'));
     }
 
     public function store(Request $request)
@@ -241,18 +262,12 @@ class PagoController extends Controller
             return back()->withErrors(['error' => 'Debe seleccionar al menos un estudiante.'])->withInput();
         }
 
-        $year = date('Y');
+        $year = $this->gestionCobro($request);
         $mesesNombres = ['', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 
-        // Un solo código de recibo para toda la transacción
+        // Un solo código de recibo para toda la transacción (se reserva más
+        // abajo, dentro de la transacción del cobro)
         $sinFactura = intval($estudiantesInput[array_key_first($estudiantesInput)]['sin_factura'] ?? 0);
-        if ($sinFactura) {
-            $ultimo = Pago::where('pagos_codigo', 'like', 'TAL%')->max('pagos_codigo');
-            $codigoRecibo = 'TAL' . str_pad(($ultimo ? intval(substr($ultimo, 3)) : 0) + 1, 5, '0', STR_PAD_LEFT);
-        } else {
-            $ultimo = Pago::where('pagos_codigo', 'like', 'REC%')->max('pagos_codigo');
-            $codigoRecibo = 'REC' . str_pad(($ultimo ? intval(substr($ultimo, 3)) : 0) + 1, 5, '0', STR_PAD_LEFT);
-        }
 
         // ── Datos de método de pago (nivel transacción) ──
         $metodo = in_array($request->pagos_metodo, ['EFECTIVO', 'QR', 'MIXTO']) ? $request->pagos_metodo : 'EFECTIVO';
@@ -274,7 +289,7 @@ class PagoController extends Controller
             $sinFactura = intval($estData['sin_factura'] ?? 0);
 
             $insc = Inscripcion::where('est_codigo', $estCodigo)
-                ->where('insc_gestion', $year)->where('insc_estado', 1)->first();
+                ->where('insc_gestion', $year)->whereIn('insc_estado', [1, 2])->first();
             $montoFinal = $insc ? ($insc->insc_monto_final ?? 0) : 0;
             $montoInscripcion = $insc ? ($insc->insc_monto_pagado ?? 0) : 0;
             $esSoloRegistro = $montoInscripcion == 0;
@@ -285,8 +300,12 @@ class PagoController extends Controller
             $mesesAPagar = [];
             for ($m = $mesInicio; $m <= 11 && count($mesesAPagar) < $cantidadCuotas; $m++) {
                 $existe = Pago::where('est_codigo', $estCodigo)
-                    ->whereYear('pagos_fecha', $year)->where('pagos_estado', 1)
-                    ->where('concepto', 'like', '%' . $mesesNombres[$m] . '%')->exists();
+                    ->deGestion($year)->where('pagos_estado', 1)
+                    ->where(function ($q) use ($m, $mesesNombres) {
+                        $q->where('pagos_mes', $m)->orWhere(function ($q2) use ($m, $mesesNombres) {
+                            $q2->whereNull('pagos_mes')->where('concepto', 'like', '%' . $mesesNombres[$m] . '%');
+                        });
+                    })->exists();
                 if ($existe) continue;
                 $mesesAPagar[] = $m;
             }
@@ -297,6 +316,7 @@ class PagoController extends Controller
             foreach ($mesesAPagar as $mes) {
                 $cuotas[] = [
                     'est'   => $estCodigo,
+                    'insc'  => $insc->insc_codigo ?? null,
                     'mes'   => $mes,
                     'monto' => ($mes === 2) ? $cuotaFebrero : $montoMensualidad,
                     'sf'    => $sinFactura ? 1 : 0,
@@ -319,7 +339,12 @@ class PagoController extends Controller
             $efRatio = 0.0;
         }
 
-        // 2ª pasada: crear los pagos con los datos de método
+        // 2ª pasada: crear los pagos con los datos de método. Número de recibo y
+        // cuotas se guardan juntos: si algo falla, no queda un recibo a medias
+        // ni un número consumido.
+        DB::transaction(function () use ($cuotas, $metodo, $efRatio, $sinFactura, $pfamCodigo, $year, $mesesNombres,
+                                         $comprobantePath, $transferenciaNro, $transferenciaHora, $reciboNro, $viaWhatsapp) {
+        $codigoRecibo = \App\Services\ReciboNumerador::siguiente($sinFactura ? 'MEN-TAL' : 'MEN-REC');
         foreach ($cuotas as $c) {
             $montoCuota = $c['monto'];
             if ($metodo === 'EFECTIVO') { $ef = $montoCuota; $qr = 0; }
@@ -339,6 +364,9 @@ class PagoController extends Controller
                 'concepto' => 'Mensualidad ' . $mesesNombres[$c['mes']],
                 'tipo' => 1,
                 'pagos_fecha' => now(),
+                'pagos_gestion' => $year,
+                'pagos_mes' => $c['mes'],
+                'insc_codigo' => $c['insc'],
                 'pagos_sin_factura' => $c['sf'],
                 'pagos_metodo' => $metodo,
                 'pagos_monto_efectivo' => $ef,
@@ -350,6 +378,7 @@ class PagoController extends Controller
                 'pagos_via_whatsapp' => $viaWhatsapp,
             ]);
         }
+        });
 
         return redirect()->route('pagos.index')->with('success', 'Pago(s) registrado(s) exitosamente');
     }
@@ -419,13 +448,13 @@ class PagoController extends Controller
 
     public function getEstudianteInscripcion($est_codigo)
     {
-        $year = date('Y');
+        $year = gestion_actual();
         $estudiante = Estudiante::where('est_codigo', $est_codigo)
             ->with([
                 'padres',
                 'inscripcion' => function($q) use ($year) {
                     $q->where('insc_gestion', $year)
-                      ->where('insc_estado', 1)
+                      ->whereIn('insc_estado', [1, 2])
                       ->with('descuentos');
                 }
             ])
@@ -433,7 +462,7 @@ class PagoController extends Controller
         
         if ($estudiante && $estudiante->inscripcion) {
             $pagosRealizados = Pago::where('est_codigo', $est_codigo)
-                ->whereYear('pagos_fecha', $year)
+                ->deGestion($year)
                 ->where('pagos_estado', 1)
                 ->count();
             
@@ -446,12 +475,18 @@ class PagoController extends Controller
         ]);
     }
 
-    public function anular($id)
+    public function anular(Request $request, $id)
     {
         $pago = Pago::findOrFail($id);
-        // Anular todos los pagos con el mismo código (pago conjunto)
-        Pago::where('pagos_codigo', $pago->pagos_codigo)->update(['pagos_estado' => 0]);
-        
+        // Anular todos los pagos con el mismo código (pago conjunto). Queda quién,
+        // cuándo y por qué: antes sólo se ponía el estado en 0.
+        Pago::where('pagos_codigo', $pago->pagos_codigo)->where('pagos_estado', 1)->update([
+            'pagos_estado'   => 0,
+            'anulado_por'    => auth()->user()->us_id,
+            'anulado_fecha'  => now(),
+            'anulado_motivo' => mb_substr(trim((string) $request->input('motivo')) ?: 'Sin motivo indicado', 0, 255),
+        ]);
+
         return response()->json(['success' => true, 'message' => 'Pago(s) anulado(s)']);
     }
 
@@ -463,10 +498,10 @@ class PagoController extends Controller
 
     public function resumenAnualPdf(Request $request)
     {
-        $year = $request->year ?? date('Y');
+        $year = $request->year ?? gestion_actual();
         
         $query = Pago::with('estudiante.curso')
-            ->whereYear('pagos_fecha', $year)
+            ->deGestion($year)
             ->where('pagos_estado', 1);
 
         if ($request->filled('cur_codigo')) {
@@ -479,7 +514,7 @@ class PagoController extends Controller
         
         $cursos = $request->filled('cur_codigo') 
             ? Curso::where('cur_codigo', $request->cur_codigo)->get()
-            : Curso::visible()->orderBy('cur_nombre')->get();
+            : Curso::visible()->ordenado()->get();
         
         $pdf = Pdf::loadView('pagos.resumen-anual-pdf', compact('pagos', 'year', 'cursos'))
             ->setPaper('legal', 'landscape');
@@ -488,18 +523,25 @@ class PagoController extends Controller
 
     public function resumenAnualExcel(Request $request)
     {
-        $year = $request->year ?? date('Y');
+        $year = $request->year ?? gestion_actual();
         $query = Estudiante::visible()->with(['curso', 'pagos' => function($q) use ($year) {
             // Los anulados no son ingresos: el PDF ya los excluia y el Excel no,
             // asi que los dos reportes no cuadraban.
-            $q->whereYear('pagos_fecha', $year)->where('pagos_estado', 1);
+            $q->deGestion($year)->where('pagos_estado', 1);
         }]);
 
         if ($request->filled('cur_codigo')) {
             $query->where('cur_codigo', $request->cur_codigo);
         }
 
-        $estudiantes = $query->orderBy('cur_codigo')->get();
+        // Orden de cursos real (cur_orden), no alfabético por código: antes
+        // salía 1ro Primaria, 1ro Secundaria, 2do Primaria… e Inicial al final.
+        // Se ordena en PHP porque cur_orden está en otra tabla y colación.
+        $estudiantes = $query->get()->sortBy([
+            fn($a, $b) => ($a->curso->cur_orden ?? 9999) <=> ($b->curso->cur_orden ?? 9999),
+            fn($a, $b) => strcmp($a->curso->cur_nombre ?? '', $b->curso->cur_nombre ?? ''),
+            fn($a, $b) => strcmp($a->est_apellidos . ' ' . $a->est_nombres, $b->est_apellidos . ' ' . $b->est_nombres),
+        ])->values();
         
         return \Maatwebsite\Excel\Facades\Excel::download(
             new \App\Exports\ResumenAnualExport($estudiantes, $year), 
@@ -521,59 +563,15 @@ class PagoController extends Controller
      */
     private function calcularMora(int $mesCorte, ?string $curCodigo, int $year)
     {
-        $query = Estudiante::visible()
-            ->with([
-                'curso',
-                'inscripcion' => function($q) use ($year) {
-                    $q->where('insc_gestion', $year)->where('insc_estado', 1);
-                },
-                'pagos' => function($q) use ($year) {
-                    $q->whereYear('pagos_fecha', $year)->where('pagos_estado', 1);
-                }
-            ]);
-
-        if (!empty($curCodigo)) {
-            $query->where('cur_codigo', $curCodigo);
-        }
-
-        $estudiantes = $query->orderBy('cur_codigo')->orderBy('est_apellidos')->get();
-
-        return $estudiantes->filter(function($est) use ($mesCorte) {
-            // Sin inscripción activa no se le puede reclamar mensualidad.
-            if (!$est->inscripcion) return false;
-
-            $mesInicio = 2;
-            if (($est->inscripcion->insc_caso_especial ?? 0) == 1) {
-                $mesInicio = (int) ($est->inscripcion->insc_mes_inicio ?? 2);
-            }
-
-            $mesesPagados = [];
-            foreach ($est->pagos as $pago) {
-                $mesesPagados = array_merge($mesesPagados, $pago->meses_cubiertos);
-            }
-            $mesesPagados = array_values(array_unique($mesesPagados));
-            sort($mesesPagados);
-
-            $pendientes = [];
-            for ($m = $mesInicio; $m <= min($mesCorte, 11); $m++) {
-                if (!in_array($m, $mesesPagados)) $pendientes[] = $m;
-            }
-
-            $mensualidad = $est->inscripcion->insc_monto_final / 10;
-
-            $est->mora_meses_pagados    = $mesesPagados;
-            $est->mora_meses_pendientes = $pendientes;
-            $est->mora_mensualidad      = $mensualidad;
-            $est->mora_deuda            = $mensualidad * count($pendientes);
-
-            return count($pendientes) > 0;
-        });
+        // La cuenta vive en MoraService: la comparten caja, la pre-inscripción y
+        // el portal de padres, para que todos muestren la misma deuda.
+        return (new \App\Services\MoraService())->enMora($mesCorte, $year, $curCodigo);
     }
 
     public function mora()
     {
-        $year = (int) date('Y');
-        $mesActual = request()->filled('mes') ? (int) request('mes') : (int) date('n');
+        $year = (int) gestion_actual();
+        $mesActual = request()->filled('mes') ? (int) request('mes') : mes_de_gestion();
 
         $estudiantesEnMora = $this->calcularMora($mesActual, request('cur_codigo'), $year);
         $deudaTotal = $estudiantesEnMora->sum('mora_deuda');
@@ -586,8 +584,8 @@ class PagoController extends Controller
 
     public function moraPdf(Request $request)
     {
-        $year = (int) date('Y');
-        $mesActual = $request->filled('mes') ? (int) $request->mes : (int) date('n');
+        $year = (int) gestion_actual();
+        $mesActual = $request->filled('mes') ? (int) $request->mes : mes_de_gestion();
 
         $estudiantesEnMora = $this->calcularMora($mesActual, $request->cur_codigo, $year);
         $deudaTotal = $estudiantesEnMora->sum('mora_deuda');

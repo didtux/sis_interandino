@@ -37,16 +37,20 @@
                         <div class="row">
                             <div class="col-md-12">
                                 <div class="form-group">
-                                    <label><i class="fas fa-barcode"></i> Escanear Código de Barras</label>
+                                    <label><i class="fas fa-qrcode"></i> Escanear código (QR o barras)</label>
                                     <div class="input-group">
-                                        <input type="text" id="barcode-input" class="form-control form-control-lg" placeholder="Escanee el código de barras aquí..." autocomplete="off">
+                                        <input type="text" id="barcode-input" class="form-control form-control-lg" placeholder="Escanee la etiqueta aquí..." autocomplete="off">
                                         <div class="input-group-append">
                                             <button type="button" class="btn btn-info" onclick="focusBarcode()">
                                                 <i class="fas fa-barcode"></i> Listo para escanear
                                             </button>
+                                            <button type="button" class="btn btn-outline-primary" id="btn-camara" onclick="alternarCamara()">
+                                                <i class="fas fa-camera"></i> Usar cámara
+                                            </button>
                                         </div>
                                     </div>
-                                    <small class="text-muted">El producto se agregará automáticamente al escanear</small>
+                                    <small class="text-muted">Con la pistola o la cámara: cada lectura suma una unidad (como venta o préstamo, según "Tipo").</small>
+                                    <div id="qr-reader-ventas" style="display:none;max-width:420px;" class="mt-2"></div>
                                 </div>
                             </div>
                         </div>
@@ -329,6 +333,11 @@ function mostrarConfirmacion() {
 
 function guardarVenta() {
     $('#modalConfirmar').modal('hide');
+    // La pestaña del ticket se abre acá, dentro del clic: si se abre recién
+    // cuando responde el servidor, el bloqueador de ventanas emergentes la
+    // frena y el ticket no sale. Se carga el recibo cuando llega la respuesta.
+    const ventanaTicket = window.open('', '_blank');
+    if (ventanaTicket) ventanaTicket.document.write('<p style="font-family:sans-serif">Generando ticket…</p>');
     const data = {
         ven_cliente: document.getElementById('ven_cliente').value,
         ven_celular: document.getElementById('ven_celular').value,
@@ -350,16 +359,22 @@ function guardarVenta() {
         if (data.success) {
             // El ticket sale solo al cerrar la venta: antes había que buscar la
             // venta en el listado para poder imprimir el comprobante.
-            if (data.recibo_url) {
+            if (data.recibo_url && ventanaTicket) {
+                ventanaTicket.location.href = data.recibo_url;
+            } else if (data.recibo_url) {
                 window.open(data.recibo_url, '_blank');
+            } else if (ventanaTicket) {
+                ventanaTicket.close();
             }
             alert('Venta ' + (data.ven_codigo || '') + ' registrada. Total Bs. ' + Number(data.total).toFixed(2));
             window.location.href = '{{ route("ventas.index") }}';
         } else {
+            if (ventanaTicket) ventanaTicket.close();
             alert('Error: ' + data.message);
         }
     })
     .catch(error => {
+        if (ventanaTicket) ventanaTicket.close();
         alert('Error al registrar la venta');
         console.error(error);
     });
@@ -368,6 +383,7 @@ function guardarVenta() {
 @endsection
 
 @push('scripts')
+<script src="{{ asset('vendor/html5-qrcode/html5-qrcode.min.js') }}"></script>
 <script>
 $(document).ready(function() {
     $('#producto-select').select2({
@@ -376,33 +392,14 @@ $(document).ready(function() {
         closeOnSelect: false,
         allowClear: true
     });
-    
-    // Auto-focus en el campo de código de barras
-    $('#barcode-input').focus();
-    
-    // Detectar escaneo de código de barras
-    let barcodeBuffer = '';
-    let barcodeTimeout;
-    
-    $('#barcode-input').on('keypress', function(e) {
-        clearTimeout(barcodeTimeout);
-        
-        if (e.which === 13) { // Enter
-            e.preventDefault();
-            const barcode = $(this).val().trim();
-            
-            if (barcode.length > 0) {
-                buscarYAgregarProducto(barcode);
-                $(this).val('');
-            }
-            barcodeBuffer = '';
-        } else {
-            barcodeBuffer += String.fromCharCode(e.which);
-            
-            barcodeTimeout = setTimeout(function() {
-                barcodeBuffer = '';
-            }, 100);
-        }
+
+    // La pistola escribe el código y manda Enter
+    $('#barcode-input').focus().on('keydown', function(e) {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        var texto = $(this).val();
+        $(this).val('');
+        buscarYAgregarProducto(texto, false);
     });
 });
 
@@ -410,76 +407,79 @@ function focusBarcode() {
     $('#barcode-input').focus();
 }
 
-function buscarYAgregarProducto(barcode) {
-    // Buscar producto por código de barras (prod_item)
-    let productoEncontrado = false;
-    
-    $('#producto-select option').each(function() {
-        const option = $(this);
-        const prodCodigo = option.val();
-        
-        if (prodCodigo) {
-            // Hacer petición AJAX para verificar el prod_item
-            $.ajax({
-                url: '{{ url("/api/producto-por-barcode") }}/' + barcode,
-                method: 'GET',
-                async: false,
-                success: function(data) {
-                    if (data.found && data.prod_codigo === prodCodigo) {
-                        productoEncontrado = true;
-                        
-                        // Seleccionar el producto
-                        $('#producto-select').val(prodCodigo).trigger('change');
-                        
-                        // Agregar automáticamente
-                        setTimeout(function() {
-                            agregarProducto();
-                            $('#barcode-input').addClass('is-valid').removeClass('is-invalid');
-                            
-                            // Mostrar notificación
-                            const Toast = Swal.mixin({
-                                toast: true,
-                                position: 'top-end',
-                                showConfirmButton: false,
-                                timer: 2000
-                            });
-                            Toast.fire({
-                                icon: 'success',
-                                title: 'Producto agregado'
-                            });
-                            
-                            setTimeout(function() {
-                                $('#barcode-input').removeClass('is-valid');
-                                $('#barcode-input').focus();
-                            }, 500);
-                        }, 100);
-                        
-                        return false;
-                    }
-                }
-            });
-        }
-    });
-    
-    if (!productoEncontrado) {
-        $('#barcode-input').addClass('is-invalid').removeClass('is-valid');
-        
-        const Toast = Swal.mixin({
-            toast: true,
-            position: 'top-end',
-            showConfirmButton: false,
-            timer: 3000
-        });
-        Toast.fire({
-            icon: 'error',
-            title: 'Producto no encontrado'
-        });
-        
-        setTimeout(function() {
-            $('#barcode-input').removeClass('is-invalid');
-            $('#barcode-input').focus();
-        }, 1000);
+/**
+ * Agrega el producto leído por la pistola o la cámara. Se busca en la lista
+ * que ya está en la página (por código de ítem o código de producto), sin
+ * consultar al servidor; antes se hacía una consulta síncrona por cada
+ * producto del catálogo (~215) en cada lectura. Las etiquetas viejas traen
+ * "codigo|nombre|categoría|precio": se usa la primera parte.
+ */
+var ultimoCodigo = '', ultimoMomento = 0;
+function buscarYAgregarProducto(texto, desdeCamara) {
+    var codigo = (texto || '').split('|')[0].trim();
+    if (!codigo) return;
+
+    // La cámara lee el mismo código varias veces por segundo
+    var ahora = Date.now();
+    if (desdeCamara && codigo === ultimoCodigo && (ahora - ultimoMomento) < 3000) return;
+    ultimoCodigo = codigo; ultimoMomento = ahora;
+
+    var buscado = codigo.toLowerCase();
+    var $opt = $('#producto-select option').filter(function() {
+        return this.value.toLowerCase() === buscado || String($(this).attr('data-item') || '').toLowerCase() === buscado;
+    }).first();
+
+    if ($opt.length) { agregarPorLectura($opt[0]); return; }
+
+    $.getJSON('{{ url("/api/producto-por-barcode") }}/' + encodeURIComponent(codigo))
+        .done(function(d) { avisoLectura(d.found ? '«' + d.prod_nombre + '» no está disponible para la venta' : 'Producto no encontrado: ' + codigo, false); })
+        .fail(function() { avisoLectura('Producto no encontrado: ' + codigo, false); });
+}
+
+/** Suma 1 unidad del producto (o crea la fila), respetando el stock. */
+function agregarPorLectura(option) {
+    var stock = parseInt(option.dataset.stock) || 0;
+    var precio = parseFloat(option.dataset.precio) || 0;
+    var nombre = option.dataset.nombre;
+    var tipo = document.getElementById('tipo').value;
+    var enLista = productosVenta.filter(function(p) { return p.prod_codigo === option.value; })
+                                .reduce(function(t, p) { return t + p.cantidad; }, 0);
+    if (enLista + 1 > stock) { avisoLectura('Stock insuficiente de ' + nombre + ' (disponible: ' + stock + ')', false); return; }
+
+    var fila = productosVenta.find(function(p) { return p.prod_codigo === option.value && p.tipo === tipo; });
+    if (fila) {
+        fila.cantidad++;
+        fila.subtotal = fila.cantidad * fila.precio;
+    } else {
+        productosVenta.push({ prod_codigo: option.value, prod_nombre: nombre, cantidad: 1, precio: precio, tipo: tipo, subtotal: precio });
     }
+    actualizarTabla();
+    avisoLectura(nombre + (fila ? ' (x' + fila.cantidad + ')' : '') + ' agregado', true);
+}
+
+function avisoLectura(mensaje, ok) {
+    $('#barcode-input').toggleClass('is-valid', ok).toggleClass('is-invalid', !ok);
+    setTimeout(function() { $('#barcode-input').removeClass('is-valid is-invalid'); }, 1200);
+    if (window.iziToast) iziToast[ok ? 'success' : 'error']({ message: mensaje, position: 'topRight', timeout: ok ? 1500 : 3000 });
+    else if (!ok) alert(mensaje);
+}
+
+// ── Lector con la cámara (celular o webcam) ─────────────────────────────────
+var lectorCamara = null;
+function alternarCamara() {
+    if (lectorCamara) {
+        lectorCamara.clear().catch(function() {});
+        lectorCamara = null;
+        $('#qr-reader-ventas').hide();
+        $('#btn-camara').html('<i class="fas fa-camera"></i> Usar cámara');
+        focusBarcode();
+        return;
+    }
+    if (typeof Html5QrcodeScanner === 'undefined') { alert('No se pudo cargar el lector de la cámara.'); return; }
+    $('#qr-reader-ventas').show();
+    $('#btn-camara').html('<i class="fas fa-stop"></i> Cerrar cámara');
+    lectorCamara = new Html5QrcodeScanner('qr-reader-ventas', { fps: 10, qrbox: 230, rememberLastUsedCamera: true });
+    lectorCamara.render(function(texto) { buscarYAgregarProducto(texto, true); });
 }
 </script>
 @endpush

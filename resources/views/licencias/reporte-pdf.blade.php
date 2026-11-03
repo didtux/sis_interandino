@@ -13,7 +13,7 @@
         $nCols  = count($columnas);
         $wEtiq  = $nCols > 15 ? 18 : 26;         // % para la primera columna
         $wCol   = ($nCols > 0) ? (100 - $wEtiq - 7) / $nCols : 0;
-        $fs     = $nCols > 20 ? 7 : ($nCols > 12 ? 8 : 9);
+        $fs     = $nCols > 12 ? 8 : 9;           // nunca menos de 8px (antes 7px)
     @endphp
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -23,7 +23,7 @@
         .logo img { width: 52px; height: auto; }
         .header-info { display: table-cell; vertical-align: middle; padding-left: 8px; }
         .header-info h3 { font-size: 10px; margin: 0; line-height: 1.2; }
-        .header-info p { font-size: 7px; margin: 1px 0; }
+        .header-info p { font-size: 8px; margin: 1px 0; }
         .fecha-box { position: absolute; top: 14px; right: 14px; text-align: right; font-size: 8px; }
         .title-section { text-align: center; margin: 8px 0; }
         .title-section h2 { font-size: 12px; }
@@ -34,8 +34,8 @@
         td.etiqueta { text-align: left; }
         .total-col, .total-row td { font-weight: bold; background-color: #ededed; }
         .retirado { color: #c0392b; }
-        .festivo { background-color: #f2f2f2; font-size: {{ max(5, $fs - 2) }}px; }
-        .footer { position: fixed; bottom: 8px; left: 14px; font-size: 7px; color: #666; }
+        .festivo { background-color: #f2f2f2; font-size: 8px; }
+        .footer { position: fixed; bottom: 8px; left: 14px; font-size: 8px; color: #666; }
     </style>
 </head>
 <body>
@@ -79,7 +79,8 @@
                     <td class="etiqueta">{{ $fila['etiqueta'] }}</td>
                     @foreach($columnas as $col)
                         @php $v = $fila['valores'][$col['clave']] ?? 0; @endphp
-                        <td class="{{ is_string($v) ? 'festivo' : '' }}">{{ $v }}</td>
+                        {{-- Los ceros van vacíos: así se ven de un vistazo los días con licencias --}}
+                        <td class="{{ is_string($v) ? 'festivo' : '' }}">{{ $v === 0 ? '' : $v }}</td>
                     @endforeach
                     <td class="total-col">{{ $fila['total'] }}</td>
                 </tr>

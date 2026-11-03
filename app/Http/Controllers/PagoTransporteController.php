@@ -7,6 +7,9 @@ use App\Models\Estudiante;
 use App\Models\PadreFamilia;
 use App\Models\EstudianteRuta;
 use Illuminate\Http\Request;
+use App\Models\AsignacionTransporte;
+use App\Models\Vehiculo;
+use App\Services\TransporteMoraService;
 use Carbon\Carbon;
 
 class PagoTransporteController extends Controller
@@ -30,6 +33,11 @@ class PagoTransporteController extends Controller
             $query->whereHas('estudiante.rutaTransporte', function($q) use ($request) {
                 $q->where('ruta_codigo', $request->ruta);
             });
+        }
+        // Por número de bus: las rutas que hoy cubre ese vehículo
+        if ($request->filled('bus')) {
+            $rutasBus = AsignacionTransporte::activo()->where('veh_codigo', $request->bus)->pluck('ruta_codigo');
+            $query->whereHas('estudiante.rutaTransporte', fn($q) => $q->whereIn('ruta_codigo', $rutasBus));
         }
 
         $pagos = $query->orderBy('tpago_fecha_registro', 'desc')->paginate(30);
@@ -81,13 +89,14 @@ class PagoTransporteController extends Controller
         }
 
         $estudiantes = Estudiante::visible()->get();
+        $buses = Vehiculo::activo()->get()->sortBy('veh_numero_bus', SORT_NATURAL)->values();
 
-        return view('transporte.pagos.index', compact('pagos', 'estudiantes', 'pagosRecibo', 'codigosConjuntos'));
+        return view('transporte.pagos.index', compact('pagos', 'estudiantes', 'pagosRecibo', 'codigosConjuntos', 'buses'));
     }
 
     public function create()
     {
-        $year = date('Y');
+        $year = gestion_actual();
 
         // Padres que tienen hijos visibles (no requiere ruta asignada, primero pagan)
         $padres = PadreFamilia::activo()
@@ -105,7 +114,8 @@ class PagoTransporteController extends Controller
             ->get();
 
         $gestion = $year;
-        $mesesNombres = ['', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre'];
+        $mora = new TransporteMoraService;
+        $mesesNombres = ['', 'Enero','Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre'];
 
         $estudiantesData = [];
         foreach ($estudiantes as $est) {
@@ -126,28 +136,10 @@ class PagoTransporteController extends Controller
                 ->orderBy('tpago_fecha_inicio')
                 ->get();
 
-            $mesesPagados = [];
-            $totalPagado = 0;
-            $ultimaVigencia = null;
-
-            foreach ($pagos as $pago) {
-                $totalPagado += $pago->tpago_monto;
-                $inicio = Carbon::parse($pago->tpago_fecha_inicio);
-                $fin = Carbon::parse($pago->tpago_fecha_fin);
-                $current = $inicio->copy()->startOfMonth();
-                $finMes = $fin->copy()->startOfMonth();
-                while ($current < $finMes) {
-                    $m = (int)$current->format('n');
-                    if ($m >= 2 && $m <= 11 && !in_array($m, $mesesPagados)) {
-                        $mesesPagados[] = $m;
-                    }
-                    $current->addMonth();
-                }
-                if (!$ultimaVigencia || $fin > $ultimaVigencia) {
-                    $ultimaVigencia = $fin;
-                }
-            }
-            sort($mesesPagados);
+            // Misma regla que el reporte de mora (TransporteMoraService)
+            $mesesPagados = $mora->mesesPagados($pagos);
+            $totalPagado = $pagos->sum('tpago_monto');
+            $ultimaVigencia = $pagos->isNotEmpty() ? Carbon::parse($pagos->max('tpago_fecha_fin')) : null;
 
             $historial = $pagos->map(function($p) {
                 return [
@@ -182,7 +174,7 @@ class PagoTransporteController extends Controller
 
     public function historialPagos($est_codigo)
     {
-        $gestionActual = date('Y');
+        $gestionActual = gestion_actual();
         $pagos = PagoTransporte::where('est_codigo', $est_codigo)
             ->whereYear('tpago_fecha_pago', $gestionActual)
             ->where('tpago_estado', '!=', 'cancelado')
@@ -325,11 +317,52 @@ class PagoTransporteController extends Controller
         return redirect()->route('pagos-transporte.index')->with('success', 'Pago cancelado');
     }
 
+    /** Estudiantes con mora de transporte, filtrables por curso, ruta y bus. */
+    public function mora(Request $request)
+    {
+        [$filas, $filtros, $mesCorte] = $this->datosMora($request);
+        return view('transporte.pagos.mora', [
+            'filas'    => $filas,
+            'filtros'  => $filtros,
+            'mesCorte' => $mesCorte,
+            'cursos'   => \App\Models\Curso::visible()->ordenado()->get(),
+            'rutas'    => \App\Models\Ruta::activo()->orderBy('ruta_nombre')->get(),
+            'buses'    => Vehiculo::activo()->get()->sortBy('veh_numero_bus', SORT_NATURAL)->values(),
+        ]);
+    }
+
+    public function moraPdf(Request $request)
+    {
+        [$filas, $filtros, $mesCorte] = $this->datosMora($request);
+        $titulo = collect([
+            $filtros['cur_codigo'] ? optional(\App\Models\Curso::where('cur_codigo', $filtros['cur_codigo'])->first())->cur_nombre : null,
+            $filtros['ruta_codigo'] ? optional(\App\Models\Ruta::where('ruta_codigo', $filtros['ruta_codigo'])->first())->ruta_nombre : null,
+            $filtros['veh_codigo'] ? optional(Vehiculo::where('veh_codigo', $filtros['veh_codigo'])->first())->veh_numero_bus : null,
+        ])->filter()->implode(' · ');
+        return \Barryvdh\DomPDF\Facade\Pdf::loadView('transporte.pagos.mora-pdf', compact('filas', 'mesCorte', 'titulo'))
+            ->setPaper('letter', 'portrait')
+            ->stream('mora-transporte.pdf');
+    }
+
+    private function datosMora(Request $request): array
+    {
+        $filtros = [
+            'cur_codigo'  => $request->input('cur_codigo'),
+            'ruta_codigo' => $request->input('ruta_codigo'),
+            'veh_codigo'  => $request->input('veh_codigo'),
+        ];
+        // Mes de corte: los meses anteriores a éste se cuentan como vencidos
+        $mesCorte = (int) $request->input('mes', mes_de_gestion());
+        $mesCorte = max(TransporteMoraService::PRIMER_MES, min(12, $mesCorte));
+        $filas = (new TransporteMoraService)->calcular(gestion_actual(), $mesCorte, $filtros);
+        return [$filas, $filtros, $mesCorte];
+    }
+
     public function reporteIngresos(Request $request)
     {
         $mesInicio = $request->mes_inicio ?? 2;
         $mesFin = $request->mes_fin ?? 11;
-        $gestion = $request->gestion ?? date('Y');
+        $gestion = $request->gestion ?? gestion_actual();
 
         $rutas = \App\Models\Ruta::where('ruta_estado', 1)
             ->with(['asignaciones' => function($q) {

@@ -99,7 +99,7 @@
                         <td class="col-paralelo">{{ $permiso->estudiante->curso->cur_paralelo ?? 'A' }}</td>
                         <td class="col-estudiante">{{ strtoupper($permiso->estudiante->est_nombres ?? '') }} {{ strtoupper($permiso->estudiante->est_apellidos ?? '') }}</td>
                         <td class="col-detalle">{{ strtoupper($permiso->permiso_motivo) }}</td>
-                        <td class="col-solicitante">{{ strtoupper($permiso->solicitante_nombre_completo ?? ($permiso->estudiante->padres->first()->pfam_nombres ?? '-')) }}</td>
+                        <td class="col-solicitante">{{ strtoupper($permiso->solicitante_nombre_completo ?? ($permiso->estudiante?->padres?->first()?->pfam_nombres ?? '-')) }}</td>
                     </tr>
                 @endforeach
             @empty

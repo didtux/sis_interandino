@@ -77,7 +77,7 @@ $(document).ready(function() {
     $('#est_codigo').on('change', function() {
         const estCodigo = $(this).val();
         if (estCodigo) {
-            $.get('/api/estudiante-padres/' + estCodigo, function(padres) {
+            $.get('{{ url('api/estudiante-padres') }}/' + estCodigo, function(padres) {
                 $('#pfam_codigo').empty().append('<option value="">Seleccione un padre</option>');
                 padres.forEach(function(padre) {
                     $('#pfam_codigo').append('<option value="' + padre.pfam_codigo + '">' + padre.pfam_nombres + '</option>');

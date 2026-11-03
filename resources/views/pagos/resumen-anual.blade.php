@@ -12,8 +12,8 @@
                     <div class="col-md-3">
                         <label>Año</label>
                         <select name="year" class="form-control">
-                            @for($y = date('Y'); $y >= 2020; $y--)
-                                <option value="{{ $y }}" {{ (request('year', date('Y')) == $y) ? 'selected' : '' }}>{{ $y }}</option>
+                            @for($y = gestion_actual(); $y >= 2020; $y--)
+                                <option value="{{ $y }}" {{ (request('year', gestion_actual()) == $y) ? 'selected' : '' }}>{{ $y }}</option>
                             @endfor
                         </select>
                     </div>

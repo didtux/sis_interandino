@@ -613,7 +613,7 @@ class AsistenciaController extends Controller
 
     public function estudiantesPorCurso($curCodigo, Request $request = null)
     {
-        $gestion = date('Y');
+        $gestion = gestion_actual();
         $fecha = request()->query('fecha');
         // La grilla tiene que mostrar sólo las marcas del turno que se está
         // cargando; si no, la tarde lista como presentes a los de la mañana.
@@ -802,7 +802,7 @@ class AsistenciaController extends Controller
      */
     public function reporteMensualSemanas(Request $request)
     {
-        $gestion = (int) $request->input('gestion', date('Y'));
+        $gestion = (int) $request->input('gestion', gestion_actual());
         $mes     = (int) $request->input('mes', date('n'));
         $mes     = max(1, min(12, $mes));
 
@@ -902,7 +902,7 @@ class AsistenciaController extends Controller
         if (!$curso) return back()->with('error', 'Curso no encontrado');
 
         $trimestre = $request->trimestre;
-        $year = date('Y');
+        $year = gestion_actual();
         // Turno del reporte: por config_id o por nombre; default Mañana.
         $turnoNombre = 'Mañana';
         if ($request->filled('turno')) {
@@ -923,42 +923,10 @@ class AsistenciaController extends Controller
         // ¿El curso pertenece al turno seleccionado? (avisa en el PDF si no)
         $turnoNoAplica = !$this->resumenService($turnoNombre)->turnoAplica($estudiantes->first()->est_codigo);
 
-        // Construir meses dentro del rango del periodo
-        $mesesConfig = [];
-        if ($periodo) {
-            $cur = $periodo->periodo_fecha_inicio->copy()->startOfMonth();
-            $fin = $periodo->periodo_fecha_fin->copy()->startOfMonth();
-            $nombresMes = [1=>'ENERO',2=>'FEBRERO',3=>'MARZO',4=>'ABRIL',5=>'MAYO',6=>'JUNIO',7=>'JULIO',8=>'AGOSTO',9=>'SEPTIEMBRE',10=>'OCTUBRE',11=>'NOVIEMBRE',12=>'DICIEMBRE'];
-            while ($cur <= $fin) {
-                $iniMes = $cur->copy();
-                $finMes = $cur->copy()->endOfMonth();
-                if ($iniMes < $periodo->periodo_fecha_inicio) $iniMes = $periodo->periodo_fecha_inicio->copy();
-                if ($finMes > $periodo->periodo_fecha_fin)    $finMes = $periodo->periodo_fecha_fin->copy();
-                $mesesConfig[$cur->format('Y-m')] = [
-                    'nombre'      => $nombresMes[(int)$cur->format('n')],
-                    'fechaInicio' => $iniMes->format('Y-m-d'),
-                    'fechaFin'    => $finMes->format('Y-m-d'),
-                ];
-                $cur->addMonth();
-            }
-        }
-
-        // Pre-compute data per student por mes y total trimestre
-        $datosEstudiantes = [];
-        $datosMensuales   = [];
-        if ($periodo) {
-            foreach ($estudiantes as $est) {
-                $datosEstudiantes[$est->est_codigo] = $this->getAsistenciaTrimestreEst($est->est_codigo, $periodo, $year, $turnoNombre);
-                $datosMensuales[$est->est_codigo] = [];
-                foreach ($mesesConfig as $key => $m) {
-                    $pseudo = (object)[
-                        'periodo_fecha_inicio' => Carbon::parse($m['fechaInicio']),
-                        'periodo_fecha_fin'    => Carbon::parse($m['fechaFin']),
-                    ];
-                    $datosMensuales[$est->est_codigo][$key] = $this->getAsistenciaTrimestreEst($est->est_codigo, $pseudo, $year, $turnoNombre);
-                }
-            }
-        }
+        // Meses del periodo y datos por estudiante (mes a mes + total). El
+        // Excel trimestral usa el mismo armado para no volver a separarse.
+        [$mesesConfig, $datosEstudiantes, $datosMensuales] =
+            $this->datosTrimestre($estudiantes, $periodo, $year, $turnoNombre);
 
         // Estadísticas del trimestre
         $totDT=0;$totTL=0;$totTF=0;$totTA=0;$totDias=0;$mejor=null;$mejorPct=-1;$perfectos=0;
@@ -1010,6 +978,48 @@ class AsistenciaController extends Controller
         return $pdf->stream('asistencia-trimestre-' . $trimestre . '-' . date('Y-m-d') . '.pdf');
     }
 
+    /**
+     * Meses de un periodo (recortados a sus fechas) y asistencia por estudiante:
+     * [$mesesConfig, $datosEstudiantes (total del periodo), $datosMensuales].
+     * Lo comparten el PDF y el Excel trimestral.
+     */
+    private function datosTrimestre($estudiantes, $periodo, $year, string $turnoNombre): array
+    {
+        $mesesConfig = [];
+        $datosEstudiantes = [];
+        $datosMensuales = [];
+        if (!$periodo) return [$mesesConfig, $datosEstudiantes, $datosMensuales];
+
+        $cur = $periodo->periodo_fecha_inicio->copy()->startOfMonth();
+        $fin = $periodo->periodo_fecha_fin->copy()->startOfMonth();
+        $nombresMes = [1=>'ENERO',2=>'FEBRERO',3=>'MARZO',4=>'ABRIL',5=>'MAYO',6=>'JUNIO',7=>'JULIO',8=>'AGOSTO',9=>'SEPTIEMBRE',10=>'OCTUBRE',11=>'NOVIEMBRE',12=>'DICIEMBRE'];
+        while ($cur <= $fin) {
+            $iniMes = $cur->copy();
+            $finMes = $cur->copy()->endOfMonth();
+            if ($iniMes < $periodo->periodo_fecha_inicio) $iniMes = $periodo->periodo_fecha_inicio->copy();
+            if ($finMes > $periodo->periodo_fecha_fin)    $finMes = $periodo->periodo_fecha_fin->copy();
+            $mesesConfig[$cur->format('Y-m')] = [
+                'nombre'      => $nombresMes[(int)$cur->format('n')],
+                'fechaInicio' => $iniMes->format('Y-m-d'),
+                'fechaFin'    => $finMes->format('Y-m-d'),
+            ];
+            $cur->addMonth();
+        }
+
+        foreach ($estudiantes as $est) {
+            $datosEstudiantes[$est->est_codigo] = $this->getAsistenciaTrimestreEst($est->est_codigo, $periodo, $year, $turnoNombre);
+            $datosMensuales[$est->est_codigo] = [];
+            foreach ($mesesConfig as $key => $m) {
+                $pseudo = (object)[
+                    'periodo_fecha_inicio' => Carbon::parse($m['fechaInicio']),
+                    'periodo_fecha_fin'    => Carbon::parse($m['fechaFin']),
+                ];
+                $datosMensuales[$est->est_codigo][$key] = $this->getAsistenciaTrimestreEst($est->est_codigo, $pseudo, $year, $turnoNombre);
+            }
+        }
+        return [$mesesConfig, $datosEstudiantes, $datosMensuales];
+    }
+
     public function reporteAnual(Request $request)
     {
         $request->validate(['cur_codigo' => 'required']);
@@ -1017,7 +1027,7 @@ class AsistenciaController extends Controller
         $curso = Curso::where('cur_codigo', $request->cur_codigo)->first();
         if (!$curso) return back()->with('error', 'Curso no encontrado');
 
-        $year = date('Y');
+        $year = gestion_actual();
         $turnoNombre = 'Mañana';
         if ($request->filled('turno')) {
             $turnoNombre = ConfiguracionAsistencia::where('config_id', $request->turno)->value('config_turno') ?: $request->turno;
@@ -1074,7 +1084,7 @@ class AsistenciaController extends Controller
         $curso = Curso::where('cur_codigo', $request->cur_codigo)->first();
         if (!$curso) return back()->with('error', 'Curso no encontrado');
 
-        $year = date('Y');
+        $year = gestion_actual();
         $estudiantes = $curso->estudiantes()->orderBy('est_apellidos')->orderBy('est_nombres')->get();
         if ($estudiantes->isEmpty()) return back()->with('error', 'No hay estudiantes registrados en el curso ' . $curso->cur_nombre);
 
@@ -1088,21 +1098,30 @@ class AsistenciaController extends Controller
             : ($request->turno_nombre ?? 'Mañana');
 
         $periodo = NotaPeriodo::activo()->gestion($year)->where('periodo_numero', $request->trimestre)->first();
-        $periodoNombre = $periodo ? $periodo->periodo_nombre : 'Trimestre ' . $request->trimestre;
 
+        // Mismo detalle que el PDF: un bloque por mes y el total del trimestre.
+        // Antes había un único bloque con el total, encabezado con el nombre
+        // del periodo, y las columnas TOTAL quedaban vacías y corridas.
+        [$mesesConfig, $datosEstudiantes, $datosMensuales] =
+            $this->datosTrimestre($estudiantes, $periodo, $year, $turnoNombre);
+
+        $cero = ['dt' => 0, 'tl' => 0, 'tf' => 0, 'ta' => 0, 'total' => 0];
         $data = collect();
         foreach ($estudiantes as $index => $est) {
-            $fila = [$listaExcel[$est->est_codigo] ?? ($index + 1), $est->est_apellidos . ' ' . $est->est_nombres];
-            if ($periodo) {
-                $d = $this->getAsistenciaTrimestreEst($est->est_codigo, $periodo, $year, $turnoNombre);
-                $fila = array_merge($fila, [$d['dt'], $d['tl'], $d['tf'], $d['ta'], $d['total']]);
-            } else {
-                $fila = array_merge($fila, [0, 0, 0, 0, 0]);
+            $nombre = $est->est_apellidos . ' ' . $est->est_nombres;
+            if (($est->est_visible ?? 1) == 0) $nombre .= ' (RETIRADO)';
+            $fila = [$listaExcel[$est->est_codigo] ?? ($index + 1), $nombre];
+            foreach (array_keys($mesesConfig) as $key) {
+                $d = $datosMensuales[$est->est_codigo][$key] ?? $cero;
+                array_push($fila, $d['dt'], $d['tl'], $d['tf'], $d['ta'], $d['total']);
             }
+            $d = $datosEstudiantes[$est->est_codigo] ?? $cero;
+            array_push($fila, $d['dt'], $d['tl'], $d['tf'], $d['ta'], $d['total']);
             $data->push($fila);
         }
 
-        return Excel::download(new AsistenciasTrimestralExport($data, $curso, $request->trimestre, [$periodoNombre], $turnoNombre),
+        $meses = array_column($mesesConfig, 'nombre');
+        return Excel::download(new AsistenciasTrimestralExport($data, $curso, $request->trimestre, $meses, $turnoNombre),
             'asistencia-trimestre-' . $request->trimestre . '-' . $turnoNombre . '-' . date('Y-m-d') . '.xlsx');
     }
 
@@ -1113,7 +1132,7 @@ class AsistenciaController extends Controller
         $curso = Curso::where('cur_codigo', $request->cur_codigo)->first();
         if (!$curso) return back()->with('error', 'Curso no encontrado');
 
-        $year = date('Y');
+        $year = gestion_actual();
         $estudiantes = $curso->estudiantes()->orderBy('est_apellidos')->orderBy('est_nombres')->get();
         if ($estudiantes->isEmpty()) return back()->with('error', 'No hay estudiantes registrados en el curso ' . $curso->cur_nombre);
 
@@ -1172,7 +1191,7 @@ class AsistenciaController extends Controller
         $fecha = $request->fecha;
 
         $lista = ListaCurso::where('cur_codigo', $request->cur_codigo)
-            ->where('lista_gestion', date('Y'))
+            ->where('lista_gestion', gestion_actual())
             ->pluck('lista_numero', 'est_codigo');
         
         $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('asistencias.reporte-atrasos-pdf', 
@@ -1203,7 +1222,7 @@ class AsistenciaController extends Controller
             $datosPorCurso = [];
             $cursosYaProcesados = [];
             $listaPorCurso = [];
-            $gestionActual = date('Y');
+            $gestionActual = gestion_actual();
             
             foreach ($configuraciones as $config) {
                 $cursosPivote = \DB::table('asistencia_configuracion_cursos')
@@ -1339,7 +1358,7 @@ class AsistenciaController extends Controller
             }
             
             $datosPorCurso = [];
-            $gestionFaltas = date('Y');
+            $gestionFaltas = gestion_actual();
             
             foreach ($cursos as $curso) {
                 $estudiantes = $curso->estudiantes()->orderBy('est_apellidos')->orderBy('est_nombres')->get();

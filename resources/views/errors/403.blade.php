@@ -8,7 +8,10 @@
                 <div class="card-body py-5">
                     <i class="fas fa-lock fa-4x text-danger mb-3"></i>
                     <h3 class="text-danger">Acceso Denegado</h3>
-                    <p class="text-muted mt-3">No tiene permisos para realizar esta acción.</p>
+                    {{-- El motivo concreto (qué permiso y en qué módulo) lo arma quien
+                         rechaza; antes todos los 403 mostraban el mismo texto y no se podía
+                         saber qué tilde faltaba en el rol. --}}
+                    <p class="text-muted mt-3">{{ (isset($exception) && $exception->getMessage()) ? $exception->getMessage() : 'No tiene permisos para realizar esta acción.' }}</p>
                     <p class="text-muted">Contacte al administrador si necesita acceso.</p>
                     <a href="{{ route('home') }}" class="btn btn-primary-modern mt-3">
                         <i class="fas fa-home mr-1"></i>Volver al Inicio

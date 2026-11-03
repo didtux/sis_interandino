@@ -25,6 +25,33 @@ class ChoferController extends Controller
         return view('transporte.choferes.create');
     }
 
+    /**
+     * Choferes y vehículos en una sola pantalla: qué chofer maneja qué bus en
+     * qué ruta, cuántos estudiantes lleva y si tiene usuario para el portal.
+     */
+    public function flota()
+    {
+        return view('transporte.flota.index', $this->datosFlota());
+    }
+
+    public function flotaPdf()
+    {
+        return \Barryvdh\DomPDF\Facade\Pdf::loadView('transporte.flota.pdf', $this->datosFlota())
+            ->setPaper('letter', 'landscape')
+            ->stream('choferes-y-buses.pdf');
+    }
+
+    private function datosFlota(): array
+    {
+        $asignaciones = \App\Models\AsignacionTransporte::activo()->with(['chofer', 'vehiculo', 'ruta'])->get()
+            ->sortBy(fn($a) => (string) optional($a->vehiculo)->veh_numero_bus, SORT_NATURAL)->values();
+        $estudiantesPorRuta = \App\Models\EstudianteRuta::activo()->selectRaw('ruta_codigo, COUNT(*) n')->groupBy('ruta_codigo')->pluck('n', 'ruta_codigo');
+        $conUsuario = User::where('us_entidad_tipo', 'chofer')->where('us_visible', 1)->pluck('us_user', 'us_entidad_id');
+        $choferesSinBus = Chofer::activo()->whereNotIn('chof_codigo', $asignaciones->pluck('chof_codigo'))->orderBy('chof_apellidos')->get();
+        $busesSinChofer = \App\Models\Vehiculo::activo()->whereNotIn('veh_codigo', $asignaciones->pluck('veh_codigo'))->get();
+        return compact('asignaciones', 'estudiantesPorRuta', 'conUsuario', 'choferesSinBus', 'busesSinChofer');
+    }
+
     public function store(Request $request)
     {
         $request->validate([

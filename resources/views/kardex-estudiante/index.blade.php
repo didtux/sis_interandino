@@ -3,7 +3,9 @@
 @section('content')
 @php
     $u = auth()->user();
-    $esDir = in_array($u->rol_id, [1,4]);
+    // Misma capacidad que EstudianteKardexController::esDireccion(). Antes era
+    // [1,4] (4 = Chofer) y la dirección no veía los botones de editar/eliminar.
+    $esDir = $u->tieneCapacidad('kardex_estudiante.direccion');
     $esDoc = $u->us_entidad_tipo === 'docente';
 @endphp
 <div class="section-body">

@@ -27,6 +27,6 @@ class NotaPeriodo extends Model
 
     public function scopeGestion($query, $gestion = null)
     {
-        return $query->where('periodo_gestion', $gestion ?? date('Y'));
+        return $query->where('periodo_gestion', $gestion ?? gestion_actual());
     }
 }

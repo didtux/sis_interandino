@@ -3,7 +3,11 @@
 @section('content')
 @php
     $esDocenteVinculado = auth()->user()->us_entidad_tipo === 'docente' && auth()->user()->us_entidad_id;
-    $esAdmin = auth()->user()->rol_id == 1;
+    // Antes todo esto era "sólo administrador"; ahora son capacidades de Roles.
+    $puedeConfigurar = auth()->user()->tieneCapacidad('notas.configurar');
+    $puedeAprobar    = auth()->user()->tieneCapacidad('notas.aprobar');
+    $puedeReportes   = auth()->user()->tieneCapacidad('notas.reportes');
+    $esAdmin = $puedeAprobar; // compatibilidad con los includes que lo usan
     $tabActivo = request('tab', 'inicio');
 @endphp
 
@@ -75,7 +79,7 @@
                 <div class="card-header d-flex justify-content-between align-items-center py-3">
                     <h4 class="mb-0"><i class="fas fa-clipboard-list mr-2"></i>Módulo de Notas — {{ $gestion }}</h4>
                     <div class="d-flex" style="gap:6px;">
-                        @if($esAdmin)
+                        @if($puedeConfigurar)
                             <a href="{{ route('notas.configuracion') }}" class="btn btn-sm btn-primary-modern">
                                 <i class="fas fa-cog mr-1"></i>Configuración
                             </a>
@@ -96,7 +100,7 @@
                             <a class="nav-link {{ $tabActivo == 'notas' ? 'active' : '' }}"
                                href="{{ route('notas.index', array_merge(request()->query(), ['tab' => 'notas'])) }}">
                                 <i class="fas fa-pen mr-1"></i>Notas
-                                @if($statEnviadas > 0 && $esAdmin)
+                                @if($statEnviadas > 0 && $puedeAprobar)
                                     <span class="badge badge-warning ml-1" style="font-size:9px;">{{ $statEnviadas }}</span>
                                 @endif
                             </a>
@@ -107,7 +111,7 @@
                                 <i class="fas fa-user-check mr-1"></i>Asistencia Clases
                             </a>
                         </li>
-                        @if($esAdmin)
+                        @if($puedeReportes)
                         <li class="nav-item">
                             <a class="nav-link {{ $tabActivo == 'reportes' ? 'active' : '' }}"
                                href="{{ route('notas.index', array_merge(request()->query(), ['tab' => 'reportes'])) }}">
@@ -347,7 +351,7 @@
                         <span class="badge badge-secondary p-1">{{ $asignaciones->count() }} asignación(es)</span>
                     </div>
 
-                    @if($esAdmin)
+                    @if($puedeAprobar)
                         <div class="alert alert-info py-2 mb-2 d-flex justify-content-between align-items-center" id="bulkBar">
                             <div>
                                 <i class="fas fa-check-double mr-1"></i>
@@ -420,7 +424,7 @@
                                                 $label     = match($estado) { 2=>'Aprobado',         1=>'Enviado',      3=>'Rechazado',      0=>'Borrador',      default=>'Calificar' };
                                             @endphp
                                             <td class="text-center" data-label="{{ $periodo->periodo_nombre }}">
-                                                @if($esAdmin && $estado === 1)
+                                                @if($puedeAprobar && $estado === 1)
                                                     <input type="checkbox" class="bulk-approve-chk mr-1"
                                                            value="{{ $asig->curmatdoc_id }}|{{ $periodo->periodo_id }}"
                                                            onchange="bulkRefresh()" title="Marcar para aprobación masiva">
@@ -482,7 +486,7 @@
                     {{-- ════════════════════════════════════════════════════ --}}
                     {{-- TAB REPORTES (solo admin)                             --}}
                     {{-- ════════════════════════════════════════════════════ --}}
-                    @elseif($tabActivo == 'reportes' && $esAdmin)
+                    @elseif($tabActivo == 'reportes' && $puedeReportes)
 
                     <div class="row">
 

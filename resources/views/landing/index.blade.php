@@ -3,6 +3,18 @@
 
 @push('styles')
 <style>
+    /* ===== AVISOS ===== */
+    .avisos { padding: 4.5rem 0 1rem; background: #f7f9fc; }
+    .avisos-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1.5rem; }
+    .aviso-card { background: #fff; border-radius: 14px; overflow: hidden; box-shadow: 0 6px 24px rgba(10,26,58,.08); display: flex; flex-direction: column; }
+    .aviso-img { width: 100%; height: 180px; object-fit: cover; }
+    .aviso-body { padding: 1.3rem 1.4rem 1.5rem; }
+    .aviso-fecha { font-size: .78rem; color: #8a94a6; margin-bottom: .4rem; }
+    .aviso-card h3 { font-size: 1.1rem; color: #0a1a3a; margin: 0 0 .6rem; }
+    .aviso-texto { font-size: .92rem; color: #4a5568; line-height: 1.6; }
+    .aviso-texto p:last-child { margin-bottom: 0; }
+    .aviso-link { display: inline-block; margin-top: .8rem; margin-right: 1rem; font-size: .88rem; font-weight: 600; color: #1a3a6c; }
+
     /* ===== HERO ===== */
     #hero {
         position: relative;
@@ -243,20 +255,15 @@
         <div class="carousel-inner">
             <!-- Slide 1 -->
             <div class="carousel-item active">
-                <div class="slide slide-1">
+                <div class="slide slide-1" @if($img = \App\Support\Landing::imagen('inicio.slide1.imagen')) style="background: linear-gradient(rgba(10,26,58,.78), rgba(10,26,58,.78)), url('{{ $img }}') center/cover" @endif>
                     <div class="slide-pattern"></div>
                     <div class="slide-deco slide-deco-1"></div>
                     <div class="slide-deco slide-deco-2"></div>
                     <div class="slide-content">
-                        <div class="slide-badge">Desde 2005 · El Alto, La Paz · Bolivia</div>
+                        <div class="slide-badge">{{ landing('inicio.slide1.badge') }}</div>
                         <img src="{{ ($sistemaConfig ?? null) && $sistemaConfig->config_logo ? asset('storage/'.$sistemaConfig->config_logo) : asset('img/logo.png') }}" alt="Logo" class="slide-logo">
-                        <h1 class="slide-title">
-                            Unidad Educativa Privada<br><span>"Interandino Boliviano"</span>
-                        </h1>
-                        <p class="slide-subtitle">
-                            Formando estudiantes autónomos, reflexivos, críticos y productivos<br>
-                            con capacidad creativa e intelectual para el vivir bien.
-                        </p>
+                        <h1 class="slide-title">{{ landing('inicio.slide1.titulo') }}</h1>
+                        <p class="slide-subtitle">{{ landing('inicio.slide1.subtitulo') }}</p>
                         <div class="slide-actions">
                             <a href="{{ route('landing.nosotros') }}" class="btn-hero btn-hero-primary">
                                 <i class="fas fa-info-circle"></i> Conócenos
@@ -270,19 +277,14 @@
             </div>
             <!-- Slide 2 -->
             <div class="carousel-item">
-                <div class="slide slide-2">
+                <div class="slide slide-2" @if($img = \App\Support\Landing::imagen('inicio.slide2.imagen')) style="background: linear-gradient(rgba(10,26,58,.78), rgba(10,26,58,.78)), url('{{ $img }}') center/cover" @endif>
                     <div class="slide-pattern"></div>
                     <div class="slide-deco slide-deco-1"></div>
                     <div class="slide-content">
-                        <div class="slide-badge">Nuestra Visión Institucional</div>
+                        <div class="slide-badge">{{ landing('inicio.slide2.badge') }}</div>
                         <div style="font-size:4rem;margin-bottom:1.2rem;filter:drop-shadow(0 4px 12px rgba(0,0,0,0.3))">🎯</div>
-                        <h1 class="slide-title">
-                            Educación <span>Inclusiva</span><br>y Comunitaria
-                        </h1>
-                        <p class="slide-subtitle">
-                            Institución pluralista con valores democráticos, intercultural y plurilingüe,<br>
-                            en armonía con la madre naturaleza y la humanidad.
-                        </p>
+                        <h1 class="slide-title">{{ landing('inicio.slide2.titulo') }}</h1>
+                        <p class="slide-subtitle">{{ landing('inicio.slide2.subtitulo') }}</p>
                         <div class="slide-actions">
                             <a href="{{ route('landing.nosotros') }}" class="btn-hero btn-hero-primary">
                                 <i class="fas fa-eye"></i> Misión y Visión
@@ -296,24 +298,19 @@
             </div>
             <!-- Slide 3 -->
             <div class="carousel-item">
-                <div class="slide slide-3">
+                <div class="slide slide-3" @if($img = \App\Support\Landing::imagen('inicio.slide3.imagen')) style="background: linear-gradient(rgba(10,26,58,.78), rgba(10,26,58,.78)), url('{{ $img }}') center/cover" @endif>
                     <div class="slide-pattern"></div>
                     <div class="slide-deco slide-deco-2"></div>
                     <div class="slide-content">
-                        <div class="slide-badge">Oferta Educativa Completa</div>
+                        <div class="slide-badge">{{ landing('inicio.slide3.badge') }}</div>
                         <div style="font-size:4rem;margin-bottom:1.2rem;filter:drop-shadow(0 4px 12px rgba(0,0,0,0.3))">📚</div>
-                        <h1 class="slide-title">
-                            <span>Tres Niveles</span><br>de Formación
-                        </h1>
-                        <p class="slide-subtitle">
-                            Educación Inicial en Familia Comunitaria<br>
-                            Primaria Vocacional · Secundaria Comunitaria Productiva
-                        </p>
+                        <h1 class="slide-title">{{ landing('inicio.slide3.titulo') }}</h1>
+                        <p class="slide-subtitle">{{ landing('inicio.slide3.subtitulo') }}</p>
                         <div class="slide-actions">
                             <a href="{{ route('landing.niveles') }}" class="btn-hero btn-hero-primary">
                                 <i class="fas fa-graduation-cap"></i> Ver Niveles
                             </a>
-                            <a href="{{ route('landing.contacto') }}" class="btn-hero btn-hero-outline">
+                            <a href="{{ route('landing.inscripciones') }}" class="btn-hero btn-hero-outline">
                                 <i class="fas fa-user-plus"></i> Inscripciones
                             </a>
                         </div>
@@ -322,19 +319,14 @@
             </div>
             <!-- Slide 4 -->
             <div class="carousel-item">
-                <div class="slide slide-4">
+                <div class="slide slide-4" @if($img = \App\Support\Landing::imagen('inicio.slide4.imagen')) style="background: linear-gradient(rgba(10,26,58,.78), rgba(10,26,58,.78)), url('{{ $img }}') center/cover" @endif>
                     <div class="slide-pattern"></div>
                     <div class="slide-deco slide-deco-1"></div>
                     <div class="slide-content">
-                        <div class="slide-badge">¡Celebrando 20 Años!</div>
+                        <div class="slide-badge">{{ landing('inicio.slide4.badge') }}</div>
                         <div style="font-size:4rem;margin-bottom:1.2rem;filter:drop-shadow(0 4px 12px rgba(0,0,0,0.3))">🏆</div>
-                        <h1 class="slide-title">
-                            <span>20 Años</span> de<br>Excelencia Educativa
-                        </h1>
-                        <p class="slide-subtitle">
-                            Desde el 25 de mayo de 2005 al servicio de El Alto,<br>
-                            construyendo el futuro de Bolivia con dedicación y vocación.
-                        </p>
+                        <h1 class="slide-title">{{ landing('inicio.slide4.titulo') }}</h1>
+                        <p class="slide-subtitle">{{ landing('inicio.slide4.subtitulo') }}</p>
                         <div class="slide-actions">
                             <a href="{{ route('landing.historia') }}" class="btn-hero btn-hero-primary">
                                 <i class="fas fa-medal"></i> Nuestra Trayectoria
@@ -364,28 +356,42 @@
 <!-- STATS BAR -->
 <div class="stats-bar">
     <div class="container">
+        @for($i = 1; $i <= 5; $i++)
         <div class="stat-item">
-            <div class="stat-number">20+</div>
-            <div class="stat-label">Años de Excelencia</div>
+            <div class="stat-number">{{ landing("inicio.cifra{$i}.numero") }}</div>
+            <div class="stat-label">{{ landing("inicio.cifra{$i}.etiqueta") }}</div>
         </div>
-        <div class="stat-item">
-            <div class="stat-number">3</div>
-            <div class="stat-label">Niveles Educativos</div>
+        @endfor
+    </div>
+</div>
+
+@php $avisos = \App\Support\Landing::bloques('AVISO'); @endphp
+@if($avisos->isNotEmpty())
+<!-- AVISOS -->
+<div class="avisos">
+    <div class="container">
+        <div class="section-header" style="margin-bottom:2.5rem">
+            <div class="section-label">Comunicados</div>
+            <h2 class="section-title">{{ landing('inicio.avisos.titulo') }}</h2>
+            <div class="section-divider"></div>
         </div>
-        <div class="stat-item">
-            <div class="stat-number">2005</div>
-            <div class="stat-label">Año de Fundación</div>
-        </div>
-        <div class="stat-item">
-            <div class="stat-number">R.A.</div>
-            <div class="stat-label">No. 311/2006</div>
-        </div>
-        <div class="stat-item">
-            <div class="stat-number">3</div>
-            <div class="stat-label">Fundadores</div>
+        <div class="avisos-grid">
+            @foreach($avisos as $a)
+            <article class="aviso-card fade-up">
+                @if($a->url_imagen)<img src="{{ $a->url_imagen }}" alt="{{ $a->lb_titulo }}" class="aviso-img">@endif
+                <div class="aviso-body">
+                    @if($a->lb_fecha)<div class="aviso-fecha"><i class="far fa-calendar"></i> {{ $a->lb_fecha->format('d/m/Y') }}</div>@endif
+                    <h3>{{ $a->lb_titulo }}</h3>
+                    @if($a->lb_texto)<div class="aviso-texto">{!! $a->lb_texto !!}</div>@endif
+                    @if($a->url_archivo)<a href="{{ $a->url_archivo }}" target="_blank" rel="noopener" class="aviso-link"><i class="fas fa-file-download"></i> Descargar</a>@endif
+                    @if($a->lb_link)<a href="{{ $a->lb_link }}" target="_blank" rel="noopener" class="aviso-link"><i class="fas fa-external-link-alt"></i> {{ $a->lb_link_texto ?: 'Ver más' }}</a>@endif
+                </div>
+            </article>
+            @endforeach
         </div>
     </div>
 </div>
+@endif
 
 <!-- QUICK LINKS -->
 <div class="quick-links">

@@ -15,7 +15,7 @@ class ComunicadoController extends Controller
     private function esDireccion(): bool
     {
         $u = auth()->user();
-        return $u && in_array($u->rol_id, [1, 9, 10, 11]);
+        return $u && $u->tieneCapacidad('comunicados.gestionar');
     }
 
     private function esDocente(): bool

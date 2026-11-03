@@ -15,7 +15,7 @@ class Inscripcion extends Model
         'insc_gestion', 'insc_monto_total', 'insc_monto_pagado',
         'insc_saldo', 'insc_concepto', 'insc_estado', 'insc_usuario',
         'insc_monto_descuento', 'insc_monto_final', 'insc_sin_factura',
-        'insc_caso_especial', 'insc_mes_inicio'
+        'insc_caso_especial', 'insc_mes_inicio', 'preinsc_id'
     ];
 
     protected $casts = [

@@ -285,6 +285,7 @@
                                                             <div class="form-group">
                                                                 <label>Nombre del Padre/Tutor</label>
                                                                 <input type="text" name="pfam_nombre_nuevo" id="pfamNuevoEdit{{ $i->insc_id }}" class="form-control" placeholder="Ingrese nombre completo">
+                                                                <input type="text" name="pfam_ci_nuevo" class="form-control mt-1" placeholder="CI del padre/tutor (si ya existe, se reutiliza)">
                                                             </div>
                                                         </div>
                                                         <div class="col-md-2">
@@ -666,15 +667,15 @@ function generarRecibo(recibo, estudiante, padre, curso, gestion, concepto, mont
 function anularInscripcion(id) {
     if (confirm('¿Está seguro de anular esta inscripción?')) {
         $.ajax({
-            url: '/inscripciones/' + id + '/anular',
+            url: '{{ url('inscripciones') }}/' + id + '/anular',
             type: 'PUT',
             data: { _token: '{{ csrf_token() }}' },
             success: function(response) {
                 alert('Inscripción anulada');
                 location.reload();
             },
-            error: function() {
-                alert('Error al anular');
+            error: function(xhr) {
+                alert('No se pudo anular: ' + mensajeErrorAjax(xhr));
             }
         });
     }

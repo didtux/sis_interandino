@@ -19,7 +19,8 @@ class AlertaParcialController extends Controller
 
     private function esDireccion(): bool
     {
-        return in_array(auth()->user()->rol_id, [1, 4, 9, 10]);
+        // Antes [1, 4, 9, 10] (4 era Chofer, por error). Ahora se asigna en Roles.
+        return auth()->user()->tieneCapacidad('alertas.direccion');
     }
 
     private function esDocente(): bool
@@ -33,7 +34,7 @@ class AlertaParcialController extends Controller
     public function matriz(Request $request)
     {
         $user    = auth()->user();
-        $gestion = (int) $request->input('gestion', date('Y'));
+        $gestion = (int) $request->input('gestion', gestion_actual());
 
         // Cursos disponibles: docente solo los suyos; dirección/admin todos.
         if ($this->esDocente() && !$this->esDireccion()) {
@@ -144,7 +145,7 @@ class AlertaParcialController extends Controller
             'periodo_id' => $request->periodo_id,
         ]);
         $alerta->cur_codigo     = $request->cur_codigo;
-        $alerta->alerta_gestion = (int) ($request->gestion ?? date('Y'));
+        $alerta->alerta_gestion = (int) ($request->gestion ?? gestion_actual());
 
         $nombre = trim(($user->us_nombres ?? '') . ' ' . ($user->us_apellidos ?? ''));
 
@@ -176,7 +177,7 @@ class AlertaParcialController extends Controller
     {
         $request->validate(['cur_codigo' => 'required', 'periodo_id' => 'required|integer']);
         $user      = auth()->user();
-        $gestion   = (int) $request->input('gestion', date('Y'));
+        $gestion   = (int) $request->input('gestion', gestion_actual());
         $curCodigo = $request->cur_codigo;
         $periodoId = (int) $request->periodo_id;
 
@@ -233,7 +234,7 @@ class AlertaParcialController extends Controller
     public function advertenciaLote(Request $request)
     {
         $request->validate(['cur_codigo' => 'required', 'periodo_id' => 'required|integer']);
-        $gestion = (int) $request->input('gestion', date('Y'));
+        $gestion = (int) $request->input('gestion', gestion_actual());
         $curso   = Curso::where('cur_codigo', $request->cur_codigo)->firstOrFail();
         $periodo = NotaPeriodo::findOrFail($request->periodo_id);
 
@@ -279,7 +280,7 @@ class AlertaParcialController extends Controller
     public function reporteCurso(Request $request)
     {
         $request->validate(['cur_codigo' => 'required']);
-        $gestion = (int) $request->input('gestion', date('Y'));
+        $gestion = (int) $request->input('gestion', gestion_actual());
         $curso = Curso::where('cur_codigo', $request->cur_codigo)->firstOrFail();
 
         $periodo = $request->filled('periodo_id')
@@ -323,7 +324,7 @@ class AlertaParcialController extends Controller
     public function reporteEstudiante(Request $request)
     {
         $request->validate(['est_codigo' => 'required', 'periodo_id' => 'required|integer']);
-        $gestion    = (int) $request->input('gestion', date('Y'));
+        $gestion    = (int) $request->input('gestion', gestion_actual());
         $estudiante = Estudiante::with('curso')->where('est_codigo', $request->est_codigo)->firstOrFail();
         $periodo    = NotaPeriodo::findOrFail($request->periodo_id);
 
@@ -368,7 +369,7 @@ class AlertaParcialController extends Controller
     {
         $request->validate(['est_codigo' => 'required', 'periodo_id' => 'required|integer']);
 
-        $gestion    = (int) $request->input('gestion', date('Y'));
+        $gestion    = (int) $request->input('gestion', gestion_actual());
         $estudiante = Estudiante::with('curso', 'padres')->where('est_codigo', $request->est_codigo)->firstOrFail();
         $periodo    = NotaPeriodo::findOrFail($request->periodo_id);
 
@@ -417,7 +418,7 @@ class AlertaParcialController extends Controller
     // ──────────────────────────────────────────────────────────────────
     public function hojaDocente(Request $request)
     {
-        $gestion = (int) $request->input('gestion', date('Y'));
+        $gestion = (int) $request->input('gestion', gestion_actual());
         $user    = auth()->user();
 
         // Docente objetivo: el propio docente, o uno elegido por dirección

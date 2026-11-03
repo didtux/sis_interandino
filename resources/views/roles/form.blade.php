@@ -1,6 +1,19 @@
 @extends('layouts.app')
 
 @section('content')
+@php
+    $acciones = [
+        'ver'      => ['fas fa-eye', 'Ver'],
+        'crear'    => ['fas fa-plus', 'Crear'],
+        'editar'   => ['fas fa-edit', 'Editar'],
+        'eliminar' => ['fas fa-trash', 'Eliminar'],
+        'anular'   => ['fas fa-ban', 'Anular'],
+        'exportar' => ['fas fa-file-export', 'Exportar'],
+    ];
+    $vacio = array_fill_keys(array_keys($acciones), 0);
+    $capacidades = collect(config('permisos.capacidades', []))->groupBy('grupo', true);
+    $capsRol = $capacidadesRol ?? [];
+@endphp
 <div class="section-body">
     <div class="row">
         <div class="col-12">
@@ -31,7 +44,15 @@
                             </div>
                         </div>
 
-                        <h5 class="mb-3"><i class="fas fa-key mr-2"></i>Permisos por Módulo</h5>
+                        @if(isset($rol) && $rol->rol_id == 1)
+                            <div class="alert alert-info">El Administrador tiene todos los permisos y capacidades siempre; lo que se marque acá no lo limita.</div>
+                        @endif
+
+                        <h5 class="mb-2"><i class="fas fa-key mr-2"></i>Permisos por Módulo</h5>
+                        <p class="text-muted small mb-3">
+                            Marcar un módulo general marca también sus submódulos. <strong>Anular</strong> es anular recibos o registros;
+                            <strong>Exportar</strong> es descargar PDF o Excel.
+                        </p>
 
                         <div class="mb-3">
                             <button type="button" class="btn btn-sm btn-outline-success mr-1" onclick="marcarTodos(true)"><i class="fas fa-check-double mr-1"></i>Marcar Todos</button>
@@ -42,39 +63,27 @@
                             <table class="table table-bordered table-hover" style="font-size: 0.9rem;">
                                 <thead style="background: linear-gradient(135deg, #667eea, #764ba2); color: white;">
                                     <tr>
-                                        <th style="width: 35%;" class="text-white" >Módulo</th>
-                                        <th class="text-center text-white" style="width: 13%; ">
-                                            <i class="fas fa-eye mr-1 text-white"></i>Ver
-                                        </th>
-                                        <th class="text-center text-white" style="width: 13%;">
-                                            <i class="fas fa-plus mr-1 text-white"></i>Crear
-                                        </th>
-                                        <th class="text-center text-white" style="width: 13%;">
-                                            <i class="fas fa-edit mr-1 text-white"></i>Editar
-                                        </th>
-                                        <th class="text-center text-white" style="width: 13%;">
-                                            <i class="fas fa-trash mr-1 text-white"></i>Eliminar
-                                        </th>
-                                        <th class="text-center text-white" style="width: 13%;">
-                                            <i class="fas fa-check-double mr-1 text-white"></i>Todos
-                                        </th>
+                                        <th style="width: 31%;" class="text-white">Módulo</th>
+                                        @foreach($acciones as $accion => [$icono, $titulo])
+                                            <th class="text-center text-white" style="width: 9%;"><i class="{{ $icono }} mr-1 text-white"></i>{{ $titulo }}</th>
+                                        @endforeach
+                                        <th class="text-center text-white" style="width: 9%;"><i class="fas fa-check-double mr-1 text-white"></i>Todos</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     @foreach($modulos as $modulo)
-                                        @php
-                                            $p = $permisosMap[$modulo->mod_id] ?? ['ver'=>0,'crear'=>0,'editar'=>0,'eliminar'=>0];
-                                        @endphp
+                                        @php $p = ($permisosMap[$modulo->mod_id] ?? []) + $vacio; @endphp
                                         <tr style="background-color: #f8f9fa; font-weight: bold;">
                                             <td>
                                                 <i class="{{ $modulo->mod_icono }} mr-2" style="color: #667eea;"></i>
                                                 {{ $modulo->mod_nombre }}
+                                                @if($ayuda = (config('permisos.ayuda_modulos')[$modulo->mod_slug] ?? null))<small class="d-block text-muted font-weight-normal">{{ $ayuda }}</small>@endif
                                             </td>
-                                            @foreach(['ver','crear','editar','eliminar'] as $accion)
+                                            @foreach($acciones as $accion => $x)
                                                 <td class="text-center">
                                                     <div class="custom-control custom-checkbox">
-                                                        <input type="checkbox" class="custom-control-input perm-check perm-{{ $modulo->mod_id }}"
-                                                            id="perm_{{ $modulo->mod_id }}_{{ $accion }}"
+                                                        <input type="checkbox" class="custom-control-input perm-check perm-{{ $modulo->mod_id }} padre-accion"
+                                                            id="perm_{{ $modulo->mod_id }}_{{ $accion }}" data-mod="{{ $modulo->mod_id }}" data-accion="{{ $accion }}"
                                                             name="permisos[{{ $modulo->mod_id }}][{{ $accion }}]" value="1"
                                                             {{ !empty($p[$accion]) ? 'checked' : '' }}>
                                                         <label class="custom-control-label" for="perm_{{ $modulo->mod_id }}_{{ $accion }}"></label>
@@ -85,25 +94,24 @@
                                                 <div class="custom-control custom-checkbox">
                                                     <input type="checkbox" class="custom-control-input toggle-row"
                                                         id="toggle_{{ $modulo->mod_id }}" data-mod="{{ $modulo->mod_id }}"
-                                                        {{ ($p['ver'] && $p['crear'] && $p['editar'] && $p['eliminar']) ? 'checked' : '' }}>
+                                                        {{ collect($acciones)->keys()->every(fn($a) => !empty($p[$a])) ? 'checked' : '' }}>
                                                     <label class="custom-control-label" for="toggle_{{ $modulo->mod_id }}"></label>
                                                 </div>
                                             </td>
                                         </tr>
 
                                         @foreach($modulo->hijos as $hijo)
-                                            @php
-                                                $ph = $permisosMap[$hijo->mod_id] ?? ['ver'=>0,'crear'=>0,'editar'=>0,'eliminar'=>0];
-                                            @endphp
+                                            @php $ph = ($permisosMap[$hijo->mod_id] ?? []) + $vacio; @endphp
                                             <tr>
                                                 <td style="padding-left: 2.5rem;">
                                                     <i class="{{ $hijo->mod_icono }} mr-2 text-muted"></i>
                                                     {{ $hijo->mod_nombre }}
+                                                    @if($ayuda = (config('permisos.ayuda_modulos')[$hijo->mod_slug] ?? null))<small class="d-block text-muted">{{ $ayuda }}</small>@endif
                                                 </td>
-                                                @foreach(['ver','crear','editar','eliminar'] as $accion)
+                                                @foreach($acciones as $accion => $x)
                                                     <td class="text-center">
                                                         <div class="custom-control custom-checkbox">
-                                                            <input type="checkbox" class="custom-control-input perm-check perm-{{ $hijo->mod_id }}"
+                                                            <input type="checkbox" class="custom-control-input perm-check perm-{{ $hijo->mod_id }} hijo-de-{{ $modulo->mod_id }}-{{ $accion }}"
                                                                 id="perm_{{ $hijo->mod_id }}_{{ $accion }}"
                                                                 name="permisos[{{ $hijo->mod_id }}][{{ $accion }}]" value="1"
                                                                 {{ !empty($ph[$accion]) ? 'checked' : '' }}>
@@ -115,7 +123,7 @@
                                                     <div class="custom-control custom-checkbox">
                                                         <input type="checkbox" class="custom-control-input toggle-row"
                                                             id="toggle_{{ $hijo->mod_id }}" data-mod="{{ $hijo->mod_id }}"
-                                                            {{ ($ph['ver'] && $ph['crear'] && $ph['editar'] && $ph['eliminar']) ? 'checked' : '' }}>
+                                                            {{ collect($acciones)->keys()->every(fn($a) => !empty($ph[$a])) ? 'checked' : '' }}>
                                                         <label class="custom-control-label" for="toggle_{{ $hijo->mod_id }}"></label>
                                                     </div>
                                                 </td>
@@ -124,6 +132,30 @@
                                     @endforeach
                                 </tbody>
                             </table>
+                        </div>
+
+                        {{-- Capacidades especiales: antes eran listas de roles escritas en el
+                             código, que ningún tilde podía cambiar (config/permisos.php). --}}
+                        <h5 class="mt-4 mb-2"><i class="fas fa-user-shield mr-2"></i>Capacidades especiales</h5>
+                        <p class="text-muted small mb-3">Decisiones que no dependen de un módulo: aprobar notas, autorizar observados, ver auditoría, etc.</p>
+                        <div class="row">
+                            @foreach($capacidades as $grupo => $caps)
+                                <div class="col-md-6 col-lg-4 mb-3">
+                                    <div class="border rounded p-2 h-100">
+                                        <div class="font-weight-bold mb-2 text-primary">{{ $grupo }}</div>
+                                        @foreach($caps as $slug => $cap)
+                                            <div class="custom-control custom-checkbox mb-1">
+                                                <input type="checkbox" class="custom-control-input cap-check" id="cap_{{ $loop->parent->index }}_{{ $loop->index }}"
+                                                       name="capacidades[]" value="{{ $slug }}" {{ in_array($slug, $capsRol) ? 'checked' : '' }}>
+                                                <label class="custom-control-label" for="cap_{{ $loop->parent->index }}_{{ $loop->index }}">
+                                                    {{ $cap['nombre'] }}
+                                                    @if(!empty($cap['descripcion']))<br><small class="text-muted">{{ $cap['descripcion'] }}</small>@endif
+                                                </label>
+                                            </div>
+                                        @endforeach
+                                    </div>
+                                </div>
+                            @endforeach
                         </div>
 
                         <div class="mt-4">
@@ -145,28 +177,32 @@
 @section('scripts')
 <script>
 $(document).ready(function() {
-    // Toggle all permissions for a row
+    // "Todos" de una fila
     $('.toggle-row').on('change', function() {
         const modId = $(this).data('mod');
-        const checked = $(this).is(':checked');
-        $('.perm-' + modId).prop('checked', checked);
+        $('.perm-' + modId).prop('checked', $(this).is(':checked')).trigger('change');
     });
 
-    // Update toggle-row when individual checkboxes change
-    $('.perm-check').on('change', function() {
-        const classes = this.className.split(' ');
-        const permClass = classes.find(c => c.startsWith('perm-') && c !== 'perm-check');
-        if (permClass) {
-            const modId = permClass.replace('perm-', '');
-            const total = $('.perm-' + modId).length;
-            const checked = $('.perm-' + modId + ':checked').length;
-            $('#toggle_' + modId).prop('checked', total === checked);
-        }
+    // Una acción del módulo general se aplica a sus submódulos (antes había que
+    // marcar uno por uno y era fácil olvidarse: de ahí muchos "Acceso Denegado").
+    $('.padre-accion').on('change', function() {
+        $('.hijo-de-' + $(this).data('mod') + '-' + $(this).data('accion')).prop('checked', $(this).is(':checked'));
+        actualizarFilas();
     });
+
+    $('.perm-check').on('change', actualizarFilas);
 });
 
+function actualizarFilas() {
+    $('.toggle-row').each(function() {
+        const modId = $(this).data('mod');
+        const total = $('.perm-' + modId).length;
+        $(this).prop('checked', total > 0 && total === $('.perm-' + modId + ':checked').length);
+    });
+}
+
 function marcarTodos(estado) {
-    $('.perm-check, .toggle-row').prop('checked', estado);
+    $('.perm-check, .toggle-row, .cap-check').prop('checked', estado);
 }
 </script>
 @endsection

@@ -16,7 +16,12 @@ Route::get('/', [App\Http\Controllers\LandingController::class, 'index'])->name(
 Route::get('/nosotros', [App\Http\Controllers\LandingController::class, 'nosotros'])->name('landing.nosotros');
 Route::get('/niveles', [App\Http\Controllers\LandingController::class, 'niveles'])->name('landing.niveles');
 Route::get('/historia', [App\Http\Controllers\LandingController::class, 'historia'])->name('landing.historia');
+// Pública: /admisiones (no /inscripciones, que es el módulo interno)
+Route::get('/admisiones', [App\Http\Controllers\LandingController::class, 'inscripciones'])->name('landing.inscripciones');
 Route::get('/contacto', [App\Http\Controllers\LandingController::class, 'contacto'])->name('landing.contacto');
+// Público: hasta 5 envíos por minuto por IP para frenar robots.
+Route::post('/contacto', [App\Http\Controllers\LandingController::class, 'enviarContacto'])
+    ->middleware('throttle:5,1')->name('landing.contacto.enviar');
 // Acá había un `GET /cmd/{command}` que ejecutaba cualquier comando de Artisan
 // sin autenticación (un `/cmd/migrate:fresh` vaciaba la base). Se eliminó.
 // Para tareas de mantenimiento se usa la consola del servidor.
@@ -53,6 +58,11 @@ Route::middleware(['auth', 'permiso', 'auditoria', 'reportes:600,1024M', 'aviso-
     // Roles y Permisos
     Route::resource('roles', App\Http\Controllers\RolController::class);
 
+    // Mensajes del formulario de contacto público
+    Route::get('contacto-mensajes', [App\Http\Controllers\ContactoMensajeController::class, 'index'])->name('contacto-mensajes.index');
+    Route::get('contacto-mensajes/{id}', [App\Http\Controllers\ContactoMensajeController::class, 'show'])->name('contacto-mensajes.show');
+    Route::put('contacto-mensajes/{id}', [App\Http\Controllers\ContactoMensajeController::class, 'update'])->name('contacto-mensajes.update');
+
     // Auditoría
     Route::get('auditoria', [App\Http\Controllers\AuditoriaController::class, 'index'])->name('auditoria.index');
     
@@ -80,7 +90,72 @@ Route::middleware(['auth', 'permiso', 'auditoria', 'reportes:600,1024M', 'aviso-
     // Parametrización: Niveles y Gestiones
     Route::resource('parametrizacion/niveles', App\Http\Controllers\NivelController::class)
         ->except(['show'])->names('niveles');
+    Route::get('parametrizacion/gestiones/{id}/asistente', [App\Http\Controllers\GestionController::class, 'asistente'])->name('gestiones.asistente');
     Route::post('parametrizacion/gestiones/{id}/activar', [App\Http\Controllers\GestionController::class, 'activar'])->name('gestiones.activar');
+
+    // Nueva gestión: tarifas, curso siguiente y parámetros del colegio
+    Route::get('tarifas', [App\Http\Controllers\TarifaController::class, 'index'])->name('tarifas.index');
+    Route::post('tarifas', [App\Http\Controllers\TarifaController::class, 'guardar'])->name('tarifas.guardar');
+    Route::get('parametros', [App\Http\Controllers\ParametroController::class, 'index'])->name('parametros.index');
+    Route::post('parametros', [App\Http\Controllers\ParametroController::class, 'guardar'])->name('parametros.guardar');
+
+    // Pre-inscripción (reserva de cupo para la gestión siguiente)
+    Route::get('preinscripciones', [App\Http\Controllers\PreinscripcionController::class, 'index'])->name('preinscripciones.index');
+    Route::get('preinscripciones/create', [App\Http\Controllers\PreinscripcionController::class, 'create'])->name('preinscripciones.create');
+    Route::get('preinscripciones/controles/{est}', [App\Http\Controllers\PreinscripcionController::class, 'controles'])->name('preinscripciones.controles');
+    Route::post('preinscripciones', [App\Http\Controllers\PreinscripcionController::class, 'store'])->name('preinscripciones.store');
+    Route::post('preinscripciones/convertir-confirmadas', [App\Http\Controllers\PreinscripcionController::class, 'convertirConfirmadas'])->name('preinscripciones.convertir-confirmadas');
+    Route::get('preinscripciones/{id}', [App\Http\Controllers\PreinscripcionController::class, 'show'])->name('preinscripciones.show');
+    Route::put('preinscripciones/{id}/destino', [App\Http\Controllers\PreinscripcionController::class, 'cambiarDestino'])->name('preinscripciones.destino');
+    Route::post('preinscripciones/{id}/convertir', [App\Http\Controllers\PreinscripcionController::class, 'convertir'])->name('preinscripciones.convertir');
+    Route::post('preinscripciones/{id}/anular', [App\Http\Controllers\PreinscripcionController::class, 'anular'])->name('preinscripciones.anular');
+
+    // Promoción de fin de año
+    Route::get('promocion', [App\Http\Controllers\PromocionController::class, 'index'])->name('promocion.index');
+    Route::post('promocion/calcular', [App\Http\Controllers\PromocionController::class, 'calcular'])->name('promocion.calcular');
+    Route::put('promocion/{id}', [App\Http\Controllers\PromocionController::class, 'decidir'])->name('promocion.decidir');
+
+    // Devoluciones (documento propio; el recibo original no se toca)
+    Route::get('devoluciones', [App\Http\Controllers\DevolucionController::class, 'index'])->name('devoluciones.index');
+    Route::get('devoluciones/create', [App\Http\Controllers\DevolucionController::class, 'create'])->name('devoluciones.create');
+    Route::post('devoluciones', [App\Http\Controllers\DevolucionController::class, 'store'])->name('devoluciones.store');
+    Route::post('devoluciones/{id}/aprobar', [App\Http\Controllers\DevolucionController::class, 'aprobar'])->name('devoluciones.aprobar');
+    Route::post('devoluciones/{id}/rechazar', [App\Http\Controllers\DevolucionController::class, 'rechazar'])->name('devoluciones.rechazar');
+    Route::post('devoluciones/{id}/pagar', [App\Http\Controllers\DevolucionController::class, 'pagar'])->name('devoluciones.pagar');
+
+    // Portal de padres: bloqueo de notas por mora, publicaciones
+    Route::get('bloqueos', [App\Http\Controllers\BloqueoNotasController::class, 'index'])->name('bloqueos.index');
+    Route::post('bloqueos', [App\Http\Controllers\BloqueoNotasController::class, 'store'])->name('bloqueos.store');
+    Route::delete('bloqueos/{id}', [App\Http\Controllers\BloqueoNotasController::class, 'destroy'])->name('bloqueos.destroy');
+    Route::post('publicaciones/duplicar', [App\Http\Controllers\PublicacionController::class, 'duplicar'])->name('publicaciones.duplicar');
+    Route::resource('publicaciones', App\Http\Controllers\PublicacionController::class)->except(['show'])
+        ->parameters(['publicaciones' => 'id']);
+
+    // Canal de atención a padres: bandeja del personal (el acceso por área lo decide el controlador)
+    Route::get('atencion', [App\Http\Controllers\AtencionController::class, 'index'])->name('atencion.index');
+    Route::get('atencion/contador', [App\Http\Controllers\AtencionController::class, 'contador'])->name('atencion.contador');
+    Route::get('atencion/{id}', [App\Http\Controllers\AtencionController::class, 'show'])->whereNumber('id')->name('atencion.show');
+    Route::get('atencion/{id}/mensajes', [App\Http\Controllers\AtencionController::class, 'mensajes'])->whereNumber('id')->name('atencion.mensajes');
+    Route::post('atencion/{id}/responder', [App\Http\Controllers\AtencionController::class, 'responder'])->whereNumber('id')->name('atencion.responder');
+    Route::post('atencion/{id}/estado', [App\Http\Controllers\AtencionController::class, 'estado'])->whereNumber('id')->name('atencion.estado');
+    Route::post('atencion/{id}/derivar', [App\Http\Controllers\AtencionController::class, 'derivar'])->whereNumber('id')->name('atencion.derivar');
+
+    // Web pública editable: textos, bloques (avisos, requisitos…) y redes
+    Route::get('web-publica', fn() => redirect()->route('web-publica.textos'));
+    Route::get('web-publica/textos', [App\Http\Controllers\WebPublicaController::class, 'textos'])->name('web-publica.textos');
+    Route::post('web-publica/textos', [App\Http\Controllers\WebPublicaController::class, 'guardarTextos'])->name('web-publica.textos.guardar');
+    Route::post('web-publica/textos/restaurar', [App\Http\Controllers\WebPublicaController::class, 'restaurar'])->name('web-publica.textos.restaurar');
+    Route::get('web-publica/redes', [App\Http\Controllers\WebPublicaController::class, 'redes'])->name('web-publica.redes');
+    Route::put('web-publica/redes', [App\Http\Controllers\WebPublicaController::class, 'guardarRedes'])->name('web-publica.redes.guardar');
+    Route::get('web-publica/bloques', [App\Http\Controllers\WebPublicaController::class, 'bloques'])->name('web-publica.bloques');
+    Route::prefix('web-publica')->name('web-publica.')->group(function () {
+        Route::resource('bloques', App\Http\Controllers\WebPublicaController::class)->except(['index', 'show'])
+            ->parameters(['bloques' => 'id']);
+    });
+
+    // Recibos generados en el servidor (media carta o ?formato=termica)
+    Route::get('recibos/{tipo}/{codigo}', [App\Http\Controllers\ReciboController::class, 'mostrar'])
+        ->where('tipo', 'mensualidad|inscripcion|reserva|devolucion')->name('recibos.mostrar');
     Route::resource('parametrizacion/gestiones', App\Http\Controllers\GestionController::class)
         ->except(['show'])->names('gestiones');
 
@@ -263,6 +338,7 @@ Route::middleware(['auth', 'permiso', 'auditoria', 'reportes:600,1024M', 'aviso-
         Route::get('/licencias/pdf-mensual',      [App\Http\Controllers\ReporteLicenciaController::class, 'mensualPdf'])->name('licencias.pdf-mensual');
         Route::get('/licencias/pdf-anual-est',    [App\Http\Controllers\ReporteLicenciaController::class, 'anualEstudiantePdf'])->name('licencias.pdf-anual-est');
         Route::get('/licencias/pdf-anual-curso',  [App\Http\Controllers\ReporteLicenciaController::class, 'anualCursoPdf'])->name('licencias.pdf-anual-curso');
+        Route::get('/licencias/pdf-ranking',      [App\Http\Controllers\ReporteLicenciaController::class, 'rankingPdf'])->name('licencias.pdf-ranking');
         
         // Horarios especiales por rango de fechas (horario de invierno, recesos)
         Route::get('/horarios-especiales', [App\Http\Controllers\HorarioEspecialController::class, 'index'])->name('horarios-especiales');
@@ -284,7 +360,8 @@ Route::middleware(['auth', 'permiso', 'auditoria', 'reportes:600,1024M', 'aviso-
     });
     
     // Módulo de Ventas
-    Route::resource('categorias', App\Http\Controllers\CategoriaController::class);
+    // Alta y edición se hacen en modales del index: create/show/edit no existen.
+    Route::resource('categorias', App\Http\Controllers\CategoriaController::class)->only(['index', 'store', 'update', 'destroy']);
     Route::resource('productos', App\Http\Controllers\ProductoController::class);
     Route::get('productos/{id}/etiqueta', [App\Http\Controllers\ProductoController::class, 'etiqueta'])->name('productos.etiqueta');
     Route::resource('ventas', App\Http\Controllers\VentaController::class);
@@ -312,11 +389,14 @@ Route::middleware(['auth', 'permiso', 'auditoria', 'reportes:600,1024M', 'aviso-
     
     // Módulo de Descuentos
     Route::get('descuentos-estudiantes', [App\Http\Controllers\DescuentoController::class, 'estudiantes'])->name('descuentos.estudiantes');
-    Route::resource('descuentos', App\Http\Controllers\DescuentoController::class);
+    // Alta y edición se hacen en modales del index: create/show/edit no existen.
+    Route::resource('descuentos', App\Http\Controllers\DescuentoController::class)->only(['index', 'store', 'update', 'destroy']);
     
     // Módulo de Transporte
     Route::resource('vehiculos', App\Http\Controllers\VehiculoController::class);
     Route::post('choferes/{id}/crear-usuario', [App\Http\Controllers\ChoferController::class, 'crearUsuario'])->name('choferes.crear-usuario');
+    Route::get('choferes/flota', [App\Http\Controllers\ChoferController::class, 'flota'])->name('choferes.flota');
+    Route::get('choferes/flota/pdf', [App\Http\Controllers\ChoferController::class, 'flotaPdf'])->name('choferes.flota-pdf');
     Route::resource('choferes', App\Http\Controllers\ChoferController::class);
     
     // Rutas específicas ANTES del resource
@@ -328,6 +408,8 @@ Route::middleware(['auth', 'permiso', 'auditoria', 'reportes:600,1024M', 'aviso-
     Route::get('pagos-transporte/historial/{est_codigo}', [App\Http\Controllers\PagoTransporteController::class, 'historialPagos']);
     Route::get('pagos-transporte/reporte-ingresos', [App\Http\Controllers\PagoTransporteController::class, 'reporteIngresos'])->name('pagos-transporte.reporte-ingresos');
     Route::put('pagos-transporte/{id}/anular', [App\Http\Controllers\PagoTransporteController::class, 'anular'])->name('pagos-transporte.anular');
+    Route::get('pagos-transporte/mora', [App\Http\Controllers\PagoTransporteController::class, 'mora'])->name('pagos-transporte.mora');
+    Route::get('pagos-transporte/mora/pdf', [App\Http\Controllers\PagoTransporteController::class, 'moraPdf'])->name('pagos-transporte.mora-pdf');
     Route::resource('pagos-transporte', App\Http\Controllers\PagoTransporteController::class);
     Route::resource('estudiantes-rutas', App\Http\Controllers\EstudianteRutaController::class);
     Route::put('estudiantes-rutas/{id}/suspender', [App\Http\Controllers\EstudianteRutaController::class, 'suspender'])->name('estudiantes-rutas.suspender');
@@ -397,5 +479,13 @@ Route::middleware(['auth', 'permiso', 'auditoria', 'reportes:600,1024M', 'aviso-
         Route::get('/psicopedagogia', [App\Http\Controllers\PadrePortalController::class, 'psicopedagogia'])->name('psicopedagogia');
         Route::get('/kardex', [App\Http\Controllers\PadrePortalController::class, 'kardex'])->name('kardex');
         Route::post('/kardex/{id}/visto', [App\Http\Controllers\EstudianteKardexController::class, 'marcarVistoPadre'])->name('kardex.visto');
+        Route::get('/agenda', [App\Http\Controllers\PadrePortalController::class, 'agenda'])->name('agenda');
+        Route::get('/consultas', [App\Http\Controllers\AtencionController::class, 'misConsultas'])->name('consultas');
+        Route::post('/consultas', [App\Http\Controllers\AtencionController::class, 'crearConsulta'])->middleware('throttle:10,1')->name('consultas.crear');
+        Route::get('/consultas/{id}', [App\Http\Controllers\AtencionController::class, 'verConsulta'])->whereNumber('id')->name('consultas.ver');
+        Route::get('/consultas/{id}/mensajes', [App\Http\Controllers\AtencionController::class, 'mensajesPadre'])->whereNumber('id')->name('consultas.mensajes');
+        Route::post('/consultas/{id}/responder', [App\Http\Controllers\AtencionController::class, 'responderPadre'])->whereNumber('id')->middleware('throttle:20,1')->name('consultas.responder');
+        Route::post('/consultas/{id}/cerrar', [App\Http\Controllers\AtencionController::class, 'cerrarPadre'])->whereNumber('id')->name('consultas.cerrar');
+        Route::get('/publicaciones/{tipo}', [App\Http\Controllers\PadrePortalController::class, 'publicaciones'])->name('publicaciones');
     });
 });

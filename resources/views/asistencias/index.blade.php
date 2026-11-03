@@ -379,7 +379,7 @@
                     </select>
                     <small class="text-muted">Tomado de la configuración de horarios.</small>
                 </div>
-                <p class="text-muted">Este reporte incluye los 3 trimestres completos del año {{ date('Y') }}</p>
+                <p class="text-muted">Este reporte incluye los 3 trimestres completos del año {{ gestion_actual() }}</p>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>

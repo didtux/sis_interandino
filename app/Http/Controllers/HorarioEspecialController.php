@@ -299,6 +299,8 @@ class HorarioEspecialController extends Controller
 
     private function gestionPorDefecto(): int
     {
-        return (int) (DB::table('notas_config_periodos')->max('periodo_gestion') ?: date('Y'));
+        // Antes era MAX(periodo_gestion): apenas se cargaban los periodos de la
+        // gestión siguiente, los horarios especiales saltaban a ese año.
+        return gestion_actual();
     }
 }

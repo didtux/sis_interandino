@@ -15,7 +15,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register()
     {
-        //
+        // gestion_actual() y demás funciones globales (ver app/helpers.php).
+        require_once app_path('helpers.php');
     }
 
     /**
@@ -35,17 +36,20 @@ class AppServiceProvider extends ServiceProvider
         }
         \Illuminate\Support\Facades\View::share('sistemaConfig', $sistemaConfig);
 
-        // Directiva @puede('modulo_slug', 'crear') ... @nopuede
+        // Directiva @puede('modulo_slug', 'crear') ... @endpuede
         \Illuminate\Support\Facades\Blade::if('puede', function ($modSlug, $accion = 'ver') {
             $user = auth()->user();
-            if (!$user) return false;
-            if ($user->rol_id == 1) return true;
-            $campo = 'perm_' . $accion;
-            return \App\Models\RolPermiso::where('rol_id', $user->rol_id)
-                ->whereHas('modulo', fn($q) => $q->where('mod_slug', $modSlug))
-                ->where($campo, 1)
-                ->exists();
+            return $user && \App\Support\Permisos::puede((int) $user->rol_id, $modSlug, $accion);
         });
+
+        // Capacidades especiales como Gate: @can('notas.aprobar'), $user->can(...),
+        // $this->authorize(...). El administrador las tiene todas.
+        \Illuminate\Support\Facades\Gate::before(function ($user) {
+            return (int) $user->rol_id === 1 ? true : null;
+        });
+        foreach (array_keys(config('permisos.capacidades', [])) as $cap) {
+            \Illuminate\Support\Facades\Gate::define($cap, fn($user) => $user->tieneCapacidad($cap));
+        }
     }
 
 }

@@ -15,7 +15,7 @@
                                 <option value="{{ $n }}" {{ (int)date('n')==$n ? 'selected' : '' }}>{{ $mn }}</option>
                             @endforeach
                         </select>
-                        <input type="number" name="anio" value="{{ date('Y') }}" class="form-control form-control-sm" style="width:90px;">
+                        <input type="number" name="anio" value="{{ gestion_actual() }}" class="form-control form-control-sm" style="width:90px;">
                         <button class="btn btn-danger btn-sm"><i class="fas fa-file-pdf mr-1"></i>Reporte mensual (descargo)</button>
                     </form>
                 </div>

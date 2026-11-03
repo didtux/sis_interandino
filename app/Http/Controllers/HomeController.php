@@ -56,7 +56,7 @@ class HomeController extends Controller
 
     private function dashboardAdmin()
     {
-        $year = date('Y');
+        $year = gestion_actual();
         $totalEstudiantes = Estudiante::visible()->count();
         $totalCursos = Curso::visible()->count();
         $totalDocentes = Docente::visible()->count();
@@ -67,7 +67,7 @@ class HomeController extends Controller
             ->whereYear('insc_fecha', $year)->where('insc_estado', '!=', 0)->sum('insc_monto_pagado');
 
         $mensualidadesMes = Pago::whereMonth('pagos_fecha', Carbon::now()->month)
-            ->whereYear('pagos_fecha', $year)->where('pagos_estado', 1)->sum('pagos_precio');
+            ->deGestion($year)->where('pagos_estado', 1)->sum('pagos_precio');
 
         $ventasMes = Venta::whereMonth('venta_fecha', Carbon::now()->month)
             ->whereYear('venta_fecha', $year)->where('venta_estado', 'completado')->sum('venta_preciototal');
@@ -124,7 +124,7 @@ class HomeController extends Controller
 
         // ── Recaudación acumulada del año ──
         $recaudacionAnual = [
-            'mensualidades' => (float) Pago::whereYear('pagos_fecha', $year)->where('pagos_estado', 1)->sum('pagos_precio'),
+            'mensualidades' => (float) Pago::deGestion($year)->where('pagos_estado', 1)->sum('pagos_precio'),
             'inscripciones' => (float) Inscripcion::where('insc_gestion', $year)->where('insc_estado', '!=', 0)->sum('insc_monto_pagado'),
             'ventas'        => (float) Venta::whereYear('venta_fecha', $year)->where('venta_estado', 'completado')->sum('venta_preciototal'),
         ];
@@ -154,7 +154,7 @@ class HomeController extends Controller
     private function dashboardDocente($user)
     {
         $docCodigo = $user->us_entidad_id;
-        $year = date('Y');
+        $year = gestion_actual();
 
         $asignaciones = $docCodigo
             ? CursoMateriaDocente::with(['curso', 'materia'])->where('doc_codigo', $docCodigo)->where('curmatdoc_estado', 1)->get()

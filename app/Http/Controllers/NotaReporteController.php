@@ -389,7 +389,7 @@ class NotaReporteController extends Controller
         // La pantalla manda 'curso'; otros enlaces del sistema usan 'cur_codigo'.
         $cursoCod = $request->input('curso') ?: $request->input('cur_codigo');
         if (!$cursoCod) abort(400, 'Falta el curso');
-        $gestion = (int) $request->input('gestion', date('Y'));
+        $gestion = (int) $request->input('gestion', gestion_actual());
 
         $curso     = Curso::where('cur_codigo', $cursoCod)->firstOrFail();
         $config    = DB::table('sistema_configuracion')->first();
@@ -400,7 +400,9 @@ class NotaReporteController extends Controller
 
         // cur_codigo existe en las dos tablas del join: sin calificar, MariaDB
         // rechaza la consulta con "Column 'cur_codigo' in where clause is ambiguous".
-        $estudiantes = Estudiante::where('colegio_estudiantes.cur_codigo', $cursoCod)
+        // Alumnos de ESA gestión (historial), no los que hoy están en el curso.
+        $codigosCurso = \App\Models\EstudianteGestion::estudiantesDeCurso($cursoCod, $gestion)->pluck('est_codigo');
+        $estudiantes = Estudiante::whereIn('colegio_estudiantes.est_codigo', $codigosCurso)
             ->leftJoin('colegio_lista_curso', function($j) use ($gestion, $cursoCod){
                 $j->whereRaw('colegio_estudiantes.est_codigo COLLATE utf8mb4_unicode_ci = colegio_lista_curso.est_codigo COLLATE utf8mb4_unicode_ci')
                   ->where('colegio_lista_curso.lista_gestion', $gestion)
@@ -499,7 +501,7 @@ class NotaReporteController extends Controller
         $cursoCod  = $request->input('curso');
         $nivelIn   = $request->input('nivel');
         $periodoId = $request->input('periodo_id'); // opcional: trimestre específico
-        $gestion   = (int) $request->input('gestion', date('Y'));
+        $gestion   = (int) $request->input('gestion', gestion_actual());
         $config    = DB::table('sistema_configuracion')->first();
 
         $periodos = NotaPeriodo::activo()->gestion($gestion)->orderBy('periodo_numero')->get();
@@ -619,7 +621,7 @@ class NotaReporteController extends Controller
     /** Top 3 por curso (anual) */
     public function top3PorCurso(Request $request)
     {
-        $gestion  = (int) $request->input('gestion', date('Y'));
+        $gestion  = (int) $request->input('gestion', gestion_actual());
         $config   = DB::table('sistema_configuracion')->first();
         $periodos = NotaPeriodo::activo()->gestion($gestion)->orderBy('periodo_numero')->get();
         $cursos   = Curso::orderBy('cur_orden')->orderBy('cur_nombre')->get();
@@ -635,7 +637,7 @@ class NotaReporteController extends Controller
     /** Boletín individual por estudiante */
     public function boletin($estCodigo, Request $request)
     {
-        $gestion    = (int) $request->input('gestion', date('Y'));
+        $gestion    = (int) $request->input('gestion', gestion_actual());
         $config     = DB::table('sistema_configuracion')->first();
         $estudiante = Estudiante::with('curso')->where('est_codigo', $estCodigo)->firstOrFail();
         $periodos   = NotaPeriodo::activo()->gestion($gestion)->orderBy('periodo_numero')->get();

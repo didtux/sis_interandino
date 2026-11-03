@@ -15,6 +15,8 @@ class Gestion extends Model
         'ges_nombre',
         'ges_abreviado',
         'ges_estado',
+        'ges_inscripcion_abierta', 'ges_preinsc_desde', 'ges_preinsc_hasta',
+        'ges_fecha_inicio', 'ges_fecha_fin', 'ges_cerrada', 'ges_monto_reserva',
     ];
 
     protected $casts = [

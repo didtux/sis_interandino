@@ -19,10 +19,10 @@
                     @if($estSeleccionado)
 
                     {{-- Estado de mensualidades visual --}}
-                    <h6 class="font-weight-bold mb-2"><i class="fas fa-calendar-alt mr-1 text-primary"></i>Estado de Mensualidades {{ date('Y') }}</h6>
+                    <h6 class="font-weight-bold mb-2"><i class="fas fa-calendar-alt mr-1 text-primary"></i>Estado de Mensualidades {{ gestion_actual() }}</h6>
                     @php
                         $mesesNombres = ['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
-                        $mesActual = (int)date('m');
+                        $mesActual = mes_de_gestion();
                         $mesesPagados = [];
                         foreach($mensualidades as $p) {
                             foreach($p->meses_cubiertos as $m) $mesesPagados[] = $m;

@@ -22,7 +22,7 @@ class EstudianteKardexController extends Controller
     private function esDireccion()
     {
         $u = auth()->user();
-        return $u && in_array($u->rol_id, [1, 9, 10, 11, 12, 14]);
+        return $u && $u->tieneCapacidad('kardex_estudiante.direccion');
     }
 
     private function esDocente()
@@ -34,14 +34,14 @@ class EstudianteKardexController extends Controller
     /** Estudiantes a los que un docente tiene acceso (los cursos que dicta). */
     private function estudiantesDelDocente($docCodigo, $gestion = null)
     {
-        $gestion = $gestion ?: date('Y');
+        $gestion = $gestion ?: gestion_actual();
         $cursos = CursoMateriaDocente::where('doc_codigo', $docCodigo)
             ->where('curmatdoc_estado', 1)
             ->pluck('cur_codigo')->unique();
 
         return Inscripcion::whereIn('cur_codigo', $cursos)
             ->where('insc_gestion', $gestion)
-            ->where('insc_estado', 1)
+            ->whereIn('insc_estado', [1, 2])
             ->pluck('est_codigo')->unique()->values();
     }
 
@@ -122,7 +122,7 @@ class EstudianteKardexController extends Controller
         // Curso actual del estudiante
         $curCodigo = $request->input('cur_codigo')
             ?: Inscripcion::where('est_codigo', $request->est_codigo)
-                ->where('insc_gestion', date('Y'))->where('insc_estado', 1)
+                ->where('insc_gestion', gestion_actual())->whereIn('insc_estado', [1, 2])
                 ->orderByDesc('insc_id')->value('cur_codigo');
 
         $data = [

@@ -22,7 +22,7 @@ class KardexDocenteController extends Controller
     private function soloDireccion()
     {
         $user = auth()->user();
-        if (!in_array($user->rol_id, [1, 9, 10, 11])) {
+        if (!$user->tieneCapacidad('kardex_docente.gestionar')) {
             abort(403, 'Solo dirección puede gestionar este módulo.');
         }
     }

@@ -134,7 +134,7 @@
     <div class="container page-hero-banner-inner">
         <div class="page-tag">Nuestra Trayectoria</div>
         <h1>Reseña <span>Histórica</span></h1>
-        <p>Veinte años de compromiso con la educación en El Alto, construyendo historia y formando generaciones.</p>
+        <p>{{ landing('historia.hero_texto') }}</p>
         <div class="breadcrumb-nav">
             <a href="{{ route('landing') }}"><i class="fas fa-home" style="font-size:0.75rem"></i> Inicio</a>
             <span>/</span>
@@ -151,10 +151,7 @@
             <div class="section-label">Desde 2005</div>
             <h2 class="section-title">20 Años <span>Construyendo Futuro</span></h2>
             <div class="section-divider"></div>
-            <p class="section-desc">
-                La historia de una institución que nació del compromiso de tres hermanos con la
-                educación de El Alto y que hoy celebra dos décadas de excelencia.
-            </p>
+            <p class="section-desc">{{ landing('historia.intro') }}</p>
         </div>
 
         <div class="historia-layout">
@@ -162,48 +159,12 @@
             <!-- Left: Narrative -->
             <div>
                 <div class="historia-text fade-up">
-                    <p>
-                        La Unidad Educativa Privada <strong>"INTERANDINO BOLIVIANO"</strong> de la Ciudad de
-                        El Alto del Departamento de La Paz, fue fundada el <strong>25 de mayo del año 2005</strong>
-                        por iniciativa propia de los Señores Néstor Quispe Copana, René Víctor Quispe Copana
-                        y Juan Quispe Copana.
-                    </p>
-                    <p>
-                        Quienes al observar la problemática educativa en la ciudad de El Alto decidieron
-                        invertir en la construcción de una Unidad Educativa diferente de las demás.
-                        Su visión principal era ser una institución <strong>inclusiva, pluralista y comunitaria</strong>
-                        con valores y principios democráticos.
-                    </p>
-                    <p>
-                        Desde sus inicios, la institución se propuso formar estudiantes autónomos, reflexivos,
-                        críticos y productivos con capacidad creativa e intelectual en la construcción
-                        de sus conocimientos científicos, técnicos, tecnológicos y artísticos bajo la
-                        concepción del <strong>vivir bien en la diversidad</strong>.
-                    </p>
-                    <p>
-                        Interandino Boliviano es una Unidad Educativa Privada donde se transmite una
-                        filosofía específica del mundo, del hombre y de la historia. Los principios y
-                        valores evangélicos se convierten en <strong>normas educativas de convivencia fraterna</strong>,
-                        en el logro por la educación integral dirigida por profesores dedicados,
-                        comprometidos y en constante actualización.
-                    </p>
-                    <p>
-                        A través de sus tres niveles educativos — Inicial, Primaria Comunitaria Vocacional
-                        y Secundaria Comunitaria Productiva — la institución ha crecido sostenidamente,
-                        sumando familias que confían en su propuesta educativa diferenciada y
-                        adaptada al contexto cultural de El Alto y Bolivia.
-                    </p>
-                    <p>
-                        Hoy, con <strong>veinte años de funcionamiento</strong>, Interandino Boliviano
-                        reafirma su compromiso de seguir contribuyendo, mejorando y desarrollando
-                        la educación en El Alto, formando cada año una nueva generación de estudiantes
-                        preparados para el futuro.
-                    </p>
+                    {{ landing('historia.relato') }}
                 </div>
 
                 <div class="motto-box fade-up">
-                    <blockquote>"Adquiere Sabiduría, adquiere inteligencia"</blockquote>
-                    <cite>— Proverbios 4:5 &nbsp;|&nbsp; Lema: <em>Contribuir, mejorar y desarrollar</em></cite>
+                    <blockquote>{{ landing('historia.cita') }}</blockquote>
+                    <cite>— {{ landing('historia.cita_fuente') }} &nbsp;|&nbsp; Lema: <em>{{ landing('general.lema') }}</em></cite>
                 </div>
             </div>
 
@@ -214,6 +175,17 @@
                         <i class="fas fa-history"></i> Línea del Tiempo
                     </div>
                     <div class="timeline">
+                        @php $hitos = \App\Support\Landing::bloques('HITO'); @endphp
+                        @if($hitos->isNotEmpty())
+                        @foreach($hitos as $h)
+                        <div class="tl-item {{ $loop->first ? 'gold' : ($loop->last ? 'green' : '') }} fade-up">
+                            <div class="tl-dot"></div>
+                            <div class="tl-year">{{ $h->lb_subtitulo }}</div>
+                            <div class="tl-title">{{ $h->lb_titulo }}</div>
+                            <div class="tl-desc">{!! $h->lb_texto !!}</div>
+                        </div>
+                        @endforeach
+                        @else
                         <div class="tl-item gold fade-up">
                             <div class="tl-dot"></div>
                             <div class="tl-year">25 de Mayo · 2005</div>
@@ -278,6 +250,7 @@
                             <div class="inst-row"><i class="fas fa-file-alt"></i> R.A. No. 311/2006</div>
                             <div class="inst-row"><i class="fas fa-hourglass-half"></i> 20 años de funcionamiento</div>
                         </div>
+                        @endif
                     </div>
                 </div>
             </div>

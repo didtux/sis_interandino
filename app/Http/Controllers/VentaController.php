@@ -253,7 +253,10 @@ class VentaController extends Controller
             $fechaInicio = $request->fecha_inicio ?? now()->subMonth()->format('Y-m-d');
             $fechaFin = $request->fecha_fin ?? now()->format('Y-m-d');
             
-            $query->whereBetween('venta_fecha', [$fechaInicio, $fechaFin]);
+            // venta_fecha es datetime: whereBetween con fechas sueltas cortaba en
+            // las 00:00 del último día, así que "Hoy" salía siempre vacío.
+            $query->whereDate('venta_fecha', '>=', $fechaInicio)
+                  ->whereDate('venta_fecha', '<=', $fechaFin);
             
             $ventasData = $query->limit(1000)->get();
             
@@ -313,7 +316,8 @@ class VentaController extends Controller
             
             $ventas = Venta::with('producto')
                 ->where('venta_estado', 'completado')
-                ->whereBetween('venta_fecha', [$request->fecha_inicio, $request->fecha_fin])
+                ->whereDate('venta_fecha', '>=', $request->fecha_inicio)
+                ->whereDate('venta_fecha', '<=', $request->fecha_fin)
                 ->orderBy('venta_fecha', 'asc')
                 ->limit(1000)
                 ->get();

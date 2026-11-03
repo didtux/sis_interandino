@@ -104,7 +104,7 @@
 @endsection
 
 @section('scripts')
-<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="{{ asset('vendor/html5-qrcode/html5-qrcode.min.js') }}"></script>
 <script>
 var rutaCodigo = '{{ $rutaSeleccionada }}';
 var tipo = '{{ $tipo }}';
@@ -125,11 +125,23 @@ $(document).ready(function() {
 function registrarManual() {
     var codigo = $('#selectEstudiante').val();
     if (!codigo) { alert('Seleccione un estudiante'); return; }
-    registrarAsistencia(codigo);
+    registrarAsistencia(codigo, true);
 }
 
-function registrarAsistencia(codigo) {
+/*
+ * La cámara lee la misma credencial varias veces por segundo mientras sigue
+ * delante; las repeticiones dentro de 3 segundos se ignoran (antes cada
+ * lectura mandaba un registro).
+ */
+var ultimoCodigo = '', ultimoMomento = 0, enviando = false;
+function registrarAsistencia(codigo, esManual) {
+    codigo = (codigo || '').trim();
+    if (!codigo) return;
+    var ahora = Date.now();
+    if (!esManual && ((codigo === ultimoCodigo && (ahora - ultimoMomento) < 3000) || enviando)) return;
+    ultimoCodigo = codigo; ultimoMomento = ahora; enviando = true;
     $.ajax({
+        complete: function() { enviando = false; },
         url: '{{ route("chofer-portal.asistencia.guardar") }}',
         method: 'POST',
         data: {

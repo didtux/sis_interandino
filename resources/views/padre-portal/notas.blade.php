@@ -9,7 +9,20 @@
                 <div class="card-body">
                     @include('padre-portal._selector-estudiante')
 
-                    @if($estSeleccionado && count($notasData) > 0)
+                    @if($estSeleccionado && ($bloqueo['bloqueado'] ?? false))
+                        {{-- Bloqueo por mora (Parámetros del colegio / Caja) --}}
+                        <div class="text-center py-5">
+                            <i class="fas fa-lock fa-3x text-warning mb-3"></i>
+                            <h5>Calificaciones no disponibles</h5>
+                            <p class="text-muted mb-1">{{ parametro('bloqueo_mensaje') }}</p>
+                            @if(!empty($bloqueo['meses']))
+                                <p class="small text-muted">Meses pendientes: {{ implode(', ', array_map(fn($m) => \App\Services\MoraService::MESES[$m] ?? $m, $bloqueo['meses'])) }}</p>
+                            @endif
+                            <a href="{{ route('padre-portal.pagos', ['est_codigo' => $estSeleccionado->est_codigo]) }}" class="btn btn-primary btn-sm mt-2">
+                                <i class="fas fa-money-bill-wave mr-1"></i>Ir a Pagos
+                            </a>
+                        </div>
+                    @elseif($estSeleccionado && count($notasData) > 0)
                     <div class="table-responsive">
                         <table class="table table-bordered table-sm" style="font-size:0.85rem;">
                             <thead style="background:#2c3e50;color:#fff;">

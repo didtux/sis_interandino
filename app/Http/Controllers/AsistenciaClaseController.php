@@ -15,7 +15,7 @@ class AsistenciaClaseController extends Controller
     public function index(Request $request)
     {
         $user = auth()->user();
-        $gestion = date('Y');
+        $gestion = gestion_actual();
         $periodos = NotaPeriodo::activo()->gestion($gestion)->orderBy('periodo_numero')->get();
 
         $query = CursoMateriaDocente::with(['curso', 'materia', 'docente'])->where('curmatdoc_estado', 1);

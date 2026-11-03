@@ -48,7 +48,7 @@
 
     <div class="title-section">
         <h2>REPORTE DE VENTAS</h2>
-        <p>Gestión {{ date('Y') }}</p>
+        <p>Gestión {{ gestion_actual() }}</p>
     </div>
 
     <div class="info">

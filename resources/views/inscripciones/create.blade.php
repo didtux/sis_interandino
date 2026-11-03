@@ -1,7 +1,7 @@
 @extends('layouts.app')
 
 @section('content')
-@php $mesActualPHP = (int)date('n'); $fueraDePlazo = $mesActualPHP > 2; @endphp
+@php $mesActualPHP = mes_de_gestion(); $fueraDePlazo = $mesActualPHP > 2; @endphp
 <div class="section-body">
     <div class="row">
         <div class="col-12">
@@ -44,6 +44,8 @@
                             <div class="col-md-5" id="divOtroPadre" style="display:none;">
                                 <label>Nombre del Padre/Tutor <span class="text-danger">*</span></label>
                                 <input type="text" name="pfam_nombre_nuevo" id="pfam_nombre_nuevo" class="form-control" placeholder="Ingrese nombre completo">
+                                <input type="text" name="pfam_ci_nuevo" class="form-control mt-1" placeholder="CI del padre/tutor">
+                                <small class="text-muted">Con el CI, si el padre ya está registrado (por otro hijo) se usa ese registro.</small>
                             </div>
                             <div class="col-md-1 mt-4">
                                 <div class="form-check">
@@ -62,7 +64,7 @@
                             </div>
                             <div class="col-md-6 mt-3">
                                 <label>Gestión <span class="text-danger">*</span></label>
-                                <input type="text" name="insc_gestion" class="form-control" value="{{ date('Y') }}" required>
+                                <input type="text" name="insc_gestion" class="form-control" value="{{ gestion_actual() }}" required>
                             </div>
                             <div class="col-md-6 mt-3">
                                 <label>Monto Total Anual (10 meses) <span class="text-danger">*</span></label>
@@ -73,7 +75,7 @@
                                 <select name="desc_id" id="desc_id" class="form-control select2">
                                     <option value="">Sin descuento</option>
                                     @foreach($descuentos as $d)
-                                        <option value="{{ $d->desc_id }}" data-porcentaje="{{ $d->desc_porcentaje }}" data-nombre="{{ strtolower($d->desc_nombre) }}">{{ $d->desc_nombre }} ({{ $d->desc_porcentaje }}%)</option>
+                                        <option value="{{ $d->desc_id }}" data-porcentaje="{{ $d->desc_porcentaje }}" data-tipo="{{ $d->desc_tipo ?? 'PORCENTAJE' }}" data-monto="{{ $d->desc_monto }}" data-nombre="{{ strtolower($d->desc_nombre) }}">{{ $d->desc_nombre }} ({{ ($d->desc_tipo ?? '') === 'MONTO' ? 'Bs ' . number_format($d->desc_monto, 2) : $d->desc_porcentaje . '%' }})</option>
                                     @endforeach
                                 </select>
                             </div>
@@ -190,7 +192,7 @@
                         <div class="row mt-3">
                             <div class="col-md-12">
                                 <label>Concepto</label>
-                                <textarea name="insc_concepto" class="form-control" rows="2">Inscripción gestión {{ date('Y') }}</textarea>
+                                <textarea name="insc_concepto" class="form-control" rows="2">Inscripción gestión {{ gestion_actual() }}</textarea>
                             </div>
                         </div>
                         <div class="mt-3">
@@ -314,15 +316,18 @@ $('#selectEstudiante').on('change', function() {
 function calcularMontos() {
     var montoTotal = parseFloat($('#monto_total').val()) || 0;
     var descId = $('#desc_id').val();
-    var porcentaje = 0, sinFactura = false;
+    var porcentaje = 0, sinFactura = false, montoFijo = null;
 
     if (descId) {
-        porcentaje = parseFloat($('#desc_id option:selected').data('porcentaje')) || 0;
-        var nombreDesc = $('#desc_id option:selected').data('nombre') || '';
+        var $opt = $('#desc_id option:selected');
+        porcentaje = parseFloat($opt.data('porcentaje')) || 0;
+        // Descuento de monto fijo (los "por familia" eran 250 Bs cargados como 0,05 %)
+        if ($opt.data('tipo') === 'MONTO') montoFijo = parseFloat($opt.data('monto')) || 0;
+        var nombreDesc = $opt.data('nombre') || '';
         sinFactura = nombreDesc.includes('sin factura');
     }
 
-    var montoDescuento = (montoTotal * porcentaje) / 100;
+    var montoDescuento = montoFijo !== null ? Math.min(montoFijo, montoTotal) : (montoTotal * porcentaje) / 100;
     var montoAnualConDesc = montoTotal - montoDescuento;
     var mensualidadBase = montoAnualConDesc / 10;
     var pagoInicial = parseFloat($('#monto_pagado').val()) || 0;

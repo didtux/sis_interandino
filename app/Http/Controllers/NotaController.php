@@ -31,7 +31,7 @@ class NotaController extends Controller
     public function index(Request $request)
     {
         $user = auth()->user();
-        $gestion = date('Y');
+        $gestion = gestion_actual();
         $periodos = NotaPeriodo::activo()->gestion($gestion)->orderBy('periodo_numero')->get();
         $dimensiones = NotaDimension::activo()->gestion($gestion)->orderBy('dimension_orden')->get();
 
@@ -181,7 +181,8 @@ class NotaController extends Controller
      */
     public function aprobarMasivo(Request $request)
     {
-        $request->validate([
+        $this->soloAprobador();
+$request->validate([
             'items' => 'required|array|min:1',
         ]);
 
@@ -208,7 +209,7 @@ class NotaController extends Controller
      */
     public function rendimiento(Request $request)
     {
-        $gestion = date('Y');
+        $gestion = gestion_actual();
         $periodos = NotaPeriodo::activo()->gestion($gestion)->orderBy('periodo_numero')->get();
         $cursos   = Curso::visible()->ordenado()->get();
 
@@ -304,7 +305,7 @@ class NotaController extends Controller
             ->where('periodo_id', $periodoId)->get()->keyBy('est_codigo');
 
         $estadoNotas = $notasExistentes->isNotEmpty() ? $notasExistentes->first()->nota_estado : 0;
-        $esAdmin = $user->rol_id == 1;
+        $esAdmin = $user->tieneCapacidad('notas.editar_fuera_plazo');
         // Editable normal: dentro del rango y en estado 0/3 (borrador/rechazado), o aún no hay notas.
         // Admin: SIEMPRE puede editar (queda registrado en auditoría si está fuera de tiempo o aprobado).
         $esEditable = $esAdmin || (($enRango && in_array($estadoNotas, [0, 3])) || !$notasExistentes->count());
@@ -395,7 +396,7 @@ class NotaController extends Controller
             abort(403);
         }
 
-        $esAdmin = $user->rol_id == 1;
+        $esAdmin = $user->tieneCapacidad('notas.editar_fuera_plazo');
 
         // Validar rango de fechas (admin puede saltar esta restricción; queda en auditoría)
         $hoy = now()->toDateString();
@@ -499,7 +500,8 @@ class NotaController extends Controller
 
     public function aprobar(Request $request, $curmatdocId, $periodoId)
     {
-        $accion = $request->input('accion');
+        $this->soloAprobador();
+$accion = $request->input('accion');
         Nota::where('curmatdoc_id', $curmatdocId)->where('periodo_id', $periodoId)->update([
             'nota_estado' => $accion === 'aprobar' ? 2 : 3,
             'nota_fecha_aprobacion' => now(),
@@ -512,7 +514,7 @@ class NotaController extends Controller
 
     public function configuracion()
     {
-        $gestion = date('Y');
+        $gestion = gestion_actual();
         $periodos = NotaPeriodo::where('periodo_gestion', $gestion)->orderBy('periodo_numero')->get();
         $dimensiones = NotaDimension::where('dimension_gestion', $gestion)->orderBy('dimension_orden')->get();
         return view('notas.configuracion', compact('periodos', 'dimensiones', 'gestion'));
@@ -633,17 +635,26 @@ class NotaController extends Controller
         ));
     }
 
-    /** El recálculo toca notas aprobadas: sólo administradores. */
+    /** Configuración y recálculo de notas: capacidad "notas.configurar". */
     private function soloAdmin(): void
     {
-        if (auth()->user()->rol_id != 1) {
-            abort(403, 'Sólo un administrador puede recalcular promedios ya guardados.');
+        if (!auth()->user()->tieneCapacidad('notas.configurar')) {
+            abort(403, 'Su rol no tiene la capacidad «Configurar periodos, dimensiones y recálculo de notas».');
+        }
+    }
+
+    /** Aprobar/rechazar notas: antes sólo lo escondía la vista; el POST no se controlaba. */
+    private function soloAprobador(): void
+    {
+        if (!auth()->user()->tieneCapacidad('notas.aprobar')) {
+            abort(403, 'Su rol no tiene la capacidad «Aprobar o rechazar notas».');
         }
     }
 
     public function guardarPeriodo(Request $request)
     {
-        $request->validate([
+        $this->soloAdmin();
+$request->validate([
             'periodo_nombre' => 'required|max:50',
             'periodo_numero' => 'required|integer|min:1',
             'periodo_fecha_inicio' => 'required|date',
@@ -658,7 +669,8 @@ class NotaController extends Controller
 
     public function eliminarPeriodo($id)
     {
-        if (Nota::where('periodo_id', $id)->exists()) {
+        $this->soloAdmin();
+if (Nota::where('periodo_id', $id)->exists()) {
             return back()->with('error', 'No se puede eliminar, tiene notas asociadas');
         }
         NotaPeriodo::findOrFail($id)->delete();
@@ -667,7 +679,8 @@ class NotaController extends Controller
 
     public function guardarDimension(Request $request)
     {
-        $request->validate([
+        $this->soloAdmin();
+$request->validate([
             'dimension_nombre' => 'required|max:50',
             'dimension_valor_max' => 'required|integer|min:1|max:100',
             'dimension_columnas' => 'required|integer|min:1|max:10',
@@ -681,7 +694,8 @@ class NotaController extends Controller
 
     public function eliminarDimension($id)
     {
-        NotaDimension::findOrFail($id)->delete();
+        $this->soloAdmin();
+NotaDimension::findOrFail($id)->delete();
         return redirect()->route('notas.configuracion')->with('success', 'Dimensión eliminada');
     }
 
@@ -790,7 +804,7 @@ class NotaController extends Controller
         if ($user->us_entidad_tipo === 'docente' && $user->us_entidad_id && $user->us_entidad_id !== $asignacion->doc_codigo) {
             return back()->with('error', 'No tiene permisos para importar en esta asignación.');
         }
-        $esAdmin = $user->rol_id == 1;
+        $esAdmin = $user->tieneCapacidad('notas.editar_fuera_plazo');
 
         // Si las notas están aprobadas o fuera de rango, sólo admin puede importar.
         $hoyImp = now()->toDateString();
@@ -903,7 +917,7 @@ class NotaController extends Controller
 
         // Detectar si se requiere auditoría (admin importando fuera de tiempo o sobre aprobadas/rechazadas)
         $userConf = auth()->user();
-        $esAdminConf = $userConf->rol_id == 1;
+        $esAdminConf = $userConf->tieneCapacidad('notas.editar_fuera_plazo');
         $hoyConf = now()->toDateString();
         $fueraConf = ($hoyConf < $periodo->periodo_fecha_inicio->toDateString() || $hoyConf > $periodo->periodo_fecha_fin->toDateString());
         $estadoPrevConf = Nota::where('curmatdoc_id', $asignacion->curmatdoc_id)->where('periodo_id', $periodo->periodo_id)->value('nota_estado');
@@ -1098,9 +1112,11 @@ class NotaController extends Controller
         $lista = ListaCurso::where('cur_codigo', $curCodigo)
             ->where('lista_gestion', $gestion)->pluck('lista_numero', 'est_codigo');
 
-        // Incluye retirados; en los PDFs se renderizan en rojo con badge RETIRADO
-        $estudiantes = Estudiante::where('cur_codigo', $curCodigo)
-            ->orderBy('est_apellidos')->orderBy('est_nombres')->get();
+        // Incluye retirados; en los PDFs se renderizan en rojo con badge RETIRADO.
+        // Para una gestión pasada, los alumnos salen del historial: al pasar de
+        // año la ficha ya apunta al curso nuevo.
+        $estudiantes = \App\Models\EstudianteGestion::estudiantesDeCurso($curCodigo, (int) $gestion)
+            ->sortBy(fn($e) => $e->est_apellidos . ' ' . $e->est_nombres)->values();
 
         if ($lista->isNotEmpty()) {
             $estudiantes = $estudiantes->sortBy(fn($e) => $lista[$e->est_codigo] ?? 9999)->values();
@@ -1242,10 +1258,13 @@ class NotaController extends Controller
     public function reportePersonal(Request $request)
     {
         $request->validate(['est_codigo' => 'required']);
-        $gestion = $request->input('gestion', date('Y'));
+        $gestion = $request->input('gestion', gestion_actual());
 
         $estudiante = Estudiante::where('est_codigo', $request->est_codigo)->with('curso')->firstOrFail();
-        $curso = $estudiante->curso;
+        // El curso de ESA gestión (historial), no el actual de la ficha: el
+        // boletín 2026 de un alumno que ya pasó a 2027 debe salir con su curso 2026.
+        $curso = Curso::where('cur_codigo', \App\Models\EstudianteGestion::cursoDe($estudiante->est_codigo, (int) $gestion))->first()
+            ?? $estudiante->curso;
         $periodos = NotaPeriodo::activo()->gestion($gestion)->orderBy('periodo_numero')->get();
 
         $lista = ListaCurso::where('cur_codigo', $curso->cur_codigo)
@@ -1391,7 +1410,7 @@ class NotaController extends Controller
     public function reporteCentralizador(Request $request)
     {
         $request->validate(['cur_codigo' => 'required']);
-        $gestion = $request->input('gestion', date('Y'));
+        $gestion = $request->input('gestion', gestion_actual());
         $year = intval($gestion);
         $periodoId = $request->input('periodo_id');
 
@@ -1456,7 +1475,7 @@ class NotaController extends Controller
     public function reporteGeneral(Request $request)
     {
         $request->validate(['cur_codigo' => 'required']);
-        $gestion = $request->input('gestion', date('Y'));
+        $gestion = $request->input('gestion', gestion_actual());
         $year = intval($gestion);
         $periodoId = $request->input('periodo_id');
 

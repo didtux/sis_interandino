@@ -66,7 +66,7 @@
                     @endif
 
                     @if($periodos->isEmpty())
-                        <div class="alert alert-warning"><i class="fas fa-exclamation-triangle mr-2"></i>No hay periodos configurados para {{ date('Y') }}.</div>
+                        <div class="alert alert-warning"><i class="fas fa-exclamation-triangle mr-2"></i>No hay periodos configurados para {{ gestion_actual() }}.</div>
                     @endif
 
                     {{-- Filtros --}}

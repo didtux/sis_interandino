@@ -56,4 +56,42 @@ table.det th{background:#1c4789;color:#fff;}
         </tr>
     </tbody>
 </table>
+
+@if(($reservas ?? collect())->count())
+<h4 style="margin:12px 0 4px;">RESERVAS DE CUPO (pre-inscripción)</h4>
+<table class="det">
+    <thead><tr><th>Recibo</th><th>Estudiante</th><th>Gestión</th><th class="r">Efectivo</th><th class="r">QR</th><th class="r">Total</th></tr></thead>
+    <tbody>
+        @foreach($reservas as $r)
+            <tr><td>{{ $r->prepago_recibo }}</td><td>{{ optional($r->preinscripcion)->nombre_completo }}</td><td class="c">{{ optional($r->preinscripcion)->ges_anio }}</td>
+                <td class="r">{{ number_format($r->monto_efectivo, 2) }}</td><td class="r">{{ number_format($r->monto_qr, 2) }}</td><td class="r">{{ number_format($r->prepago_monto, 2) }}</td></tr>
+        @endforeach
+    </tbody>
+</table>
+@endif
+
+@if(($devoluciones ?? collect())->count())
+<h4 style="margin:12px 0 4px;color:#a12a2a;">DEVOLUCIONES PAGADAS (egreso)</h4>
+<table class="det">
+    <thead><tr><th>Recibo</th><th>Origen</th><th>Estudiante</th><th>Forma</th><th class="r">Devuelto</th></tr></thead>
+    <tbody>
+        @foreach($devoluciones as $d)
+            <tr><td>{{ $d->dev_codigo }}</td><td>{{ $d->recibo_origen }}</td>
+                <td>{{ $d->estudiante ? $d->estudiante->est_apellidos . ' ' . $d->estudiante->est_nombres : optional($d->preinscripcion)->nombre_completo }}</td>
+                <td>{{ $d->dev_metodo }}</td><td class="r">-{{ number_format($d->monto_devuelto, 2) }}</td></tr>
+        @endforeach
+    </tbody>
+</table>
+@endif
+
+@if(($reservas ?? collect())->count() || ($devoluciones ?? collect())->count())
+<table class="cards" style="margin-top:10px;">
+    <tr>
+        <td><div class="lbl">EFECTIVO EN CAJA (neto)</div><div class="val">Bs. {{ number_format($resumen['efectivo_neto'], 2) }}</div></td>
+        <td><div class="lbl">QR (neto)</div><div class="val">Bs. {{ number_format($resumen['qr_neto'], 2) }}</div></td>
+        <td><div class="lbl">RESERVAS</div><div class="val">Bs. {{ number_format($resumen['reservas'], 2) }}</div></td>
+        <td><div class="lbl">DEVOLUCIONES</div><div class="val">-Bs. {{ number_format($resumen['devoluciones'], 2) }}</div></td>
+    </tr>
+</table>
+@endif
 </body></html>

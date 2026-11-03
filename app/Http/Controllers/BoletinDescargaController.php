@@ -21,7 +21,7 @@ class BoletinDescargaController extends Controller
     private function autorizar()
     {
         $u = auth()->user();
-        if (!$u || !in_array($u->rol_id, [1, 9, 10, 11])) {
+        if (!$u || !$u->tieneCapacidad('boletin.reimpresiones')) {
             abort(403, 'Solo dirección puede auditar reimpresiones.');
         }
     }
@@ -32,7 +32,7 @@ class BoletinDescargaController extends Controller
 
         $curCodigo = $request->input('cur_codigo');
         $estCodigo = $request->input('est_codigo');
-        $gestion   = $request->input('gestion', date('Y'));
+        $gestion   = $request->input('gestion', gestion_actual());
         $trim      = $request->input('trimestre');
         $estado    = $request->input('estado'); // '', 'cobrable', 'cobrado', 'anulada', 'primera'
         $desde     = $request->input('desde');
@@ -45,7 +45,7 @@ class BoletinDescargaController extends Controller
         if ($estCodigo) $q->where('est_codigo', $estCodigo);
         if ($curCodigo) {
             $ests = Inscripcion::where('cur_codigo', $curCodigo)
-                ->where('insc_gestion', $gestion)->where('insc_estado', 1)
+                ->where('insc_gestion', $gestion)->whereIn('insc_estado', [1, 2])
                 ->pluck('est_codigo');
             $q->whereIn('est_codigo', $ests);
         }

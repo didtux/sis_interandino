@@ -124,7 +124,7 @@ $(document).ready(function() {
             $('#info-estudiante').hide();
             return;
         }
-        $.get('/psicopedagogia/buscar-estudiante/' + codigo, function(data) {
+        $.get('{{ url('psicopedagogia/buscar-estudiante') }}/' + codigo, function(data) {
             if (data.success) {
                 let html = '<strong>Estudiante:</strong> ' + data.estudiante.nombres + '<br>';
                 html += '<strong>CI:</strong> ' + (data.estudiante.ci || 'N/A') + '<br>';

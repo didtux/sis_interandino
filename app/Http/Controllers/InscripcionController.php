@@ -9,6 +9,7 @@ use App\Models\PadreFamilia;
 use App\Models\Curso;
 use App\Models\Pago;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class InscripcionController extends Controller
 {
@@ -20,7 +21,7 @@ class InscripcionController extends Controller
         // sumaban inscripciones de gestiones anteriores. Por defecto, la actual.
         $gestiones = Inscripcion::select('insc_gestion')->distinct()
             ->orderBy('insc_gestion', 'desc')->pluck('insc_gestion')->filter()->values();
-        $gestion = $request->input('gestion', date('Y'));
+        $gestion = $request->input('gestion', gestion_actual());
         if ($gestion !== 'todas') {
             $query->where('insc_gestion', $gestion);
         }
@@ -72,11 +73,11 @@ class InscripcionController extends Controller
 
         // Precargar total de mensualidades pagadas por estudiante
         // (del mismo año que se está mirando, no siempre del actual)
-        $year = $gestion === 'todas' ? date('Y') : (int) $gestion;
-        $mesActualNum = intval(date('n'));
+        $year = $gestion === 'todas' ? gestion_actual() : (int) $gestion;
+        $mesActualNum = mes_de_gestion();
         $estCodigos = $inscripciones->pluck('est_codigo')->unique()->toArray();
         $mensualidadesPagadas = Pago::whereIn('est_codigo', $estCodigos)
-            ->whereYear('pagos_fecha', $year)
+            ->deGestion($year)
             ->where('pagos_estado', 1)
             ->selectRaw('est_codigo, SUM(pagos_precio) as total_mensualidades')
             ->groupBy('est_codigo')
@@ -87,7 +88,7 @@ class InscripcionController extends Controller
         $primerMesPorEst = [];
         if (!empty($estCodigos)) {
             $pagosConcepto = Pago::whereIn('est_codigo', $estCodigos)
-                ->whereYear('pagos_fecha', $year)
+                ->deGestion($year)
                 ->where('pagos_estado', 1)
                 ->select('est_codigo', 'concepto')
                 ->get();
@@ -126,10 +127,10 @@ class InscripcionController extends Controller
         $inscripciones = $query->orderBy('insc_fecha', 'desc')->get();
 
         // Mensualidades pagadas
-        $year = date('Y');
+        $year = gestion_actual();
         $estCodigos = $inscripciones->pluck('est_codigo')->unique()->toArray();
         $mensualidadesPagadas = Pago::whereIn('est_codigo', $estCodigos)
-            ->whereYear('pagos_fecha', $year)
+            ->deGestion($year)
             ->where('pagos_estado', 1)
             ->selectRaw('est_codigo, SUM(pagos_precio) as total_mensualidades')
             ->groupBy('est_codigo')
@@ -143,7 +144,7 @@ class InscripcionController extends Controller
         $query = Inscripcion::with(['estudiante', 'curso', 'padreFamilia', 'descuentos']);
 
         // Misma gestión que la grilla de la que se exporta (ver index()).
-        $gestion = $request->input('gestion', date('Y'));
+        $gestion = $request->input('gestion', gestion_actual());
         if ($gestion !== 'todas') {
             $query->where('insc_gestion', $gestion);
         }
@@ -193,10 +194,10 @@ class InscripcionController extends Controller
         $inscripciones = $query->orderBy('insc_fecha', 'desc')->get();
 
         // Mensualidades pagadas por estudiante
-        $year = $gestion === 'todas' ? date('Y') : (int) $gestion;
+        $year = $gestion === 'todas' ? gestion_actual() : (int) $gestion;
         $estCodigos = $inscripciones->pluck('est_codigo')->unique()->toArray();
         $mensualidadesPagadas = Pago::whereIn('est_codigo', $estCodigos)
-            ->whereYear('pagos_fecha', $year)
+            ->deGestion($year)
             ->where('pagos_estado', 1)
             ->selectRaw('est_codigo, SUM(pagos_precio) as total_mensualidades')
             ->groupBy('est_codigo')
@@ -220,16 +221,19 @@ class InscripcionController extends Controller
 
     public function create()
     {
-        $gestion = (int) date('Y');
+        $gestion = (int) gestion_actual();
 
         // Estudiantes que YA tienen inscripción activa en la gestión actual
         $yaInscritos = Inscripcion::where('insc_gestion', $gestion)
-            ->where('insc_estado', 1)
+            ->whereIn('insc_estado', [1, 2])
             ->pluck('est_codigo')
             ->all();
 
-        // Sólo se muestran los que aún no tienen registro en esta gestión
-        $estudiantes = Estudiante::visible()
+        // Sólo se muestran los que aún no tienen registro en esta gestión. Se
+        // suman los de la gestión anterior que quedaron ocultos al pasar de año
+        // por no haberse reinscrito: así se los puede inscribir tarde.
+        $deAnterior = \App\Models\EstudianteGestion::where('ges_anio', $gestion - 1)->pluck('est_codigo');
+        $estudiantes = Estudiante::where(fn($q) => $q->where('est_visible', 1)->orWhereIn('est_codigo', $deAnterior))
             ->whereNotIn('est_codigo', $yaInscritos)
             ->orderBy('est_apellidos')->orderBy('est_nombres')
             ->get();
@@ -269,7 +273,7 @@ class InscripcionController extends Controller
         if ($obs) {
             // Override solo para dirección (Admin/Director General/Directora Académica) si envía "override=1"
             $user = auth()->user();
-            $puedeOverride = in_array($user->rol_id, [1, 9, 10]);
+            $puedeOverride = $user->tieneCapacidad('observados.autorizar');
             if (!$puedeOverride || !$request->boolean('override_observado')) {
                 return back()->withErrors([
                     'error' => 'ESTUDIANTE BLOQUEADO. Motivo ('.$obs->obs_motivo_tipo.'): '.$obs->obs_motivo.'. Solo la dirección puede levantar el bloqueo.'
@@ -277,22 +281,11 @@ class InscripcionController extends Controller
             }
         }
 
-        // Si se ingresó un nuevo padre, crearlo
+        // Padre nuevo: si ya existe uno con ese CI se reutiliza (antes se creaba
+        // siempre otro, con CI 0000000, y la familia quedaba partida).
         if ($request->filled('pfam_nombre_nuevo')) {
-            $padre = PadreFamilia::create([
-                'pfam_codigo' => 'Pad' . str_pad(PadreFamilia::max('pfam_id') + 1, 5, '0', STR_PAD_LEFT),
-                'pfam_nombres' => $request->pfam_nombre_nuevo,
-                'pfam_ci' => '0000000',
-                'pfam_estado' => 1
-            ]);
-            
-            // Vincular padre con estudiante
-            \DB::table('rela_estudiantespadres')->insert([
-                'est_id' => $request->est_codigo,
-                'pfam_id' => $padre->pfam_codigo,
-                'estpad_estado' => 1
-            ]);
-            
+            $padre = PadreFamilia::obtenerOCrear($request->pfam_nombre_nuevo, $request->pfam_ci_nuevo);
+            $padre->vincularHijo($request->est_codigo);
             $pfamCodigo = $padre->pfam_codigo;
         } else {
             $request->validate(['pfam_codigo' => 'required|exists:cole_padresfamilia,pfam_codigo']);
@@ -308,7 +301,7 @@ class InscripcionController extends Controller
         // Caso Especial: inscripción retroactiva, los meses previos a insc_mes_inicio
         // NO se contabilizan como vencidos.
         $casoEspecial  = $request->has('insc_caso_especial');
-        $mesInicio     = $casoEspecial ? max(2, min(12, (int) ($request->insc_mes_inicio ?? date('n')))) : null;
+        $mesInicio     = $casoEspecial ? max(2, min(12, (int) ($request->insc_mes_inicio ?? mes_de_gestion()))) : null;
 
         // El mes al que se imputa la primera mensualidad no puede ser anterior al
         // mes actual, salvo en Registro Especial, donde el piso es el mes de inicio
@@ -316,7 +309,7 @@ class InscripcionController extends Controller
         // y el backend aceptaba cualquier mes que le llegara.
         if ($soloRegistro && $request->filled('insc_mes_destino')) {
             $mesDestinoReq = (int) $request->insc_mes_destino;
-            $mesMinimo     = $casoEspecial ? $mesInicio : (int) date('n');
+            $mesMinimo     = $casoEspecial ? $mesInicio : mes_de_gestion();
             $meses = ['','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
             if ($mesDestinoReq < $mesMinimo) {
                 return back()->withErrors(['error' =>
@@ -329,12 +322,12 @@ class InscripcionController extends Controller
             }
         }
 
+        // Inscripción, descuento y primer pago se guardan juntos: si algo falla
+        // no queda una inscripción sin su pago ni un número de recibo consumido.
+        return DB::transaction(function () use ($request, $pfamCodigo, $montoTotal, $montoDescuento, $montoFinal,
+                                                  $montoPagado, $sinFactura, $soloRegistro, $casoEspecial, $mesInicio) {
         // Código secuencial INSC000XXX
-        $ultimoInsc = Inscripcion::where('insc_codigo', 'REGEXP', '^INSC[0-9]{6}$')
-            ->orderByRaw('CAST(SUBSTRING(insc_codigo, 5) AS UNSIGNED) DESC')
-            ->first();
-        $numInsc = $ultimoInsc ? intval(substr($ultimoInsc->insc_codigo, 4)) + 1 : 1;
-        $codigoInsc = 'INSC' . str_pad($numInsc, 6, '0', STR_PAD_LEFT);
+        $codigoInsc = \App\Services\ReciboNumerador::siguiente('INSC');
 
         // Si es solo registro, el pago va a mensualidad, no a inscripción
         $montoPagadoInsc = $soloRegistro ? 0 : $montoPagado;
@@ -367,6 +360,14 @@ class InscripcionController extends Controller
             ]);
         }
 
+        // Historial por gestión. Si es la gestión vigente, la ficha pasa al curso
+        // de la inscripción: antes la inscripción no tocaba el curso del alumno
+        // y quedaban fichas en un curso e inscripciones en otro.
+        \App\Models\EstudianteGestion::registrar($request->est_codigo, (int) $request->insc_gestion, $request->cur_codigo, $codigoInsc);
+        if ((int) $request->insc_gestion === gestion_actual()) {
+            Estudiante::where('est_codigo', $request->est_codigo)->update(['cur_codigo' => $request->cur_codigo, 'est_visible' => 1]);
+        }
+
         $prefijoRecibo = $sinFactura ? 'TAL' : 'REC';
 
         if ($soloRegistro && $montoPagado > 0) {
@@ -375,16 +376,12 @@ class InscripcionController extends Controller
             // Especial, donde el piso es el mes de inicio retroactivo. Hasta ahora
             // esto sólo estaba en la vista (option disabled) y el backend aceptaba
             // cualquier mes que le mandaran.
-            $mesDestino = intval($request->insc_mes_destino ?? date('n'));
+            $mesDestino = intval($request->insc_mes_destino ?? mes_de_gestion());
             $mesesNombresArr = ['','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
             $mesNombre = $mesesNombresArr[$mesDestino] ?? 'Mes';
 
-            // Código recibo mensualidad
-            $ultimoRec = Pago::where('pagos_codigo', 'REGEXP', '^' . $prefijoRecibo . '[0-9]{5}$')
-                ->orderByRaw('CAST(SUBSTRING(pagos_codigo, 4) AS UNSIGNED) DESC')
-                ->first();
-            $numRec = $ultimoRec ? intval(substr($ultimoRec->pagos_codigo, 3)) + 1 : 1;
-            $codigoRecibo = $prefijoRecibo . str_pad($numRec, 5, '0', STR_PAD_LEFT);
+            // Código recibo mensualidad (contador con bloqueo, sin duplicados)
+            $codigoRecibo = \App\Services\ReciboNumerador::siguiente('MEN-' . $prefijoRecibo);
 
             Pago::create([
                 'pagos_codigo' => $codigoRecibo,
@@ -399,16 +396,17 @@ class InscripcionController extends Controller
                 'concepto' => 'Mensualidad ' . $mesNombre,
                 'tipo' => 1,
                 'pagos_fecha' => now(),
+                'pagos_gestion' => (int) $request->insc_gestion,
+                'pagos_mes' => $mesDestino,
+                'insc_codigo' => $inscripcion->insc_codigo,
+                'pagos_metodo' => 'EFECTIVO',
+                'pagos_monto_efectivo' => $montoPagado,
                 'pagos_sin_factura' => $sinFactura ? 1 : 0
             ]);
 
         } elseif ($montoPagado > 0) {
             // NORMAL: pago de inscripción
-            $ultimoRecibo = InscripcionPago::where('inscpago_recibo', 'REGEXP', '^' . $prefijoRecibo . '[0-9]{6}$')
-                ->orderByRaw('CAST(SUBSTRING(inscpago_recibo, 4) AS UNSIGNED) DESC')
-                ->first();
-            $numRecibo = $ultimoRecibo ? intval(substr($ultimoRecibo->inscpago_recibo, 3)) + 1 : 1;
-            $codigoRecibo = $prefijoRecibo . str_pad($numRecibo, 6, '0', STR_PAD_LEFT);
+            $codigoRecibo = \App\Services\ReciboNumerador::siguiente('INS-' . $prefijoRecibo);
 
             $ultimoPago = InscripcionPago::where('inscpago_codigo', 'REGEXP', '^PAGO[0-9]{6}$')
                 ->orderByRaw('CAST(SUBSTRING(inscpago_codigo, 5) AS UNSIGNED) DESC')
@@ -427,6 +425,7 @@ class InscripcionController extends Controller
         }
 
         return redirect()->route('inscripciones.index')->with('success', 'Inscripción registrada' . ($soloRegistro ? ' (fuera de periodo - pago registrado como mensualidad)' : ''));
+        });
     }
 
     public function registrarPago(Request $request, $id)
@@ -437,13 +436,10 @@ class InscripcionController extends Controller
             'monto' => 'required|numeric|min:0|max:' . $inscripcion->insc_saldo
         ]);
 
-        // Código secuencial recibo
+        return DB::transaction(function () use ($request, $inscripcion) {
+        // Código secuencial recibo (contador con bloqueo, sin duplicados)
         $prefijoRecibo = ($inscripcion->insc_sin_factura ?? 0) ? 'TAL' : 'REC';
-        $ultimoRecibo = InscripcionPago::where('inscpago_recibo', 'REGEXP', '^' . $prefijoRecibo . '[0-9]{6}$')
-            ->orderByRaw('CAST(SUBSTRING(inscpago_recibo, 4) AS UNSIGNED) DESC')
-            ->first();
-        $numRecibo = $ultimoRecibo ? intval(substr($ultimoRecibo->inscpago_recibo, 3)) + 1 : 1;
-        $codigoRecibo = $prefijoRecibo . str_pad($numRecibo, 6, '0', STR_PAD_LEFT);
+        $codigoRecibo = \App\Services\ReciboNumerador::siguiente('INS-' . $prefijoRecibo);
 
         // Código secuencial pago
         $ultimoPago = InscripcionPago::where('inscpago_codigo', 'REGEXP', '^PAGO[0-9]{6}$')
@@ -471,6 +467,7 @@ class InscripcionController extends Controller
         $inscripcion->save();
 
         return redirect()->back()->with('success', 'Pago registrado');
+        });
     }
 
     public function anular($id)
@@ -486,22 +483,11 @@ class InscripcionController extends Controller
     {
         $inscripcion = Inscripcion::findOrFail($id);
         
-        // Si se ingresó un nuevo padre, crearlo
+        // Padre nuevo: se reutiliza si ya existe con ese CI.
         if ($request->filled('pfam_nombre_nuevo')) {
-            $padre = PadreFamilia::create([
-                'pfam_codigo' => 'Pad' . str_pad(PadreFamilia::max('pfam_id') + 1, 5, '0', STR_PAD_LEFT),
-                'pfam_nombres' => $request->pfam_nombre_nuevo,
-                'pfam_ci' => '0000000',
-                'pfam_estado' => 1
-            ]);
-            
-            // Vincular padre con estudiante
-            \DB::table('rela_estudiantespadres')->insert([
-                'est_id' => $inscripcion->est_codigo,
-                'pfam_id' => $padre->pfam_codigo,
-                'estpad_estado' => 1
-            ]);
-            
+            $padre = PadreFamilia::obtenerOCrear($request->pfam_nombre_nuevo, $request->pfam_ci_nuevo);
+            $padre->vincularHijo($inscripcion->est_codigo);
+
             $inscripcion->pfam_codigo = $padre->pfam_codigo;
         } elseif ($request->filled('pfam_codigo')) {
             $inscripcion->pfam_codigo = $request->pfam_codigo;
@@ -511,9 +497,10 @@ class InscripcionController extends Controller
         
         $descuento = \App\Models\Descuento::findOrFail($request->desc_id);
         
-        // Calcular nuevo monto con descuento
+        // Calcular nuevo monto con descuento. Los descuentos por familia son un
+        // monto fijo (250 Bs) cargado como 0,05 %: por porcentaje daban 2,38 Bs.
         $montoTotal = $inscripcion->insc_monto_total;
-        $montoDescuento = $montoTotal * ($descuento->desc_porcentaje / 100);
+        $montoDescuento = $descuento->montoSobre((float) $montoTotal);
         $montoFinal = $montoTotal - $montoDescuento;
         
         // Actualizar inscripción
@@ -532,7 +519,7 @@ class InscripcionController extends Controller
 
     public function eliminarCargaMasiva(Request $request)
     {
-        $year = date('Y');
+        $year = gestion_actual();
         $eliminados = 0;
         $estudiantesEliminados = 0;
         
@@ -548,7 +535,7 @@ class InscripcionController extends Controller
             
             // Eliminar pagos de mensualidades relacionados
             \App\Models\Pago::where('est_codigo', $insc->est_codigo)
-                ->whereYear('pagos_fecha', $year)
+                ->deGestion($year)
                 ->delete();
             
             // Eliminar pagos de inscripción
@@ -602,7 +589,7 @@ class InscripcionController extends Controller
         $highestColumn = $sheet->getHighestColumn();
         $data = $sheet->toArray(null, true, true, true);
         
-        $year = date('Y');
+        $year = gestion_actual();
         $registrados = 0;
         $saltados = [
             'anulados' => 0,
@@ -874,9 +861,7 @@ class InscripcionController extends Controller
             }
             
             // Pago de inscripción (300 Bs)
-            $ultimoRecibo = InscripcionPago::where('inscpago_recibo', 'like', $prefijoRecibo . '%')->orderBy('inscpago_id', 'desc')->first();
-            $numero = $ultimoRecibo ? intval(substr($ultimoRecibo->inscpago_recibo, 3)) + 1 : 1;
-            $codigoRecibo = $prefijoRecibo . str_pad($numero, 6, '0', STR_PAD_LEFT);
+            $codigoRecibo = \App\Services\ReciboNumerador::siguiente('INS-' . $prefijoRecibo);
             
             InscripcionPago::create([
                 'inscpago_codigo' => 'PAGO' . str_pad(InscripcionPago::max('inscpago_id') + 1, 6, '0', STR_PAD_LEFT),
@@ -901,9 +886,7 @@ class InscripcionController extends Controller
                     // Primer pago es la primera mensualidad (ajustada), resto son cuotas completas
                     $montoPago = ($i == 0) ? $primeraMensualidad : $montoMensualidad;
                     
-                    $ultimoPago = \App\Models\Pago::where('pagos_codigo', 'like', $prefijoRecibo . '%')->orderBy('pagos_id', 'desc')->first();
-                    $numeroPago = $ultimoPago ? intval(substr($ultimoPago->pagos_codigo, 3)) + 1 : 1;
-                    $codigoPago = $prefijoRecibo . str_pad($numeroPago, 5, '0', STR_PAD_LEFT);
+                    $codigoPago = \App\Services\ReciboNumerador::siguiente('MEN-' . $prefijoRecibo);
                     
                     $fechaPago = \Carbon\Carbon::create($year, $mesInscripcion, 15);
                     
@@ -920,6 +903,10 @@ class InscripcionController extends Controller
                         'concepto' => 'Mensualidad ' . $mesesNombres[$mes],
                         'tipo' => 1,
                         'pagos_fecha' => $fechaPago,
+                        'pagos_gestion' => (int) $year,
+                        'pagos_mes' => $mes,
+                        'insc_codigo' => $inscripcion->insc_codigo,
+                        'pagos_monto_efectivo' => $montoPago,
                         'pagos_sin_factura' => $sinFactura
                     ]);
                 }

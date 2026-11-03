@@ -75,10 +75,23 @@ class Estudiante extends Model
         return $this->hasMany(PagoTransporte::class, 'est_codigo', 'est_codigo');
     }
 
+    /** Siguiente código Est00000 (mismo criterio que el alta manual). */
+    public static function siguienteCodigo(): string
+    {
+        $ultimo = self::where('est_codigo', 'REGEXP', '^Est[0-9]+$')
+            ->orderByRaw('CAST(SUBSTRING(est_codigo, 4) AS UNSIGNED) DESC')->value('est_codigo');
+        $n = $ultimo ? (int) substr($ultimo, 3) + 1 : 1;
+        return 'Est' . str_pad($n, 5, '0', STR_PAD_LEFT);
+    }
+
     public function inscripcion()
     {
+        // Primero la de la gestión vigente: ordenar sólo por gestión desc hacía
+        // que, apenas se pre-inscribiera a alguien para la gestión siguiente,
+        // caja y el portal le mostraran esa inscripción en lugar de la actual.
         return $this->hasOne(Inscripcion::class, 'est_codigo', 'est_codigo')
-            ->where('insc_estado', 1)
+            ->whereIn('insc_estado', [1, 2])
+            ->orderByRaw('insc_gestion = ? DESC', [gestion_actual()])
             ->orderBy('insc_gestion', 'desc');
     }
 

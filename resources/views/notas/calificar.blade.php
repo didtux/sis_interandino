@@ -211,7 +211,7 @@
                 </div>
             </form>
 
-            @if(auth()->user()->rol_id == 1 && $estadoNotas == 1)
+            @if(auth()->user()->tieneCapacidad('notas.aprobar') && $estadoNotas == 1)
                 <div class="card modern-card mt-3">
                     <div class="card-header" style="background:linear-gradient(135deg,#2c3e50,#34495e);color:#fff;">
                         <h5 class="mb-0"><i class="fas fa-gavel mr-2"></i>Aprobación de Notas</h5>
@@ -375,7 +375,7 @@ $(document).ready(function() {
             mat_codigo: '{{ $asignacion->mat_codigo }}',
             cur_codigo: '{{ $asignacion->cur_codigo }}',
             periodo_id: '{{ $periodo->periodo_id }}',
-            gestion: '{{ $periodo->periodo_gestion ?? date("Y") }}',
+            gestion: '{{ $periodo->periodo_gestion ?? gestion_actual() }}',
             rol: 'docente',
             estado: $chk.is(':checked') ? 1 : 0
         }).fail(function() {

@@ -11,6 +11,7 @@ class Curso extends Model
     public $timestamps = false;
 
     protected $fillable = [
+        'cur_siguiente', 'cur_grado', 'cur_paralelo',
         'cur_codigo',
         'cur_nombre',
         'cur_orden',

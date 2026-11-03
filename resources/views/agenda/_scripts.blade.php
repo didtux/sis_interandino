@@ -1,4 +1,4 @@
-<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="{{ asset('vendor/html5-qrcode/html5-qrcode.min.js') }}"></script>
 <script>
 var qrScanner = null;
 $(document).ready(function() {
@@ -11,7 +11,7 @@ $(document).ready(function() {
             $('#padres-container').html('<p class="text-muted" style="font-size:0.85rem;"><i class="fas fa-info-circle mr-1"></i>Seleccione un estudiante para ver sus padres</p>');
             return;
         }
-        $.get('/agenda/padres-estudiante/' + codigo, function(padres) {
+        $.get('{{ url('agenda/padres-estudiante') }}/' + codigo, function(padres) {
             if (padres.length === 0) {
                 $('#padres-container').html('<p class="text-muted" style="font-size:0.85rem;"><i class="fas fa-exclamation-circle mr-1"></i>Sin padres registrados</p>');
                 return;

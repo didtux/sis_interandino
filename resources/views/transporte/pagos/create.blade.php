@@ -153,7 +153,7 @@
 <script>
 var estudiantesData = @json($estudiantesData);
 var mesesNombres = ['', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre'];
-var mesActual = {{ (int)date('n') }}; // 1-12
+var mesActual = {{ mes_de_gestion() }}; // 1-12
 var idxGlobal = 0;
 var estudiantesAgregados = [];
 

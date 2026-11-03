@@ -85,6 +85,21 @@
         <i class="fas fa-folder-open"></i><span>Kardex / Anotaciones</span>
     </a>
 </li>
+<li class="side-menus {{ Request::is('mi-portal/agenda*') ? 'active' : '' }}">
+    <a class="nav-link" href="{{ route('padre-portal.agenda') }}"><i class="fas fa-calendar-alt"></i><span>Agenda</span></a>
+</li>
+@php $consultasNuevas = \App\Http\Controllers\AtencionController::noLeidasPadre($user); @endphp
+<li class="side-menus {{ Request::is('mi-portal/consultas*') ? 'active' : '' }}">
+    <a class="nav-link" href="{{ route('padre-portal.consultas') }}"><i class="fas fa-comments"></i><span>Consultas al colegio</span>
+        @if($consultasNuevas)<span class="badge badge-danger ml-auto">{{ $consultasNuevas }}</span>@endif</a>
+</li>
+{{-- Publicaciones del colegio (revista, útiles, reglamento, horarios, misión y visión) --}}
+@foreach(['REVISTA', 'LISTA_UTILES', 'REGLAMENTO', 'HORARIO', 'MISION_VISION'] as $tipoPub)
+    @php [$tPub, $iPub] = \App\Models\Publicacion::TIPOS[$tipoPub]; @endphp
+    <li class="side-menus {{ Request::is('mi-portal/publicaciones/' . strtolower($tipoPub)) ? 'active' : '' }}">
+        <a class="nav-link" href="{{ route('padre-portal.publicaciones', strtolower($tipoPub)) }}"><i class="{{ $iPub }}"></i><span>{{ $tPub }}</span></a>
+    </li>
+@endforeach
 @else
 {{-- ── MENÚ NORMAL ── --}}
 
@@ -115,7 +130,7 @@
 </li>
 @endif
 
-@if($esAdmin)
+@if($user->tieneCapacidad('auditoria.ver'))
 <li class="side-menus {{ Request::is('auditoria*') ? 'active' : '' }}">
     <a class="nav-link" href="{{ route('auditoria.index') }}">
         <i class="fas fa-history"></i><span>Auditoría</span>
@@ -132,7 +147,7 @@
         @if($esAdmin || $user->tieneAccesoModulo('estudiantes'))
         <li><a href="{{ route('estudiantes.index') }}"><i class="fas fa-list"></i> Lista Estudiantes</a></li>
         @endif
-        @if($esAdmin || in_array(optional($user)->rol_id, [1,9,10,11]) || $user->us_entidad_tipo === 'docente')
+        @if($user->tieneCapacidad('kardex_estudiante.direccion') || $user->us_entidad_tipo === 'docente')
         <li><a href="{{ route('kardex-estudiante.index') }}"><i class="fas fa-folder-open"></i> Kardex / Anotaciones</a></li>
         @endif
     </ul>
@@ -155,6 +170,49 @@
 </li>
 @endif
 
+@if($user->tieneAccesoModulo('publicaciones'))
+<li class="side-menus {{ Request::is('publicaciones*') ? 'active' : '' }}">
+    <a class="nav-link" href="{{ route('publicaciones.index') }}"><i class="fas fa-book-open"></i><span>Publicaciones</span></a>
+</li>
+@endif
+
+@if($esAdmin || $user->tieneAccesoModulo('contacto-mensajes'))
+@php $mensajesNuevos = \App\Models\ContactoMensaje::where('cm_estado', 'NUEVO')->count(); @endphp
+<li class="side-menus {{ Request::is('contacto-mensajes*') ? 'active' : '' }}">
+    <a class="nav-link" href="{{ route('contacto-mensajes.index') }}">
+        <i class="fas fa-envelope-open-text"></i><span>Mensajes web</span>
+        @if($mensajesNuevos)<span class="badge badge-danger ml-auto">{{ $mensajesNuevos }}</span>@endif
+    </a>
+</li>
+@endif
+
+@php $areasAtencion = $esPadre || $esChofer ? [] : \App\Http\Controllers\AtencionController::areasDe($user); @endphp
+@if($areasAtencion)
+@php $atencionPend = \App\Http\Controllers\AtencionController::pendientesPara($user); @endphp
+<li class="side-menus {{ Request::is('atencion*') ? 'active' : '' }}">
+    <a class="nav-link" href="{{ route('atencion.index') }}">
+        <i class="fas fa-comments"></i><span>Atención a padres</span>
+        <span class="badge badge-danger ml-auto" id="badgeAtencion" style="{{ $atencionPend ? '' : 'display:none' }}">{{ $atencionPend }}</span>
+    </a>
+</li>
+<script>
+// Globito de consultas sin leer: se actualiza cada minuto en cualquier pantalla
+setInterval(function () {
+    if (document.hidden) return;
+    fetch('{{ route('atencion.contador') }}', { headers: { 'Accept': 'application/json' } })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (d) { if (!d) return; var b = document.getElementById('badgeAtencion'); b.textContent = d.pendientes; b.style.display = d.pendientes ? '' : 'none'; })
+        .catch(function () {});
+}, 60000);
+</script>
+@endif
+
+@if($user->tieneAccesoModulo('web-publica'))
+<li class="side-menus {{ Request::is('web-publica*') ? 'active' : '' }}">
+    <a class="nav-link" href="{{ route('web-publica.textos') }}"><i class="fas fa-globe"></i><span>Web pública</span></a>
+</li>
+@endif
+
 @if($esAdmin || $user->tieneAccesoModulo('docentes'))
 <li class="side-menus {{ Request::is('docentes*') || Request::is('kardex-docente*') ? 'active' : '' }}">
     <a class="nav-link menu-toggle" href="#" data-toggle="collapse" data-target="#docentesMenu">
@@ -164,10 +222,10 @@
         <li><a href="{{ route('docentes.index') }}"><i class="fas fa-list"></i> Lista Docentes</a></li>
         {{-- Mismos roles que KardexDocenteController::soloDireccion(): antes
              estaba en [1,4] y el 4 es Chofer, así que dirección no lo veía. --}}
-        @if($esAdmin || in_array(optional($user)->rol_id, [1,9,10,11]))
+        @if($user->tieneCapacidad('kardex_docente.gestionar'))
         <li><a href="{{ route('kardex-docente.index') }}"><i class="fas fa-folder-open"></i> Kardex Docente</a></li>
         @endif
-        @if($esAdmin || in_array(optional($user)->rol_id, [1,9,10,11]))
+        @if($user->tieneCapacidad('comunicados.gestionar'))
         <li><a href="{{ route('comunicados.index') }}"><i class="fas fa-bullhorn"></i> Comunicados</a></li>
         @endif
     </ul>
@@ -191,29 +249,29 @@
 </li>
 @endif
 
-@if($esAdmin || $user->tieneAccesoModulo('asistencias'))
+@if($esAdmin || $user->tieneAccesoGrupo('asistencias'))
 <li class="side-menus {{ Request::is('asistencias*') || Request::is('asistencia-config*') ? 'active' : '' }}">
     <a class="nav-link menu-toggle" href="#" data-toggle="collapse" data-target="#asistenciaMenu">
         <i class="fas fa-clipboard-check"></i><span>Asistencias</span>
     </a>
     <ul class="collapse {{ Request::is('asistencias*') || Request::is('asistencia-config*') ? 'show' : '' }}" id="asistenciaMenu">
-        @if($esAdmin || $user->tieneAccesoModulo('asistencias.registro'))
+        @if($esAdmin || $user->tieneAccesoAlguno(['asistencias.registro', 'asistencias']))
         <li><a href="{{ route('asistencias.index') }}"><i class="fas fa-list"></i> Registro</a></li>
         @endif
         @if($esAdmin || $user->tieneAccesoModulo('asistencia-config'))
         <li><a href="{{ route('asistencia-config.index') }}"><i class="fas fa-cog"></i> Configuración</a></li>
         @endif
-        @if($esAdmin || $user->tieneAccesoModulo('asistencia-config.atrasos'))
+        @if($esAdmin || $user->tieneAccesoAlguno(['asistencia-config.atrasos', 'asistencia-config']))
         <li><a href="{{ route('asistencia-config.atrasos') }}"><i class="fas fa-clock"></i> Atrasos</a></li>
         @endif
-        @if($esAdmin || $user->tieneAccesoModulo('asistencia-config.permisos'))
+        @if($esAdmin || $user->tieneAccesoAlguno(['asistencia-config.permisos', 'asistencia-config']))
         <li><a href="{{ route('asistencia-config.permisos') }}"><i class="fas fa-file-alt"></i> Permisos</a></li>
         @endif
-        @if($esAdmin || $user->tieneAccesoModulo('asistencia-config.festivos'))
+        @if($esAdmin || $user->tieneAccesoAlguno(['asistencia-config.festivos', 'asistencia-config']))
         <li><a href="{{ route('asistencia-config.festivos') }}"><i class="fas fa-calendar-day"></i> Festivos</a></li>
         <li><a href="{{ route('asistencia-config.horarios-especiales') }}"><i class="fas fa-snowflake"></i> Horarios especiales</a></li>
         @endif
-        @if($esAdmin || $user->tieneAccesoModulo('asistencia-config.reportes'))
+        @if($esAdmin || $user->tieneAccesoAlguno(['asistencia-config.reportes', 'asistencia-config']))
         <li><a href="{{ route('asistencia-config.reportes') }}"><i class="fas fa-file-pdf"></i> Reportes</a></li>
         @endif
     </ul>
@@ -226,7 +284,7 @@
     </a>
 </li>
 @endif
-@if($esAdmin || $user->tieneAccesoModulo('notas'))
+@if($esAdmin || $user->tieneAccesoGrupo('notas'))
 <li class="side-menus {{ Request::is('notas*') || Request::is('asistencia-clases*') ? 'active' : '' }}">
     <a class="nav-link menu-toggle" href="#" data-toggle="collapse" data-target="#notasMenu">
         <i class="fas fa-star"></i><span>Notas</span>
@@ -238,7 +296,10 @@
         <li><a href="{{ route('notas.rendimiento') }}"><i class="fas fa-chart-line"></i> Rendimiento</a></li>
         @endif
         <li><a href="{{ route('asistencia-clases.index') }}"><i class="fas fa-clipboard-check"></i> Asistencia Clases</a></li>
-        @if($esAdmin || in_array(optional($user)->rol_id, [1,9,10,11]))
+        @if($user->tieneAccesoModulo('promocion'))
+        <li><a href="{{ route('promocion.index') }}"><i class="fas fa-level-up-alt"></i> Promoción</a></li>
+        @endif
+        @if($user->tieneCapacidad('boletin.reimpresiones'))
         <li><a href="{{ route('reimpresiones.index') }}"><i class="fas fa-print"></i> Reimpresiones</a></li>
         @endif
         @if($esAdmin)
@@ -257,7 +318,7 @@
 @endif
 
 {{-- Estudiantes observados (Lista Negra) — solo dirección/admin --}}
-@if($esAdmin || in_array(optional($user)->rol_id, [1,9,10,11,13]))
+@if($user->tieneCapacidad('observados.gestionar'))
 <li class="side-menus {{ Request::is('observados*') ? 'active' : '' }}">
     <a class="nav-link" href="{{ route('observados.index') }}">
         <i class="fas fa-user-slash"></i><span>Estudiantes Observados</span>
@@ -265,14 +326,23 @@
 </li>
 @endif
 
-@if($esAdmin || $user->tieneAccesoModulo('pagos'))
+@if($esAdmin || $user->tieneAccesoGrupo('pagos'))
 <li class="side-menus {{ Request::is('pagos*') || Request::is('inscripciones*') || Request::is('servicios*') ? 'active' : '' }}">
     <a class="nav-link menu-toggle" href="#" data-toggle="collapse" data-target="#pagosMenu">
         <i class="fas fa-money-bill-wave"></i><span>Pagos</span>
     </a>
-    <ul class="collapse {{ Request::is('pagos*') || Request::is('inscripciones*') || Request::is('servicios*') || Request::is('descuentos*') ? 'show' : '' }}" id="pagosMenu">
+    <ul class="collapse {{ Request::is('pagos*') || Request::is('inscripciones*') || Request::is('servicios*') || Request::is('descuentos*') || Request::is('preinscripciones*') || Request::is('devoluciones*') || Request::is('comprobantes*') || Request::is('bloqueos*') ? 'show' : '' }}" id="pagosMenu">
         @if($esAdmin || $user->tieneAccesoModulo('inscripciones'))
         <li><a href="{{ route('inscripciones.index') }}"><i class="fas fa-user-plus"></i> Inscripciones</a></li>
+        @endif
+        @if($user->tieneAccesoModulo('preinscripciones'))
+        <li><a href="{{ route('preinscripciones.index') }}"><i class="fas fa-user-clock"></i> Pre-inscripciones</a></li>
+        @endif
+        @if($user->tieneAccesoModulo('devoluciones'))
+        <li><a href="{{ route('devoluciones.index') }}"><i class="fas fa-undo-alt"></i> Devoluciones</a></li>
+        @endif
+        @if($user->tieneAccesoModulo('portal-bloqueos'))
+        <li><a href="{{ route('bloqueos.index') }}"><i class="fas fa-user-lock"></i> Bloqueo de notas</a></li>
         @endif
         @if($esAdmin || $user->tieneAccesoModulo('inscripciones.reportes'))
         <li><a href="{{ route('inscripciones.reportes') }}"><i class="fas fa-file-pdf"></i> Reportes</a></li>
@@ -294,7 +364,7 @@
 </li>
 @endif
 
-@if($esAdmin || $user->tieneAccesoModulo('ventas'))
+@if($esAdmin || $user->tieneAccesoGrupo('ventas'))
 <li class="side-menus {{ Request::is('categorias*') || Request::is('productos*') || Request::is('ventas*') || Request::is('proveedores*') || Request::is('movimientos*') ? 'active' : '' }}">
     <a class="nav-link menu-toggle" href="#" data-toggle="collapse" data-target="#ventasMenu">
         <i class="fas fa-shopping-cart"></i><span>Ventas y Almacén</span>
@@ -348,7 +418,7 @@
 
 
 
-@if($esAdmin || $user->tieneAccesoModulo('transporte'))
+@if($esAdmin || $user->tieneAccesoGrupo('transporte'))
 <li class="side-menus {{ Request::is('vehiculos*') || Request::is('choferes*') || Request::is('rutas*') || Request::is('asignaciones-transporte*') || Request::is('pagos-transporte*') || Request::is('estudiantes-rutas*') ? 'active' : '' }}">
     <a class="nav-link menu-toggle" href="#" data-toggle="collapse" data-target="#transporteMenu">
         <i class="fas fa-bus"></i><span>Transporte</span>
@@ -358,6 +428,7 @@
         <li><a href="{{ route('vehiculos.index') }}"><i class="fas fa-car"></i> Vehículos</a></li>
         @endif
         @if($esAdmin || $user->tieneAccesoModulo('choferes'))
+        <li><a href="{{ route('choferes.flota') }}"><i class="fas fa-bus-alt"></i> Choferes y buses</a></li>
         <li><a href="{{ route('choferes.index') }}"><i class="fas fa-id-card"></i> Choferes</a></li>
         @endif
         @if($esAdmin || $user->tieneAccesoModulo('rutas'))
@@ -368,6 +439,7 @@
         @endif
         @if($esAdmin || $user->tieneAccesoModulo('pagos-transporte'))
         <li><a href="{{ route('pagos-transporte.index') }}"><i class="fas fa-money-bill"></i> Pagos</a></li>
+        <li><a href="{{ route('pagos-transporte.mora') }}"><i class="fas fa-exclamation-triangle"></i> Mora por curso</a></li>
         @endif
         @if($esAdmin || $user->tieneAccesoModulo('estudiantes-rutas'))
         <li><a href="{{ route('estudiantes-rutas.index') }}"><i class="fas fa-users"></i> Estudiantes</a></li>
@@ -376,12 +448,12 @@
 </li>
 @endif
 
-@if($esAdmin || $user->tieneAccesoModulo('parametrizacion') || $user->tieneAccesoModulo('unidad-educativa') || $user->tieneAccesoModulo('niveles') || $user->tieneAccesoModulo('gestiones'))
-<li class="side-menus {{ Request::is('parametrizacion*') || Request::is('unidad-educativa*') ? 'active' : '' }}">
+@if($user->tieneAccesoGrupo('parametrizacion'))
+<li class="side-menus {{ Request::is('parametrizacion*') || Request::is('unidad-educativa*') || Request::is('tarifas*') || Request::is('parametros*') ? 'active' : '' }}">
     <a class="nav-link menu-toggle" href="#" data-toggle="collapse" data-target="#parametrizacionMenu">
         <i class="fas fa-cogs"></i><span>Parametrización</span>
     </a>
-    <ul class="collapse {{ Request::is('parametrizacion*') || Request::is('unidad-educativa*') ? 'show' : '' }}" id="parametrizacionMenu">
+    <ul class="collapse {{ Request::is('parametrizacion*') || Request::is('unidad-educativa*') || Request::is('tarifas*') || Request::is('parametros*') ? 'show' : '' }}" id="parametrizacionMenu">
         @if($esAdmin || $user->tieneAccesoModulo('unidad-educativa'))
         <li><a href="{{ route('unidad-educativa.edit') }}"><i class="fas fa-school"></i> Unidad Educativa</a></li>
         @endif
@@ -390,6 +462,12 @@
         @endif
         @if($esAdmin || $user->tieneAccesoModulo('gestiones'))
         <li><a href="{{ route('gestiones.index') }}"><i class="fas fa-calendar"></i> Gestiones</a></li>
+        @endif
+        @if($user->tieneAccesoModulo('tarifas'))
+        <li><a href="{{ route('tarifas.index') }}" title="Tarifas por curso y curso siguiente"><i class="fas fa-tags"></i> Tarifas</a></li>
+        @endif
+        @if($user->tieneAccesoModulo('parametros'))
+        <li><a href="{{ route('parametros.index') }}" title="Parámetros del colegio"><i class="fas fa-sliders-h"></i> Parámetros</a></li>
         @endif
     </ul>
 </li>

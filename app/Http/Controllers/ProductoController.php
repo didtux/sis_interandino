@@ -78,8 +78,11 @@ class ProductoController extends Controller
     {
         $producto = Producto::with('categoria')->findOrFail($id);
         
-        $qrData = "{$producto->prod_codigo}|{$producto->prod_nombre}|{$producto->categoria->categ_nombre}|Bs.{$producto->prod_preciounitario}";
-        
+        // El QR lleva sólo el código de ítem (o el del producto si no tiene),
+        // que es lo que busca la pantalla de venta. Antes llevaba
+        // "codigo|nombre|categoría|precio" y la venta nunca lo encontraba.
+        $qrData = $producto->prod_item ?: $producto->prod_codigo;
+
         $options = new QROptions([
             'version'    => 10,
             'outputType' => QRCode::OUTPUT_IMAGE_PNG,
@@ -97,17 +100,24 @@ class ProductoController extends Controller
         return $pdf->stream('etiqueta-' . $producto->prod_codigo . '.pdf');
     }
 
+    /** Producto por código de ítem o de producto; acepta las etiquetas viejas "codigo|nombre|...". */
     public function buscarPorBarcode($barcode)
     {
-        $producto = Producto::where('prod_item', $barcode)->where('prod_visible', 1)->first();
-        
+        $codigo = trim(explode('|', $barcode)[0]);
+        $producto = Producto::where('prod_visible', 1)
+            ->where(fn($q) => $q->where('prod_item', $codigo)->orWhere('prod_codigo', $codigo))
+            ->first();
+
         if ($producto) {
             return response()->json([
-                'found' => true,
-                'prod_codigo' => $producto->prod_codigo
+                'found'       => true,
+                'prod_codigo' => $producto->prod_codigo,
+                'prod_nombre' => $producto->prod_nombre,
+                'stock'       => (int) $producto->prod_cantidad,
+                'precio'      => (float) $producto->prod_preciounitario,
             ]);
         }
-        
+
         return response()->json(['found' => false]);
     }
 }

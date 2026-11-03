@@ -124,6 +124,14 @@
         box-shadow: 0 10px 28px rgba(26,58,108,0.35);
     }
     .btn-submit:disabled { opacity: 0.7; cursor: not-allowed; transform: none; }
+    .form-ayuda { display: block; font-size: 0.75rem; color: var(--text); margin-top: 0.3rem; }
+    .form-aviso {
+        padding: 0.9rem 1.1rem; border-radius: 10px; margin-bottom: 1.2rem;
+        font-size: 0.88rem; line-height: 1.5;
+    }
+    .form-aviso i { margin-right: 0.4rem; }
+    .form-aviso-ok    { background: #e8f6ee; color: #1e6b3f; border: 1px solid #b6e2c7; }
+    .form-aviso-error { background: #fdecec; color: #9b2c2c; border: 1px solid #f5c2c2; }
 
     @media (max-width: 992px) {
         .contact-layout { grid-template-columns: 1fr; }
@@ -181,25 +189,58 @@
                     <div class="contact-card-icon"><i class="fas fa-map-marker-alt"></i></div>
                     <div>
                         <strong>Dirección</strong>
-                        <p>Ciudad de El Alto, Departamento de La Paz, Bolivia</p>
+                        <p>{{ optional($sistemaConfig)->config_direccion ?: 'Ciudad de El Alto, Departamento de La Paz, Bolivia' }}</p>
                     </div>
                 </div>
 
+                @if(optional($sistemaConfig)->config_telefono)
                 <div class="contact-card fade-up">
-                    <div class="contact-card-icon"><i class="fas fa-user-tie"></i></div>
+                    <div class="contact-card-icon"><i class="fas fa-phone"></i></div>
                     <div>
-                        <strong>Director General</strong>
-                        <p>Arq. Ovidio Luis Quispe Moya</p>
+                        <strong>Teléfono</strong>
+                        <p>{{ $sistemaConfig->config_telefono }}</p>
                     </div>
                 </div>
+                @endif
 
+                @if(optional($sistemaConfig)->config_email)
                 <div class="contact-card fade-up">
-                    <div class="contact-card-icon"><i class="fas fa-chalkboard-teacher"></i></div>
+                    <div class="contact-card-icon"><i class="fas fa-envelope"></i></div>
                     <div>
-                        <strong>Coordinación Académica</strong>
-                        <p>Prof. Adela Guerra Castaños</p>
+                        <strong>Correo</strong>
+                        <p>{{ $sistemaConfig->config_email }}</p>
                     </div>
                 </div>
+                @endif
+
+                @if(optional($sistemaConfig)->config_horario)
+                <div class="contact-card fade-up">
+                    <div class="contact-card-icon"><i class="fas fa-clock"></i></div>
+                    <div>
+                        <strong>Horario de atención</strong>
+                        <p>{{ $sistemaConfig->config_horario }}</p>
+                    </div>
+                </div>
+                @endif
+
+                @php
+                    $autoridades = \App\Support\Landing::bloques('AUTORIDAD');
+                    if ($autoridades->isEmpty()) {
+                        $autoridades = collect([
+                            new \App\Models\LandingBloque(['lb_subtitulo' => 'Director General', 'lb_titulo' => 'Arq. Ovidio Luis Quispe Moya']),
+                            new \App\Models\LandingBloque(['lb_subtitulo' => 'Coordinación Académica', 'lb_titulo' => 'Prof. Adela Guerra Castaños']),
+                        ]);
+                    }
+                @endphp
+                @foreach($autoridades as $i => $aut)
+                <div class="contact-card fade-up">
+                    <div class="contact-card-icon"><i class="fas {{ $i === 0 ? 'fa-user-tie' : 'fa-chalkboard-teacher' }}"></i></div>
+                    <div>
+                        <strong>{{ $aut->lb_subtitulo }}</strong>
+                        <p>{{ $aut->lb_titulo }}</p>
+                    </div>
+                </div>
+                @endforeach
 
                 <div class="contact-card fade-up">
                     <div class="contact-card-icon"><i class="fas fa-graduation-cap"></i></div>
@@ -213,18 +254,25 @@
                     <div class="contact-card-icon"><i class="fas fa-file-alt"></i></div>
                     <div>
                         <strong>Resolución Administrativa</strong>
-                        <p>No. 311/2006 — Dependencia Privada</p>
+                        <p>{{ landing('general.resolucion') }} — Dependencia Privada</p>
                     </div>
                 </div>
 
+                @if(($sistemaConfig ?? null) && ($redes = $sistemaConfig->redes()))
                 <div class="contact-social fade-up">
                     <p>Síguenos en redes sociales:</p>
                     <div class="social-row">
-                        <a href="#" class="social-btn"><i class="fab fa-facebook-f"></i> Facebook</a>
-                        <a href="#" class="social-btn"><i class="fab fa-whatsapp"></i> WhatsApp</a>
-                        <a href="#" class="social-btn"><i class="fab fa-instagram"></i> Instagram</a>
+                        @foreach($redes as [$urlRed, $iconoRed, $nombreRed])
+                        <a href="{{ $urlRed }}" class="social-btn" target="_blank" rel="noopener"><i class="{{ $iconoRed }}"></i> {{ $nombreRed }}</a>
+                        @endforeach
                     </div>
                 </div>
+                @endif
+                @if(optional($sistemaConfig)->config_mapa_url)
+                <a href="{{ $sistemaConfig->config_mapa_url }}" target="_blank" rel="noopener" class="social-btn fade-up" style="margin-top:1rem;display:inline-flex">
+                    <i class="fas fa-map-marked-alt"></i> Ver ubicación en el mapa
+                </a>
+                @endif
             </div>
 
             <!-- Right: Contact form -->
@@ -237,38 +285,62 @@
                     Los campos marcados con <span style="color:#e53e3e">*</span> son obligatorios.
                 </p>
 
-                <form id="contactForm">
+                @if(session('contacto_ok'))
+                    <div class="form-aviso form-aviso-ok" id="contactoOk">
+                        <i class="fas fa-check-circle"></i>
+                        ¡Mensaje recibido! Nos pondremos en contacto contigo a la brevedad.
+                    </div>
+                @endif
+                @if($errors->any())
+                    <div class="form-aviso form-aviso-error">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        @foreach($errors->unique() as $e)<div>{{ $e }}</div>@endforeach
+                    </div>
+                @endif
+
+                <form id="contactForm" method="POST" action="{{ route('landing.contacto.enviar') }}">
+                    @csrf
+                    <input type="hidden" name="t" value="{{ $marcaTiempo }}">
+                    {{-- Campo trampa: invisible para personas, los robots lo llenan --}}
+                    <div style="position:absolute;left:-10000px;" aria-hidden="true">
+                        <label>Sitio web <input type="text" name="sitio_web" tabindex="-1" autocomplete="off"></label>
+                    </div>
                     <div class="form-row">
                         <div class="form-group">
                             <label for="nombre">Nombre completo <span class="req">*</span></label>
-                            <input type="text" id="nombre" class="form-control" placeholder="Tu nombre completo" required>
+                            <input type="text" id="nombre" name="nombre" class="form-control" placeholder="Tu nombre completo"
+                                   value="{{ old('nombre') }}" maxlength="120" required>
                         </div>
                         <div class="form-group">
                             <label for="telefono">Teléfono / WhatsApp</label>
-                            <input type="text" id="telefono" class="form-control" placeholder="Ej: 78901234">
+                            <input type="text" id="telefono" name="telefono" class="form-control" placeholder="Ej: 78901234"
+                                   value="{{ old('telefono') }}" maxlength="30">
                         </div>
                     </div>
                     <div class="form-group">
-                        <label for="email">Correo electrónico <span class="req">*</span></label>
-                        <input type="email" id="email" class="form-control" placeholder="tucorreo@ejemplo.com" required>
+                        <label for="email">Correo electrónico</label>
+                        <input type="email" id="email" name="correo" class="form-control" placeholder="tucorreo@ejemplo.com"
+                               value="{{ old('correo') }}" maxlength="120">
+                        <small class="form-ayuda">Dejanos al menos un teléfono o un correo para poder responderte.</small>
                     </div>
                     <div class="form-group">
-                        <label for="asunto">Motivo de consulta</label>
-                        <select id="asunto" class="form-control">
+                        <label for="asunto">Motivo de consulta <span class="req">*</span></label>
+                        <select id="asunto" name="motivo" class="form-control" required>
                             <option value="">Selecciona un motivo...</option>
-                            <option>Información sobre inscripciones</option>
-                            <option>Consulta sobre nivel Inicial</option>
-                            <option>Consulta sobre nivel Primaria</option>
-                            <option>Consulta sobre nivel Secundaria</option>
-                            <option>Información sobre pensiones y pagos</option>
-                            <option>Solicitud de documentos</option>
-                            <option>Información general</option>
-                            <option>Otro</option>
+                            @foreach($motivos as $clave => $texto)
+                                <option value="{{ $clave }}" {{ $motivoInicial === $clave ? 'selected' : '' }}>{{ $texto }}</option>
+                            @endforeach
                         </select>
+                    </div>
+                    <div class="form-group" id="grupoCurso" style="{{ $motivoInicial === 'INSCRIPCION' ? '' : 'display:none;' }}">
+                        <label for="curso_interes">¿A qué curso o grado quiere inscribir?</label>
+                        <input type="text" id="curso_interes" name="curso_interes" class="form-control"
+                               placeholder="Ej: 1ro de Primaria" value="{{ old('curso_interes') }}" maxlength="80">
                     </div>
                     <div class="form-group">
                         <label for="mensaje">Mensaje <span class="req">*</span></label>
-                        <textarea id="mensaje" class="form-control" placeholder="Escribe tu consulta con detalle..." required></textarea>
+                        <textarea id="mensaje" name="mensaje" class="form-control" placeholder="Escribe tu consulta con detalle..."
+                                  maxlength="3000" required>{{ old('mensaje') }}</textarea>
                     </div>
                     <button type="submit" class="btn-submit" id="submitBtn">
                         <i class="fas fa-paper-plane"></i> Enviar Mensaje
@@ -284,17 +356,20 @@
 
 @push('scripts')
 <script>
-    document.getElementById('contactForm').addEventListener('submit', function (e) {
-        e.preventDefault();
+    // Antes este script cancelaba el envío y mostraba "¡Mensaje recibido!" sin
+    // guardar nada. Ahora el formulario se envía al servidor; acá sólo se evita
+    // el doble clic y se muestra el campo de curso cuando el motivo es inscripción.
+    document.getElementById('contactForm').addEventListener('submit', function () {
         const btn = document.getElementById('submitBtn');
         btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enviando...';
         btn.disabled = true;
-        setTimeout(function () {
-            document.getElementById('contactForm').reset();
-            btn.innerHTML = '<i class="fas fa-paper-plane"></i> Enviar Mensaje';
-            btn.disabled = false;
-            showToast('¡Mensaje recibido! Nos pondremos en contacto pronto.');
-        }, 1300);
     });
+    document.getElementById('asunto').addEventListener('change', function () {
+        document.getElementById('grupoCurso').style.display = this.value === 'INSCRIPCION' ? '' : 'none';
+    });
+    @if(session('contacto_ok'))
+        showToast('¡Mensaje recibido! Nos pondremos en contacto pronto.');
+        document.getElementById('contactoOk').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    @endif
 </script>
 @endpush

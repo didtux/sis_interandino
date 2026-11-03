@@ -330,15 +330,15 @@ function generarReciboServicio(codigo, estudiante, padre, curso, servicio, monto
 function anularPago(id) {
     if (confirm('¿Está seguro de anular este pago?')) {
         $.ajax({
-            url: '/pagos-servicios/' + id + '/anular',
+            url: '{{ url('pagos-servicios') }}/' + id + '/anular',
             type: 'PUT',
             data: { _token: '{{ csrf_token() }}' },
             success: function(response) {
                 alert('Pago anulado');
                 location.reload();
             },
-            error: function() {
-                alert('Error al anular');
+            error: function(xhr) {
+                alert('No se pudo anular: ' + mensajeErrorAjax(xhr));
             }
         });
     }

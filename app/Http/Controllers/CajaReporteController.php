@@ -9,8 +9,10 @@ use Illuminate\Http\Request;
 
 /**
  * Reportes de caja de mensualidades (sección "REPORTES" del documento):
- *  - Diario: total cobrado, efectivo, QR, mixto y N° de estudiantes cobrados,
- *            con detalle por estudiante (método, recibo, WhatsApp).
+ *  - Diario: total cobrado, efectivo, QR y N° de estudiantes cobrados, con
+ *            detalle por estudiante (recibo, efectivo, QR, WhatsApp). Un pago
+ *            mixto no tiene columna propia: su parte en efectivo suma a
+ *            Efectivo y su parte QR a QR, que es como se cuadra la caja.
  *  - Por período (semanal/mensual/por fechas): totales por día.
  * Formato carta (PDF) y térmico (PDF angosto 80mm).
  */
@@ -44,8 +46,8 @@ class CajaReporteController extends Controller
                 'estudiante'=> $first->estudiante,
                 'curso'     => optional(optional($first->estudiante)->curso)->cur_nombre,
                 'conceptos' => $grp->pluck('concepto')->implode(', '),
-                'efectivo'  => $grp->sum('pagos_monto_efectivo'),
-                'qr'        => $grp->sum('pagos_monto_qr'),
+                'efectivo'  => $grp->sum(fn($p) => $this->montos($p)[0]),
+                'qr'        => $grp->sum(fn($p) => $this->montos($p)[1]),
                 'total'     => $grp->sum('pagos_precio'),
                 'metodo'    => $first->pagos_metodo,
                 'whatsapp'  => (bool) $grp->max('pagos_via_whatsapp'),
@@ -53,8 +55,19 @@ class CajaReporteController extends Controller
             ];
         })->values();
 
+        // Reservas de cupo cobradas ese día (ingreso) y devoluciones pagadas ese
+        // día (egreso). La devolución no anula el recibo original: es una salida
+        // de dinero y se descuenta del efectivo o QR de la caja del día.
+        [$reservas, $devoluciones] = $this->movimientosExtra($fecha, $fecha);
+        $resumen['reservas']          = (float) $reservas->sum('prepago_monto');
+        $resumen['devoluciones']      = (float) $devoluciones->sum('monto_devuelto');
+        $resumen['efectivo_neto']     = $resumen['efectivo'] + (float) $reservas->sum('monto_efectivo')
+                                        - (float) $devoluciones->where('dev_metodo', 'EFECTIVO')->sum('monto_devuelto');
+        $resumen['qr_neto']           = $resumen['qr'] + (float) $reservas->sum('monto_qr')
+                                        - (float) $devoluciones->where('dev_metodo', 'QR')->sum('monto_devuelto');
+
         $vista = $formato === 'termico' ? 'pagos.caja-diario-termico' : 'pagos.caja-diario-pdf';
-        $pdf = Pdf::loadView($vista, compact('fecha', 'resumen', 'detalle'));
+        $pdf = Pdf::loadView($vista, compact('fecha', 'resumen', 'detalle', 'reservas', 'devoluciones'));
         if ($formato === 'termico') {
             $pdf->setPaper([0, 0, 226.77, 800], 'portrait'); // 80mm de ancho
         } else {
@@ -77,8 +90,8 @@ class CajaReporteController extends Controller
         $porDia = $pagos->groupBy(fn($p) => $p->pagos_fecha->format('Y-m-d'))->map(function ($grp, $dia) {
             return (object) [
                 'fecha'       => $dia,
-                'efectivo'    => $grp->sum('pagos_monto_efectivo'),
-                'qr'          => $grp->sum('pagos_monto_qr'),
+                'efectivo'    => $grp->sum(fn($p) => $this->montos($p)[0]),
+                'qr'          => $grp->sum(fn($p) => $this->montos($p)[1]),
                 'total'       => $grp->sum('pagos_precio'),
                 'estudiantes' => $grp->pluck('est_codigo')->unique()->count(),
                 'recibo_min'  => $grp->min('pagos_codigo'),
@@ -93,18 +106,43 @@ class CajaReporteController extends Controller
         return $pdf->stream('caja-periodo-' . $desde . '_' . $hasta . '.pdf');
     }
 
+    /** Reservas de cupo (ingreso) y devoluciones pagadas (egreso) de un rango. */
+    private function movimientosExtra(string $desde, string $hasta): array
+    {
+        if (!\Illuminate\Support\Facades\Schema::hasTable('preinscripciones_pagos')) {
+            return [collect(), collect()];
+        }
+        $reservas = \App\Models\PreinscripcionPago::with('preinscripcion')->where('prepago_estado', 1)
+            ->whereDate('prepago_fecha', '>=', $desde)->whereDate('prepago_fecha', '<=', $hasta)->get();
+        $devoluciones = \App\Models\Devolucion::with('estudiante', 'preinscripcion')->where('dev_estado', 'PAGADA')
+            ->whereDate('pagado_fecha', '>=', $desde)->whereDate('pagado_fecha', '<=', $hasta)->get();
+        return [$reservas, $devoluciones];
+    }
+
     /** Totales por método sobre una colección de pagos. */
     private function resumen($pagos): array
     {
-        $efectivo = (float) $pagos->sum('pagos_monto_efectivo');
-        $qr       = (float) $pagos->sum('pagos_monto_qr');
-        $total    = (float) $pagos->sum('pagos_precio');
         return [
-            'total'        => $total,
-            'efectivo'     => $efectivo,
-            'qr'           => $qr,
-            'mixto'        => $pagos->where('pagos_metodo', 'MIXTO')->sum('pagos_precio'),
-            'n_pagos'      => $pagos->count(),
+            'total'    => (float) $pagos->sum('pagos_precio'),
+            'efectivo' => (float) $pagos->sum(fn($p) => $this->montos($p)[0]),
+            'qr'       => (float) $pagos->sum(fn($p) => $this->montos($p)[1]),
+            'n_pagos'  => $pagos->count(),
         ];
+    }
+
+    /**
+     * [efectivo, qr] de un pago. Los pagos cargados antes de que existieran
+     * las columnas por método tienen 0 y 0: se reparten según pagos_metodo
+     * para que Efectivo + QR siempre dé el total cobrado.
+     * (database/sql/upgrade_2026_11_pagos_montos_metodo.sql corrige los datos.)
+     */
+    private function montos($p): array
+    {
+        $ef = (float) $p->pagos_monto_efectivo;
+        $qr = (float) $p->pagos_monto_qr;
+        if ($ef == 0 && $qr == 0) {
+            return $p->pagos_metodo === 'QR' ? [0.0, (float) $p->pagos_precio] : [(float) $p->pagos_precio, 0.0];
+        }
+        return [$ef, $qr];
     }
 }

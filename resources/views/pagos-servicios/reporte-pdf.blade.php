@@ -44,7 +44,7 @@
 
     <div class="title-section">
         <h2>REPORTE DE PAGOS DE SERVICIOS</h2>
-        <p>Gestión {{ date('Y') }}</p>
+        <p>Gestión {{ gestion_actual() }}</p>
     </div>
 
     <table>

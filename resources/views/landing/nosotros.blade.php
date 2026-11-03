@@ -129,7 +129,7 @@
     <div class="container page-hero-banner-inner">
         <div class="page-tag">Quiénes Somos</div>
         <h1>Filosofía e <span>Identidad</span> Institucional</h1>
-        <p>Conoce la misión, visión y valores que guían nuestra labor educativa en El Alto, Bolivia.</p>
+        <p>{{ landing('nosotros.hero_texto') }}</p>
         <div class="breadcrumb-nav">
             <a href="{{ route('landing') }}"><i class="fas fa-home" style="font-size:0.75rem"></i> Inicio</a>
             <span>/</span>
@@ -147,10 +147,7 @@
             <div class="section-label">Identidad Institucional</div>
             <h2 class="section-title">Misión y <span>Visión</span></h2>
             <div class="section-divider"></div>
-            <p class="section-desc">
-                Los principios fundacionales que nos orientan en la formación de estudiantes
-                autónomos, reflexivos y productivos para el vivir bien en Bolivia.
-            </p>
+            <p class="section-desc">{{ landing('nosotros.intro') }}</p>
         </div>
 
         <div class="vm-grid">
@@ -158,32 +155,13 @@
                 <div class="vm-card-bg"></div>
                 <div class="vm-icon"><i class="fas fa-eye"></i></div>
                 <h3>Nuestra Visión</h3>
-                <p>
-                    Ser una Unidad Educativa <strong>inclusiva, pluralista y comunitaria</strong>
-                    con valores y principios democráticos, formando estudiantes autónomos, reflexivos,
-                    críticos y productivos con capacidad creativa e intelectual.
-                </p>
-                <p>
-                    Construir el conocimiento científico, técnico, tecnológico y artístico bajo
-                    la concepción del <strong>vivir bien en la diversidad</strong>, a través de una
-                    educación intracultural, intercultural y plurilingüe, en interrelación con la
-                    madre naturaleza y la humanidad.
-                </p>
+                {{ landing('nosotros.vision') }}
             </div>
             <div class="vm-card accent fade-up">
                 <div class="vm-card-bg"></div>
                 <div class="vm-icon"><i class="fas fa-bullseye"></i></div>
                 <h3>Nuestra Misión</h3>
-                <p>
-                    Formar estudiantes con <strong>principios y valores sociocomunitarios</strong>,
-                    ético-morales; autónomos, creativos, reflexivos y críticos; investigadores
-                    y constructores de su propio conocimiento científico, técnico, tecnológico y artístico.
-                </p>
-                <p>
-                    En un ambiente <strong>cómodo, interactivo, con equidad y sin violencia</strong>,
-                    guiado por docentes profesionales formados en el modelo sociocomunitario productivo,
-                    comprometidos con la actualización permanente.
-                </p>
+                {{ landing('nosotros.mision') }}
             </div>
         </div>
 
@@ -197,54 +175,62 @@
         <div class="values-grid">
             <div class="value-card fade-up">
                 <div class="value-icon"><i class="fas fa-hands-helping"></i></div>
-                <h4>Inclusión</h4>
-                <p>Formamos estudiantes sin distinción, respetando la diversidad cultural, social y de capacidades en comunidad.</p>
+                <h4>{{ landing('nosotros.valor1.titulo') }}</h4>
+                <p>{{ landing('nosotros.valor1.texto') }}</p>
             </div>
             <div class="value-card fade-up">
                 <div class="value-icon"><i class="fas fa-star"></i></div>
-                <h4>Excelencia</h4>
-                <p>Comprometidos con la calidad educativa y la superación permanente de docentes y estudiantes.</p>
+                <h4>{{ landing('nosotros.valor2.titulo') }}</h4>
+                <p>{{ landing('nosotros.valor2.texto') }}</p>
             </div>
             <div class="value-card fade-up">
                 <div class="value-icon"><i class="fas fa-users"></i></div>
-                <h4>Comunidad</h4>
-                <p>Fortalecemos vínculos sociocomunitarios, la participación familiar y el trabajo colectivo solidario.</p>
+                <h4>{{ landing('nosotros.valor3.titulo') }}</h4>
+                <p>{{ landing('nosotros.valor3.texto') }}</p>
             </div>
             <div class="value-card fade-up">
                 <div class="value-icon"><i class="fas fa-lightbulb"></i></div>
-                <h4>Innovación</h4>
-                <p>Metodologías activas y actualizadas que estimulan el pensamiento crítico y la creatividad.</p>
+                <h4>{{ landing('nosotros.valor4.titulo') }}</h4>
+                <p>{{ landing('nosotros.valor4.texto') }}</p>
             </div>
         </div>
 
         <!-- Info strip -->
+        {{-- Autoridades: las de Web pública → Bloques; sin ninguna cargada, las originales --}}
+        @php
+            $autoridades = \App\Support\Landing::bloques('AUTORIDAD');
+            if ($autoridades->isEmpty()) {
+                $autoridades = collect([
+                    new \App\Models\LandingBloque(['lb_subtitulo' => 'Director General', 'lb_titulo' => 'Arq. Ovidio Luis Quispe Moya']),
+                    new \App\Models\LandingBloque(['lb_subtitulo' => 'Coordinadora Académica', 'lb_titulo' => 'Prof. Adela Guerra Castaños']),
+                ]);
+            }
+        @endphp
         <div class="info-strip fade-up">
+            @foreach($autoridades as $i => $aut)
             <div class="info-strip-item">
-                <div class="info-strip-icon"><i class="fas fa-user-tie"></i></div>
+                <div class="info-strip-icon">
+                    @if($aut->url_imagen)<img src="{{ $aut->url_imagen }}" alt="{{ $aut->lb_titulo }}" style="width:100%;height:100%;object-fit:cover;border-radius:inherit">
+                    @else<i class="fas {{ $i === 0 ? 'fa-user-tie' : 'fa-chalkboard-teacher' }}"></i>@endif
+                </div>
                 <div class="info-strip-text">
-                    <strong>Director General</strong>
-                    <span>Arq. Ovidio Luis Quispe Moya</span>
+                    <strong>{{ $aut->lb_subtitulo }}</strong>
+                    <span>{{ $aut->lb_titulo }}</span>
                 </div>
             </div>
-            <div class="info-strip-item">
-                <div class="info-strip-icon"><i class="fas fa-chalkboard-teacher"></i></div>
-                <div class="info-strip-text">
-                    <strong>Coordinadora Académica</strong>
-                    <span>Prof. Adela Guerra Castaños</span>
-                </div>
-            </div>
+            @endforeach
             <div class="info-strip-item">
                 <div class="info-strip-icon"><i class="fas fa-calendar-alt"></i></div>
                 <div class="info-strip-text">
                     <strong>Fundación</strong>
-                    <span>25 de Mayo de 2005</span>
+                    <span>{{ landing('general.fundacion') }}</span>
                 </div>
             </div>
             <div class="info-strip-item">
                 <div class="info-strip-icon"><i class="fas fa-file-alt"></i></div>
                 <div class="info-strip-text">
                     <strong>Resolución Adm.</strong>
-                    <span>No. 311/2006</span>
+                    <span>{{ landing('general.resolucion') }}</span>
                 </div>
             </div>
         </div>

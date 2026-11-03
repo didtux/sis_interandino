@@ -58,7 +58,7 @@
 
     <div class="title-section">
         <h2>REPORTE DE ASISTENCIA - {{ $trimestre }}{{ $trimestre == 1 ? 'ER' : ($trimestre == 2 ? 'DO' : 'ER') }} TRIMESTRE</h2>
-        <p><strong>CURSO:</strong> {{ $curso->cur_nombre }} | <strong>TURNO:</strong> {{ strtoupper($turnoNombre ?? 'Mañana') }} | <strong>GESTIÓN {{ $year ?? date('Y') }}</strong></p>
+        <p><strong>CURSO:</strong> {{ $curso->cur_nombre }} | <strong>TURNO:</strong> {{ strtoupper($turnoNombre ?? 'Mañana') }} | <strong>GESTIÓN {{ $year ?? gestion_actual() }}</strong></p>
         @if(isset($periodo) && $periodo)
             <p>{{ $periodo->periodo_fecha_inicio->format('d/m/Y') }} — {{ $periodo->periodo_fecha_fin->format('d/m/Y') }}</p>
         @endif

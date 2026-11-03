@@ -16,7 +16,7 @@ class ConcejoController extends Controller
         $cursos      = Curso::visible()->ordenado()->get();
         $cursoCod    = $request->input('curso');
         $buscar      = trim((string) $request->input('buscar', ''));
-        $gestion     = (int) $request->input('gestion', date('Y'));
+        $gestion     = (int) $request->input('gestion', gestion_actual());
         $tab         = $request->input('tab', 'documentos');
 
         $estudiantes = collect();
@@ -125,7 +125,7 @@ class ConcejoController extends Controller
 
     public function documento($estCodigo, Request $request)
     {
-        $gestion    = (int) $request->input('gestion', date('Y'));
+        $gestion    = (int) $request->input('gestion', gestion_actual());
         $config     = DB::table('sistema_configuracion')->first();
         $estudiante = Estudiante::with('curso','padres')->where('est_codigo', $estCodigo)->firstOrFail();
         $periodos   = NotaPeriodo::activo()->gestion($gestion)->orderBy('periodo_numero')->get();
@@ -174,7 +174,7 @@ class ConcejoController extends Controller
 
     public function detalle($estCodigo, Request $request)
     {
-        $gestion    = (int) $request->input('gestion', date('Y'));
+        $gestion    = (int) $request->input('gestion', gestion_actual());
         $estudiante = Estudiante::with('curso')->where('est_codigo', $estCodigo)->firstOrFail();
         $periodos   = NotaPeriodo::activo()->gestion($gestion)
             ->orderBy('periodo_numero')->get();

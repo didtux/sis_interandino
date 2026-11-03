@@ -34,6 +34,7 @@ class RolController extends Controller
         ]);
 
         $this->guardarPermisos($rol, $request->input('permisos', []));
+        $this->guardarCapacidades($rol, $request->input('capacidades', []));
 
         return redirect()->route('roles.index')->with('success', 'Rol creado exitosamente');
     }
@@ -45,15 +46,14 @@ class RolController extends Controller
 
         $permisosMap = [];
         foreach ($rol->permisos as $p) {
-            $permisosMap[$p->mod_id] = [
-                'ver' => $p->perm_ver,
-                'crear' => $p->perm_crear,
-                'editar' => $p->perm_editar,
-                'eliminar' => $p->perm_eliminar,
-            ];
+            foreach (\App\Support\Permisos::ACCIONES as $a) {
+                $permisosMap[$p->mod_id][$a] = (int) ($p->{'perm_' . $a} ?? 0);
+            }
         }
+        $capacidadesRol = \Illuminate\Support\Facades\DB::table('rol_capacidades')
+            ->where('rol_id', $rol->rol_id)->pluck('cap_slug')->all();
 
-        return view('roles.form', compact('rol', 'modulos', 'permisosMap'));
+        return view('roles.form', compact('rol', 'modulos', 'permisosMap', 'capacidadesRol'));
     }
 
     public function update(Request $request, $id)
@@ -69,8 +69,11 @@ class RolController extends Controller
             'rol_descripcion' => $request->rol_descripcion,
         ]);
 
-        RolPermiso::where('rol_id', $rol->rol_id)->delete();
-        $this->guardarPermisos($rol, $request->input('permisos', []));
+        \Illuminate\Support\Facades\DB::transaction(function () use ($rol, $request) {
+            RolPermiso::where('rol_id', $rol->rol_id)->delete();
+            $this->guardarPermisos($rol, $request->input('permisos', []));
+            $this->guardarCapacidades($rol, $request->input('capacidades', []));
+        });
 
         return redirect()->route('roles.index')->with('success', 'Rol actualizado exitosamente');
     }
@@ -89,15 +92,24 @@ class RolController extends Controller
     {
         foreach ($permisos as $modId => $acciones) {
             if (!empty($acciones)) {
-                RolPermiso::create([
-                    'rol_id' => $rol->rol_id,
-                    'mod_id' => $modId,
-                    'perm_ver' => isset($acciones['ver']) ? 1 : 0,
-                    'perm_crear' => isset($acciones['crear']) ? 1 : 0,
-                    'perm_editar' => isset($acciones['editar']) ? 1 : 0,
-                    'perm_eliminar' => isset($acciones['eliminar']) ? 1 : 0,
-                ]);
+                $fila = ['rol_id' => $rol->rol_id, 'mod_id' => $modId];
+                foreach (\App\Support\Permisos::ACCIONES as $a) {
+                    $fila['perm_' . $a] = isset($acciones[$a]) ? 1 : 0;
+                }
+                RolPermiso::create($fila);
             }
         }
+        \App\Support\Permisos::olvidar();
+    }
+
+    /** Capacidades especiales (config/permisos.php) marcadas para el rol. */
+    private function guardarCapacidades(Rol $rol, array $capacidades)
+    {
+        $validas = array_intersect($capacidades, array_keys(config('permisos.capacidades', [])));
+        \Illuminate\Support\Facades\DB::table('rol_capacidades')->where('rol_id', $rol->rol_id)->delete();
+        foreach (array_unique($validas) as $slug) {
+            \Illuminate\Support\Facades\DB::table('rol_capacidades')->insert(['rol_id' => $rol->rol_id, 'cap_slug' => $slug]);
+        }
+        \App\Support\Permisos::olvidar();
     }
 }

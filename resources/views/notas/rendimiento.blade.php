@@ -7,7 +7,7 @@
             <h4><i class="fas fa-chart-line mr-2"></i>Rendimiento / Notas</h4>
             <div class="d-flex flex-wrap" style="gap:6px;">
                 <button type="button" class="btn btn-sm btn-warning" data-toggle="modal" data-target="#modalCuadroHonor"><i class="fas fa-medal mr-1"></i>Cuadro de Honor</button>
-                <a href="{{ route('notas.top3-cursos', ['gestion'=>date('Y')]) }}" class="btn btn-sm btn-info" target="_blank"><i class="fas fa-trophy mr-1"></i>Top 3 por Curso</a>
+                <a href="{{ route('notas.top3-cursos', ['gestion'=>gestion_actual()]) }}" class="btn btn-sm btn-info" target="_blank"><i class="fas fa-trophy mr-1"></i>Top 3 por Curso</a>
             </div>
         </div>
         <div class="card-body">
@@ -170,7 +170,7 @@
                 </div>
                 <div class="form-group">
                     <label>Gestión</label>
-                    <input type="number" id="chGestion" class="form-control" value="{{ date('Y') }}" min="2020" max="2099">
+                    <input type="number" id="chGestion" class="form-control" value="{{ gestion_actual() }}" min="2020" max="2099">
                 </div>
             </div>
             <div class="modal-footer">
@@ -198,7 +198,7 @@ $(document).ready(function(){
 
     $('#btnGenerarCH').on('click', function(){
         var tipo = $('#chTipo').val();
-        var gestion = $('#chGestion').val() || '{{ date("Y") }}';
+        var gestion = $('#chGestion').val() || '{{ gestion_actual() }}';
         var trimestre = $('#chTrimestre').val();
         var url = '{{ route("notas.cuadro-honor") }}?tipo=' + encodeURIComponent(tipo) + '&gestion=' + encodeURIComponent(gestion);
         if (trimestre) url += '&periodo_id=' + encodeURIComponent(trimestre);

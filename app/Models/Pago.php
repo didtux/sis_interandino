@@ -17,6 +17,9 @@ class Pago extends Model
         // Método de pago / comprobante / transferencia
         'pagos_metodo', 'pagos_monto_efectivo', 'pagos_monto_qr', 'pagos_comprobante',
         'pagos_transferencia_nro', 'pagos_transferencia_hora', 'pagos_recibo_nro', 'pagos_via_whatsapp',
+        // Gestión y mes a los que corresponde la cuota (antes se deducían de la
+        // fecha y del texto del concepto) y registro de la anulación.
+        'pagos_gestion', 'pagos_mes', 'insc_codigo', 'anulado_por', 'anulado_fecha', 'anulado_motivo',
     ];
 
     protected $casts = [
@@ -24,8 +27,26 @@ class Pago extends Model
         'pagos_precio' => 'float',
         'pagos_descuento' => 'float',
         'tipo' => 'integer',
-        'pagos_sin_factura' => 'boolean'
+        'pagos_sin_factura' => 'boolean',
+        'pagos_gestion' => 'integer',
+        'pagos_mes' => 'integer',
+        'anulado_fecha' => 'datetime',
     ];
+
+    /**
+     * Pagos de una gestión. Usa pagos_gestion; las filas sin ese dato (cargadas
+     * antes de upgrade_2026_11_pagos_gestion_mes.sql) caen al año de la fecha,
+     * que era el criterio anterior.
+     */
+    public function scopeDeGestion($query, $gestion)
+    {
+        return $query->where(function ($q) use ($gestion) {
+            $q->where('pagos_gestion', $gestion)
+              ->orWhere(function ($q2) use ($gestion) {
+                  $q2->whereNull('pagos_gestion')->whereYear('pagos_fecha', $gestion);
+              });
+        });
+    }
 
     public function estudiante()
     {
@@ -39,6 +60,8 @@ class Pago extends Model
 
     public function getMesCorrespondienteAttribute()
     {
+        if ($this->pagos_mes) return (int) $this->pagos_mes;
+
         $meses = [
             'Febrero' => 2, 'Marzo' => 3, 'Abril' => 4, 'Mayo' => 5, 'Junio' => 6,
             'Julio' => 7, 'Agosto' => 8, 'Septiembre' => 9, 'Octubre' => 10, 'Noviembre' => 11

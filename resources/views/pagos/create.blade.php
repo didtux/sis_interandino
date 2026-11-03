@@ -21,8 +21,19 @@
     <div class="row">
         <div class="col-12">
             <div class="card modern-card">
-                <div class="card-header">
-                    <h4><i class="fas fa-money-bill-wave mr-2"></i>Registrar Mensualidad</h4>
+                <div class="card-header d-flex justify-content-between align-items-center flex-wrap">
+                    <h4 class="mb-0"><i class="fas fa-money-bill-wave mr-2"></i>Registrar Mensualidad — gestión {{ $year }}</h4>
+                    @if(count($gestionesCobro) > 1)
+                        {{-- Después del paso de año, la gestión anterior sigue cobrable para saldar deudas. --}}
+                        <form method="GET" class="form-inline">
+                            <label class="mr-2 small">Gestión a cobrar</label>
+                            <select name="gestion" class="form-control form-control-sm js-select2" onchange="this.form.submit()">
+                                @foreach($gestionesCobro as $g)
+                                    <option value="{{ $g }}" {{ (int) $year === (int) $g ? 'selected' : '' }}>{{ $g }}{{ $g < gestion_actual() ? ' (deudas)' : '' }}</option>
+                                @endforeach
+                            </select>
+                        </form>
+                    @endif
                 </div>
                 <div class="card-body">
                     @if(session('success'))
@@ -42,6 +53,7 @@
 
                     <form action="{{ route('pagos.store') }}" method="POST" id="form-mensualidad" enctype="multipart/form-data">
                         @csrf
+                        <input type="hidden" name="gestion" value="{{ $year }}">
 
                         {{-- Búsqueda rápida por estudiante (nombre o CI) --}}
                         <div class="row" id="divBuscarEst">
@@ -224,7 +236,7 @@
 <script>
 var estudiantesData = @json($estudiantesData);
 var mesesNombres = ['', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre'];
-var mesActual = {{ (int)date('n') }};
+var mesActual = {{ $mesCorte }};
 var idxGlobal = 0;
 var estudiantesAgregados = [];
 
@@ -285,26 +297,30 @@ $(document).ready(function() {
         }, 250);
     });
 
-    // Si se llegó desde el listado de mora (?est_codigo=...), se deja el alumno
-    // ya elegido para no obligar al cajero a buscarlo de nuevo.
-    @if(!empty($estPreseleccionado))
-    var estDesdeMora = @json($estPreseleccionado);
-    if ($('#buscar-estudiante option[value="' + estDesdeMora + '"]').length) {
-        $('#buscar-estudiante').val(estDesdeMora).trigger('change');
-    }
-    @endif
-
     $('#checkOtroPadre').on('change', function() {
         var esOtro = $(this).is(':checked');
         $('#divPadreSelect').toggle(!esOtro);
         $('#divOtroPadre').toggle(esOtro);
         $('#divAgregarEstudiante').toggle(esOtro);
         if (esOtro) {
+            // Pasar a "Otro" cambia quién paga, no a quién se le cobra: los
+            // estudiantes que ya estaban en la tabla se conservan (antes se
+            // borraban y había que volver a buscarlos).
+            var previos = estudiantesAgregados.slice();
+            var tildados = $('#hijos-tbody .check-estudiante:checked').map(function() {
+                return $(this).closest('tr').data('est');
+            }).get();
             $('#padre-select').val('').trigger('change');
             $('#pfam_codigo_hidden').val('');
             $('#pfam_nombre_nuevo').prop('required', true);
             limpiarTabla();
             cargarSelectEstudiantes();
+            previos.forEach(function(cod) {
+                if (estudiantesData[cod]) agregarFilaEstudiante(estudiantesData[cod]);
+            });
+            tildados.forEach(function(cod) {
+                $('#hijos-tbody tr[data-est="' + cod + '"] .check-estudiante').prop('checked', true).trigger('change');
+            });
             $('#hijos-container').show();
         } else {
             $('#divAgregarEstudiante').hide();
@@ -338,6 +354,17 @@ $(document).ready(function() {
     $('#checkAll').on('change', function() {
         $('.check-estudiante').prop('checked', $(this).is(':checked')).trigger('change');
     });
+
+    // Si se llegó desde el listado de mora (?est_codigo=...), se deja el alumno
+    // ya elegido para no obligar al cajero a buscarlo de nuevo. Va al final:
+    // el change dispara los handlers de padre y "Otro", que tienen que estar
+    // registrados antes; si no, el padre aparecía elegido pero sin la tabla.
+    @if(!empty($estPreseleccionado))
+    var estDesdeMora = @json($estPreseleccionado);
+    if ($('#buscar-estudiante option[value="' + estDesdeMora + '"]').length) {
+        $('#buscar-estudiante').val(estDesdeMora).trigger('change');
+    }
+    @endif
 });
 
 function limpiarTabla() {

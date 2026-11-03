@@ -15,7 +15,7 @@
 
                     <form method="GET" class="mb-3">
                         <div class="row">
-                            <div class="col-md-3">
+                            <div class="col-md-2">
                                 <input type="text" name="buscar" class="form-control form-control-sm" placeholder="Buscar estudiante..." value="{{ request('buscar') }}">
                             </div>
                             <div class="col-md-2">
@@ -26,7 +26,15 @@
                                     @endforeach
                                 </select>
                             </div>
-                            <div class="col-md-3">
+                            <div class="col-md-2">
+                                <select name="veh_codigo" class="form-control form-control-sm js-select2">
+                                    <option value="">Todos los buses</option>
+                                    @foreach($buses as $b)
+                                        <option value="{{ $b->veh_codigo }}" {{ request('veh_codigo') == $b->veh_codigo ? 'selected' : '' }}>{{ $b->veh_numero_bus ?: $b->veh_placa }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div class="col-md-2">
                                 <select name="ruta_codigo" class="form-control form-control-sm">
                                     <option value="">Todas las rutas</option>
                                     @foreach($rutas as $r)

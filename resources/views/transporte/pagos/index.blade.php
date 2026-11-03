@@ -67,6 +67,17 @@
                             </div>
                         </div>
                         <div class="row mt-2">
+                            <div class="col-md-3">
+                                <label>Bus</label>
+                                <select name="bus" class="form-control js-select2">
+                                    <option value="">Todos</option>
+                                    @foreach($buses as $b)
+                                        <option value="{{ $b->veh_codigo }}" {{ request('bus') == $b->veh_codigo ? 'selected' : '' }}>{{ $b->veh_numero_bus ?: $b->veh_placa }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                        </div>
+                        <div class="row mt-2">
                             <div class="col-md-12">
                                 <button type="submit" class="btn btn-primary"><i class="fas fa-search"></i> Filtrar</button>
                                 <a href="{{ route('pagos-transporte.index') }}" class="btn btn-secondary"><i class="fas fa-redo"></i> Limpiar</a>
@@ -160,7 +171,13 @@
                                                         <span class="badge badge-success">Vigente</span>
                                                     @endif
                                                 </td>
-                                                <td></td>
+                                                <td>
+                                                    @if($item['estado'] != 'cancelado')
+                                                        <a href="{{ route('pagos-transporte.edit', $item['tpago_id']) }}" class="btn btn-sm btn-warning" title="Editar este pago">
+                                                            <i class="fas fa-edit"></i>
+                                                        </a>
+                                                    @endif
+                                                </td>
                                             </tr>
                                         @endforeach
                                     @endif
@@ -232,7 +249,7 @@
                 <div class="modal-body">
                     <div class="form-group">
                         <label>Gestión</label>
-                        <input type="number" name="gestion" class="form-control" value="{{ date('Y') }}" min="2020" max="2100" required>
+                        <input type="number" name="gestion" class="form-control" value="{{ gestion_actual() }}" min="2020" max="2100" required>
                     </div>
                     <div class="row">
                         <div class="col-md-6">
@@ -476,11 +493,11 @@ function generarReciboGrupo(codigo) {
 function anularPago(id) {
     if (confirm('¿Está seguro de anular este pago? Se anularán todos los pagos del mismo recibo.')) {
         $.ajax({
-            url: '/pagos-transporte/' + id + '/anular',
+            url: '{{ url('pagos-transporte') }}/' + id + '/anular',
             type: 'PUT',
             data: { _token: '{{ csrf_token() }}' },
             success: function() { alert('Pago(s) anulado(s)'); location.reload(); },
-            error: function() { alert('Error al anular'); }
+            error: function(xhr) { alert('No se pudo anular: ' + mensajeErrorAjax(xhr)); }
         });
     }
 }

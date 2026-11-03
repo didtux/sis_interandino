@@ -702,6 +702,35 @@ tr:first-child > td > .fc-day-grid-event {
 .select2-dropdown {
   border-color: #e4e6fc !important; }
 
+/* Tema bootstrap4 a la altura de los .form-control de la plantilla (42px) y,
+   con .select2-sm, de los .form-control-sm */
+.select2-container--bootstrap4 .select2-selection--single .select2-selection__rendered {
+  line-height: 40px;
+  padding-left: 15px;
+  padding-right: 28px;
+  font-size: 14px; }
+
+.select2-container--bootstrap4 .select2-selection--single .select2-selection__arrow {
+  top: 0;
+  right: 6px;
+  height: 40px; }
+
+.select2-container--bootstrap4 .select2-selection--single .select2-selection__arrow b {
+  top: 50%; }
+
+.select2-container--bootstrap4.select2-sm .select2-selection--single {
+  min-height: 31px;
+  height: 31px; }
+
+.select2-container--bootstrap4.select2-sm .select2-selection--single .select2-selection__rendered {
+  line-height: 29px;
+  padding-left: 10px;
+  padding-right: 24px;
+  font-size: 13px; }
+
+.select2-container--bootstrap4.select2-sm .select2-selection--single .select2-selection__arrow {
+  height: 29px; }
+
 .select2-container.select2-container--open .select2-selection--multiple {
   background-color: #fefeff;
   border-color: #95a0f4; }

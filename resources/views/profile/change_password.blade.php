@@ -61,7 +61,7 @@ $(document).ready(function() {
         $('#btnCambiarPassword').prop('disabled', true).html('<i class="fas fa-spinner fa-spin mr-1"></i>Guardando...');
 
         $.ajax({
-            url: '/perfil/cambiar-password',
+            url: '{{ url('perfil/cambiar-password') }}',
             method: 'POST',
             headers: { 'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content') },
             data: { password_current: actual, password: nueva, password_confirmation: confirmar },
@@ -80,7 +80,7 @@ $(document).ready(function() {
                     }, function() {
                         var form = document.createElement('form');
                         form.method = 'POST';
-                        form.action = '/logout';
+                        form.action = '{{ url('logout') }}';
                         var csrf = document.createElement('input');
                         csrf.type = 'hidden';
                         csrf.name = '_token';

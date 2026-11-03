@@ -16,7 +16,7 @@
                 <select name="est_codigo" class="form-control" onchange="this.form.submit()" style="max-width:400px;">
                     @foreach($estudiantes as $e)
                         <option value="{{ $e->est_codigo }}" {{ $estSeleccionado && $estSeleccionado->est_codigo == $e->est_codigo ? 'selected' : '' }}>
-                            {{ $e->est_apellido_paterno }} {{ $e->est_nombres }}
+                            {{ $e->est_apellidos }} {{ $e->est_nombres }}
                         </option>
                     @endforeach
                 </select>
@@ -25,7 +25,7 @@
             @if($estSeleccionado)
                 <h6 class="text-muted mb-3">
                     <i class="fas fa-user-graduate mr-1"></i>
-                    {{ $estSeleccionado->est_apellido_paterno }} {{ $estSeleccionado->est_nombres }}
+                    {{ $estSeleccionado->est_apellidos }} {{ $estSeleccionado->est_nombres }}
                 </h6>
 
                 @php $pendientes = $registros->where('ek_visto_padre', 0)->count(); @endphp

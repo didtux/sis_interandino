@@ -6,9 +6,11 @@ use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithStyles;
 use Maatwebsite\Excel\Concerns\WithTitle;
+use Maatwebsite\Excel\Concerns\WithStrictNullComparison;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
-class AsistenciasTrimestralExport implements FromCollection, WithHeadings, WithStyles, WithTitle
+// WithStrictNullComparison: sin esto Maatwebsite escribe los 0 como celda vacía.
+class AsistenciasTrimestralExport implements FromCollection, WithHeadings, WithStyles, WithTitle, WithStrictNullComparison
 {
     protected $data;
     protected $curso;
@@ -32,7 +34,9 @@ class AsistenciasTrimestralExport implements FromCollection, WithHeadings, WithS
 
     public function headings(): array
     {
-        $headers = ['ESTUDIANTE'];
+        // "N°" faltaba: los datos traen número de lista + nombre y todos los
+        // encabezados quedaban corridos una columna.
+        $headers = ['N°', 'ESTUDIANTE'];
         
         foreach ($this->meses as $mes) {
             $headers[] = $mes . ' D.T.';

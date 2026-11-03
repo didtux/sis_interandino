@@ -9,7 +9,7 @@ class AuditoriaController extends Controller
 {
     public function index(Request $request)
     {
-        if (auth()->user()->rol_id != 1) abort(403);
+        if (!auth()->user()->tieneCapacidad('auditoria.ver')) abort(403, 'Su rol no tiene la capacidad «Ver la auditoría del sistema».');
 
         $query = Auditoria::orderBy('audit_fecha', 'desc');
 

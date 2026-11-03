@@ -71,7 +71,7 @@ class CursoController extends Controller
         ][$estado] ?? 'Todos los cursos';
         if ($nivel !== '') $etiquetaEstado .= ' — Nivel ' . $nivel;
 
-        $gestion = date('Y');
+        $gestion = gestion_actual();
 
         $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('cursos.reporte-pdf',
                 compact('porNivel', 'etiquetaEstado', 'gestion'))
@@ -105,7 +105,7 @@ class CursoController extends Controller
 
     public function show($id)
     {
-        $gestion = date('Y');
+        $gestion = gestion_actual();
 
         $curso = Curso::with([
             'estudiantes' => function($q) {
@@ -166,7 +166,7 @@ class CursoController extends Controller
     public function guardarLista(Request $request, $id)
     {
         $curso = Curso::findOrFail($id);
-        $gestion = date('Y');
+        $gestion = gestion_actual();
         $numeros = $request->input('numeros', []);
 
         // Eliminar lista actual de esta gestión
@@ -195,7 +195,7 @@ class CursoController extends Controller
     public function autoLista($id)
     {
         $curso = Curso::findOrFail($id);
-        $gestion = date('Y');
+        $gestion = gestion_actual();
 
         $estudiantes = $curso->estudiantes()
             ->where('est_visible', 1)

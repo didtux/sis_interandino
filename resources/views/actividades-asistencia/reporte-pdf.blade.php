@@ -138,7 +138,7 @@
     @endif
 
     <div class="footer">
-        Impreso: {{ now()->format('d/m/Y H:i:s') }} | Actividades - Asistencia | Gestión {{ date('Y') }}
+        Impreso: {{ now()->format('d/m/Y H:i:s') }} | Actividades - Asistencia | Gestión {{ gestion_actual() }}
     </div>
 </body>
 </html>

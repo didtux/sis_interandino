@@ -22,6 +22,6 @@ class NotaDimension extends Model
 
     public function scopeGestion($query, $gestion = null)
     {
-        return $query->where('dimension_gestion', $gestion ?? date('Y'));
+        return $query->where('dimension_gestion', $gestion ?? gestion_actual());
     }
 }

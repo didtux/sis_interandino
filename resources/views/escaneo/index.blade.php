@@ -99,7 +99,7 @@
     </div>
 
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    <script src="{{ asset('vendor/html5-qrcode/html5-qrcode.min.js') }}"></script>
     <script>
         const CSRF = $('meta[name="csrf-token"]').attr('content');
         const URL_REGISTRAR = '{{ route("escaneo.registrar") }}';

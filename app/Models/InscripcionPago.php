@@ -12,7 +12,10 @@ class InscripcionPago extends Model
 
     protected $fillable = [
         'inscpago_codigo', 'insc_codigo', 'inscpago_monto',
-        'inscpago_concepto', 'inscpago_usuario', 'inscpago_recibo'
+        'inscpago_concepto', 'inscpago_usuario', 'inscpago_recibo',
+        // RESERVA: el dinero entró como reserva de cupo (pre-inscripción) y ya
+        // se contó en la caja de ese día; no vuelve a sumar en la de hoy.
+        'inscpago_estado', 'inscpago_origen',
     ];
 
     protected $casts = [

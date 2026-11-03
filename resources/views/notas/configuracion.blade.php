@@ -31,7 +31,7 @@
                 <i class="fas fa-sliders-h mr-1"></i>Periodos y dimensiones
             </a>
         </li>
-        @if(auth()->user()->rol_id == 1)
+        @if(auth()->user()->tieneCapacidad('notas.configurar'))
         <li class="nav-item">
             <a class="nav-link" data-toggle="tab" href="#tab-recalculo" role="tab">
                 <i class="fas fa-calculator mr-1"></i>Recalcular notas guardadas
@@ -163,7 +163,7 @@
     <div class="tab-pane fade" id="tab-recalculo" role="tabpanel">
 
     {{-- ═══ Recálculo de promedios ya guardados (sólo administradores) ═══ --}}
-    @if(auth()->user()->rol_id == 1)
+    @if(auth()->user()->tieneCapacidad('notas.configurar'))
     <div class="row">
         <div class="col-12">
             <div class="card modern-card">
@@ -346,7 +346,7 @@
     </div>
 </div>
 {{-- Modal confirmación de recálculo --}}
-@if(auth()->user()->rol_id == 1)
+@if(auth()->user()->tieneCapacidad('notas.configurar'))
 <div class="modal fade" id="modalRecalc" tabindex="-1" data-backdrop="static">
     <div class="modal-dialog">
         <div class="modal-content">
@@ -426,7 +426,7 @@ function modalDimension(data = null) {
     $('#modalDimension').modal('show');
 }
 
-@if(auth()->user()->rol_id == 1)
+@if(auth()->user()->tieneCapacidad('notas.configurar'))
 // ═══════════════════════════════════════════════════════════════
 // Recálculo de promedios ya guardados
 // ═══════════════════════════════════════════════════════════════

@@ -20,7 +20,7 @@ class EstudianteController extends Controller
 
         // Filtro para estudiantes incompletos
         if ($request->filled('incompletos')) {
-            $year = date('Y');
+            $year = gestion_actual();
             $estudiantesConInscripcion = \App\Models\Inscripcion::where('insc_gestion', $year)
                 ->where('insc_codigo', 'like', 'INSC%')
                 ->pluck('est_codigo')
@@ -58,7 +58,7 @@ class EstudianteController extends Controller
 
         // Si filtra por curso, ordena por lista_numero de la gestión actual del MISMO curso
         if ($request->filled('curso')) {
-            $gestion = date('Y');
+            $gestion = gestion_actual();
             $cursoCod = $request->curso;
             $estudiantes = $query->leftJoin('colegio_lista_curso', function($j) use ($gestion, $cursoCod){
                     $j->whereRaw('colegio_lista_curso.est_codigo COLLATE utf8mb4_unicode_ci = colegio_estudiantes.est_codigo COLLATE utf8mb4_unicode_ci')
@@ -110,7 +110,7 @@ class EstudianteController extends Controller
     private function moverLista($estId, $delta)
     {
         $est = Estudiante::findOrFail($estId);
-        $gestion = date('Y');
+        $gestion = gestion_actual();
 
         $reg = ListaCurso::where('est_codigo', $est->est_codigo)
             ->where('lista_gestion', $gestion)
@@ -136,7 +136,7 @@ class EstudianteController extends Controller
         $cursos    = Curso::visible()->ordenado()->get();
         $cursoCod  = $request->input('curso');
         $periodoId = $request->input('periodo_id');
-        $gestion   = date('Y');
+        $gestion   = gestion_actual();
         $rows      = collect();
 
         if ($cursoCod && $periodoId) {
@@ -169,7 +169,7 @@ class EstudianteController extends Controller
         $cursoCod = $request->input('curso');
         if (!$cursoCod) abort(400, 'Falta curso');
 
-        $gestion = (int) ($request->input('gestion') ?: date('Y'));
+        $gestion = (int) ($request->input('gestion') ?: gestion_actual());
         $curso   = Curso::where('cur_codigo', $cursoCod)->firstOrFail();
 
         $rows  = DB::table('colegio_estudiantes as e')
@@ -214,7 +214,7 @@ class EstudianteController extends Controller
     public function listadoExcel(Request $request)
     {
         $cursoCod = $request->input('curso');
-        $gestion  = (int) ($request->input('gestion') ?: date('Y'));
+        $gestion  = (int) ($request->input('gestion') ?: gestion_actual());
 
         $query = Estudiante::with('curso','padres');
         if ($cursoCod) $query->where('cur_codigo', $cursoCod);
@@ -296,11 +296,11 @@ class EstudianteController extends Controller
      */
     private function observadoBloqueante(?string $ci)
     {
-        $obs = \App\Models\EstudianteObservado::vigentePorCi($ci, (int) date('Y'));
+        $obs = \App\Models\EstudianteObservado::vigentePorCi($ci, (int) gestion_actual());
         if (!$obs) {
             return null;
         }
-        $esDireccion = in_array(auth()->user()->rol_id ?? 0, [1, 9, 10]);
+        $esDireccion = auth()->user()->tieneCapacidad('observados.autorizar');
         if ($esDireccion && request()->boolean('override_observado')) {
             return null;
         }
@@ -341,8 +341,8 @@ class EstudianteController extends Controller
 
         // En edición no se bloquea (hay que poder corregir la ficha de un
         // observado), pero sí se avisa: el dato estaba invisible desde acá.
-        $obs = \App\Models\EstudianteObservado::vigentePara($estudiante->est_codigo, (int) date('Y'))
-            ?: \App\Models\EstudianteObservado::vigentePorCi($estudiante->est_ci, (int) date('Y'));
+        $obs = \App\Models\EstudianteObservado::vigentePara($estudiante->est_codigo, (int) gestion_actual())
+            ?: \App\Models\EstudianteObservado::vigentePorCi($estudiante->est_ci, (int) gestion_actual());
         if ($obs) {
             return redirect()->route('estudiantes.index')
                 ->with('success', 'Estudiante actualizado exitosamente')
@@ -370,7 +370,7 @@ class EstudianteController extends Controller
 
         $listaCurso = \DB::table('colegio_lista_curso')
             ->where('est_codigo', $estudiante->est_codigo)
-            ->where('lista_gestion', date('Y'))
+            ->where('lista_gestion', gestion_actual())
             ->first();
         $numero = $listaCurso->lista_numero ?? '';
 

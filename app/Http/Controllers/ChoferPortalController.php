@@ -189,7 +189,7 @@ class ChoferPortalController extends Controller
         $rutaSeleccionada = $request->ruta_codigo && $rutaCodigos->contains($request->ruta_codigo)
             ? $request->ruta_codigo : $rutaCodigos->first();
 
-        $anio = (int) $request->input('anio', date('Y'));
+        $anio = (int) $request->input('anio', gestion_actual());
         $mes  = (int) $request->input('mes', date('n'));
 
         $inicio = \Carbon\Carbon::create($anio, $mes, 1)->startOfMonth();

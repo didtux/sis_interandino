@@ -39,7 +39,7 @@
                 <div class="col-lg-3 col-md-6">
                     <div class="card card-statistic-1">
                         <div class="card-icon bg-info"><i class="fas fa-user-plus"></i></div>
-                        <div class="card-wrap"><div class="card-header"><h4>Inscripciones {{ date('Y') }}</h4></div><div class="card-body">{{ $totalInscripciones }}</div></div>
+                        <div class="card-wrap"><div class="card-header"><h4>Inscripciones {{ gestion_actual() }}</h4></div><div class="card-body">{{ $totalInscripciones }}</div></div>
                     </div>
                 </div>
                 <div class="col-lg-3 col-md-6">
@@ -111,7 +111,7 @@
             <div class="row">
                 <div class="col-12">
                     <div class="card">
-                        <div class="card-header"><h4><i class="fas fa-hand-holding-usd mr-2"></i>Recaudación Acumulada {{ date('Y') }}</h4></div>
+                        <div class="card-header"><h4><i class="fas fa-hand-holding-usd mr-2"></i>Recaudación Acumulada {{ gestion_actual() }}</h4></div>
                         <div class="card-body">
                             <div class="row text-center">
                                 <div class="col-md-3 col-6 mb-2"><div class="text-muted small">Mensualidades</div><h4 class="text-primary">Bs. {{ number_format($recaudacionAnual['mensualidades'], 2) }}</h4></div>
@@ -128,7 +128,7 @@
             <div class="row">
                 <div class="col-lg-6">
                     <div class="card">
-                        <div class="card-header"><h4><i class="fas fa-trophy mr-2 text-warning"></i>Mejores Estudiantes {{ date('Y') }}</h4></div>
+                        <div class="card-header"><h4><i class="fas fa-trophy mr-2 text-warning"></i>Mejores Estudiantes {{ gestion_actual() }}</h4></div>
                         <div class="card-body p-0">
                             <table class="table table-striped mb-0">
                                 <thead><tr><th>#</th><th>Estudiante</th><th>Curso</th><th class="text-center">Promedio</th></tr></thead>
@@ -215,7 +215,7 @@
                 </div>
                 <div class="col-lg-6">
                     <div class="card">
-                        <div class="card-header"><h4><i class="fas fa-chart-pie mr-2"></i>Inscripciones {{ date('Y') }}</h4></div>
+                        <div class="card-header"><h4><i class="fas fa-chart-pie mr-2"></i>Inscripciones {{ gestion_actual() }}</h4></div>
                         <div class="card-body">
                             <div class="row text-center">
                                 <div class="col-4"><h3 class="text-warning mb-0">{{ $estadoInscripciones['pendientes'] }}</h3><small class="text-muted">Activas</small></div>

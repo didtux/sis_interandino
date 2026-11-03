@@ -97,7 +97,7 @@ class ReporteLicenciaController extends Controller
     // ───────────────────────────────────────────────────────────────
     public function mensualExcel(Request $request)
     {
-        $gestion = (int) $request->input('gestion', date('Y'));
+        $gestion = (int) $request->input('gestion', gestion_actual());
         $mes     = (int) $request->input('mes', date('n'));
         $turno   = $request->input('turno');
 
@@ -209,7 +209,7 @@ class ReporteLicenciaController extends Controller
     // ───────────────────────────────────────────────────────────────
     public function anualEstudianteExcel(Request $request)
     {
-        $gestion  = (int) $request->input('gestion', date('Y'));
+        $gestion  = (int) $request->input('gestion', gestion_actual());
         $curCodigo = $request->input('cur_codigo');
 
         if (!$curCodigo) {
@@ -294,7 +294,7 @@ class ReporteLicenciaController extends Controller
     // ───────────────────────────────────────────────────────────────
     public function anualCursoExcel(Request $request)
     {
-        $gestion = (int) $request->input('gestion', date('Y'));
+        $gestion = (int) $request->input('gestion', gestion_actual());
         $turno   = $request->input('turno');
 
         $cursos   = $this->cursosDelTurno($turno);
@@ -373,7 +373,7 @@ class ReporteLicenciaController extends Controller
 
     public function mensualPdf(Request $request)
     {
-        $gestion = (int) $request->input('gestion', date('Y'));
+        $gestion = (int) $request->input('gestion', gestion_actual());
         $mes     = (int) $request->input('mes', date('n'));
         $turno   = $request->input('turno');
         if (!isset($this->mesesNombre[$mes])) $mes = max(2, min(12, $mes));
@@ -444,7 +444,7 @@ class ReporteLicenciaController extends Controller
 
     public function anualEstudiantePdf(Request $request)
     {
-        $gestion   = (int) $request->input('gestion', date('Y'));
+        $gestion   = (int) $request->input('gestion', gestion_actual());
         $curCodigo = $request->input('cur_codigo');
         if (!$curCodigo) {
             return back()->with('error', 'Seleccione un curso para el reporte anual por estudiante.');
@@ -510,7 +510,7 @@ class ReporteLicenciaController extends Controller
 
     public function anualCursoPdf(Request $request)
     {
-        $gestion = (int) $request->input('gestion', date('Y'));
+        $gestion = (int) $request->input('gestion', gestion_actual());
         $turno   = $request->input('turno');
 
         $cursos   = $this->cursosDelTurno($turno);
@@ -564,6 +564,89 @@ class ReporteLicenciaController extends Controller
         );
     }
 
+    // ───────────────────────────────────────────────────────────────
+    // 4) Ranking de licencias recurrentes por curso
+    // ───────────────────────────────────────────────────────────────
+    /**
+     * Los N estudiantes de cada curso con más licencias en la gestión (o en
+     * un mes), contando sólo a los que llegan al mínimo. Se ordena por
+     * cantidad de licencias y, a igualdad, por días hábiles cubiertos.
+     */
+    public function rankingPdf(Request $request)
+    {
+        $gestion = (int) $request->input('gestion', gestion_actual());
+        $top     = max(1, min(50, (int) $request->input('top', 5)));
+        $minimo  = max(1, (int) $request->input('minimo', 3));
+        $mes     = $request->filled('mes') ? (int) $request->input('mes') : null;
+        $turno   = $request->input('turno');
+
+        if ($mes && isset($this->mesesNombre[$mes])) {
+            $inicio = Carbon::create($gestion, $mes, 1)->startOfMonth();
+            $fin    = (clone $inicio)->endOfMonth();
+            $periodo = $this->mesesNombre[$mes] . ' ' . $gestion;
+        } else {
+            $inicio = Carbon::create($gestion, 2, 1)->startOfMonth();
+            $fin    = Carbon::create($gestion, 12, 31)->endOfDay();
+            $periodo = 'Gestión ' . $gestion;
+        }
+
+        $cursos = $request->filled('cur_codigo')
+            ? Curso::where('cur_codigo', $request->cur_codigo)->get()
+            : $this->cursosDelTurno($turno);
+        $estCurso = $this->mapaEstudianteCurso();
+        $permisos = Permiso::where('permiso_estado', 1)
+            ->whereDate('permiso_fecha_inicio', '<=', $fin->toDateString())
+            ->whereDate('permiso_fecha_fin', '>=', $inicio->toDateString())
+            ->get(['estud_codigo', 'permiso_fecha_inicio', 'permiso_fecha_fin']);
+
+        $porEst = [];
+        foreach ($permisos as $pm) {
+            $e = $pm->estud_codigo;
+            $porEst[$e]['licencias'] = ($porEst[$e]['licencias'] ?? 0) + 1;
+            $d = Carbon::parse($pm->permiso_fecha_inicio)->max($inicio);
+            $hasta = Carbon::parse($pm->permiso_fecha_fin)->min($fin);
+            while ($d <= $hasta) {
+                if ($d->isWeekday()) $porEst[$e]['dias'][$d->toDateString()] = true;
+                $d->addDay();
+            }
+            $ultima = Carbon::parse($pm->permiso_fecha_inicio)->toDateString();
+            if ($ultima > ($porEst[$e]['ultima'] ?? '')) $porEst[$e]['ultima'] = $ultima;
+        }
+
+        $nombres = Estudiante::whereIn('est_codigo', array_keys($porEst))
+            ->get(['est_codigo', 'est_apellidos', 'est_nombres', 'est_visible'])->keyBy('est_codigo');
+        $codigosCurso = $cursos->pluck('cur_codigo')->flip();
+        $grupos = [];
+        foreach ($porEst as $est => $d) {
+            $cur = $estCurso[$est] ?? null;
+            if (!$cur || !isset($codigosCurso[$cur]) || $d['licencias'] < $minimo) continue;
+            $e = $nombres[$est] ?? null;
+            $grupos[$cur][] = [
+                'nombre'    => $e ? trim($e->est_apellidos . ' ' . $e->est_nombres) : $est,
+                'retirado'  => $e && (int) $e->est_visible === 0,
+                'licencias' => $d['licencias'],
+                'dias'      => count($d['dias'] ?? []),
+                'ultima'    => $d['ultima'] ?? null,
+            ];
+        }
+
+        $secciones = [];
+        foreach ($cursos as $c) {
+            if (empty($grupos[$c->cur_codigo])) continue;
+            $filas = collect($grupos[$c->cur_codigo])
+                ->sortBy([['licencias', 'desc'], ['dias', 'desc'], ['nombre', 'asc']])
+                ->values();
+            $secciones[] = ['curso' => $c->cur_nombre, 'total' => $filas->count(), 'filas' => $filas->take($top)];
+        }
+
+        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('licencias.ranking-pdf', [
+            'secciones' => $secciones,
+            'titulo'    => 'LICENCIAS RECURRENTES POR CURSO',
+            'subtitulo' => $periodo . $this->sufijoTurno($turno) . " — los {$top} con más licencias de cada curso (mínimo {$minimo})",
+        ])->setPaper('letter', 'portrait');
+        return $pdf->stream('licencias-recurrentes-' . $gestion . '.pdf');
+    }
+
     /** " — TURNO: X" cuando el reporte se acota a un turno. */
     private function sufijoTurno($turnoConfigId): string
     {
@@ -575,9 +658,12 @@ class ReporteLicenciaController extends Controller
                                array $columnas, array $filas, array $totales,
                                string $archivo, string $orientacion)
     {
+        // Con más de 15 columnas (el mensual tiene ~22 días hábiles) la carta
+        // obligaba a bajar la letra a 7px; en oficio (8,5 × 13") entra a 8px.
+        $papel = count($columnas) > 15 ? [0, 0, 612, 936] : 'letter';
         $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('licencias.reporte-pdf',
                 compact('titulo', 'subtitulo', 'etiquetaColumna', 'columnas', 'filas', 'totales'))
-            ->setPaper('letter', $orientacion);
+            ->setPaper($papel, $orientacion);
         return $pdf->stream($archivo . '.pdf');
     }
 

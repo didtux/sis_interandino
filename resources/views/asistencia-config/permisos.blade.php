@@ -58,7 +58,7 @@
                             <div class="row align-items-end">
                                 <div class="col-md-2">
                                     <label class="small mb-1">Gestión</label>
-                                    <input type="number" id="lic_gestion" class="form-control form-control-sm" value="{{ date('Y') }}">
+                                    <input type="number" id="lic_gestion" class="form-control form-control-sm" value="{{ gestion_actual() }}">
                                 </div>
                                 <div class="col-md-2">
                                     <label class="small mb-1">Mes</label>
@@ -79,7 +79,7 @@
                                     </select>
                                 </div>
                                 <div class="col-md-3">
-                                    <label class="small mb-1">Curso (para anual×estudiante)</label>
+                                    <label class="small mb-1">Curso (anual×estudiante y ranking)</label>
                                     <select id="lic_curso" class="form-control form-control-sm select2-curso">
                                         <option value="">— Seleccione —</option>
                                         @foreach($cursos as $curso)
@@ -111,6 +111,21 @@
                                 </button>
                                 <button type="button" class="btn btn-outline-danger btn-sm" onclick="reporteLic('anual-curso', 'pdf')">
                                     <i class="fas fa-layer-group mr-1"></i>Anual × curso
+                                </button>
+                            </div>
+                            {{-- Estudiantes que más licencias piden, por curso --}}
+                            <div class="mt-2 form-inline">
+                                <div class="small text-muted mr-2"><i class="fas fa-sort-amount-down mr-1"></i>Recurrentes:</div>
+                                <label class="small mr-1">los</label>
+                                <input type="number" id="lic_top" class="form-control form-control-sm mr-1" value="5" min="1" max="50" style="width:65px">
+                                <label class="small mr-1">con más licencias, mínimo</label>
+                                <input type="number" id="lic_minimo" class="form-control form-control-sm mr-1" value="3" min="1" style="width:65px">
+                                <select id="lic_periodo" class="form-control form-control-sm mr-2 js-select2">
+                                    <option value="">en la gestión</option>
+                                    <option value="mes">en el mes elegido</option>
+                                </select>
+                                <button type="button" class="btn btn-outline-danger btn-sm" onclick="reporteRanking()">
+                                    <i class="fas fa-file-pdf mr-1"></i>Ranking por curso
                                 </button>
                             </div>
                         </div>
@@ -540,7 +555,7 @@ function generarReportePermisos() {
  * firmar ni archivar.
  */
 function reporteLic(tipo, formato) {
-    var gestion = document.getElementById('lic_gestion').value || {{ date('Y') }};
+    var gestion = document.getElementById('lic_gestion').value || {{ gestion_actual() }};
     var mes     = document.getElementById('lic_mes').value;
     var turno   = document.getElementById('lic_turno').value;
     var curso   = document.getElementById('lic_curso').value;
@@ -568,6 +583,19 @@ function reporteLic(tipo, formato) {
         p.append('cur_codigo', curso);
     }
     window.open(rutas[formato][tipo] + '?' + p.toString(), '_blank');
+}
+
+/** Ranking de licencias recurrentes: todos los cursos, o el curso elegido. */
+function reporteRanking() {
+    var p = new URLSearchParams();
+    p.append('gestion', document.getElementById('lic_gestion').value || {{ gestion_actual() }});
+    p.append('top', document.getElementById('lic_top').value || 5);
+    p.append('minimo', document.getElementById('lic_minimo').value || 3);
+    if (document.getElementById('lic_periodo').value === 'mes') p.append('mes', document.getElementById('lic_mes').value);
+    var turno = document.getElementById('lic_turno').value, curso = document.getElementById('lic_curso').value;
+    if (turno) p.append('turno', turno);
+    if (curso) p.append('cur_codigo', curso);
+    window.open('{{ route("asistencia-config.licencias.pdf-ranking") }}?' + p.toString(), '_blank');
 }
 </script>
 @endsection

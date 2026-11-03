@@ -31,6 +31,11 @@ class EstudianteRutaController extends Controller
             $query->whereHas('estudiante', fn($q) => $q->where('cur_codigo', $request->cur_codigo));
         }
 
+        // Por número de bus: las rutas que hoy cubre ese vehículo
+        if ($request->veh_codigo) {
+            $query->whereIn('ruta_codigo', \App\Models\AsignacionTransporte::activo()->where('veh_codigo', $request->veh_codigo)->pluck('ruta_codigo'));
+        }
+
         if ($request->estado === 'suspendido') {
             $query->where('ter_suspendido', 1);
         } elseif ($request->estado === 'activo') {
@@ -42,7 +47,8 @@ class EstudianteRutaController extends Controller
         $asignaciones = $query->where('ter_estado', '>=', 0)->orderBy('ter_fecha_registro', 'desc')->get();
         $rutas = Ruta::activo()->with('asignaciones.vehiculo')->get();
         $cursos = \App\Models\Curso::visible()->orderBy('cur_nombre')->get();
-        return view('transporte.estudiantes-rutas.index', compact('asignaciones', 'rutas', 'cursos'));
+        $buses = \App\Models\Vehiculo::activo()->get()->sortBy('veh_numero_bus', SORT_NATURAL)->values();
+        return view('transporte.estudiantes-rutas.index', compact('asignaciones', 'rutas', 'cursos', 'buses'));
     }
 
     public function create()

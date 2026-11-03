@@ -3928,6 +3928,16 @@ body.layout-3 .main-footer {
     background-color: transparent;
 }
 
+/* Submenús desplegables (ul.collapse): un nombre largo baja de línea y la
+   fila crece, en vez de montarse sobre la siguiente con alto fijo de 50px */
+.main-sidebar .sidebar-menu li ul.collapse li a {
+    height: auto;
+    min-height: 50px;
+    line-height: 1.3;
+    padding-top: 6px;
+    padding-bottom: 6px;
+}
+
 .main-sidebar .sidebar-menu li ul.dropdown-menu li a {
     color: #868e96;
     height: 35px;

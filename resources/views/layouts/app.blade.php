@@ -13,6 +13,7 @@
     <link rel="stylesheet" href="{{ asset('assets/css/iziToast.min.css') }}">
     <link href="{{ asset('assets/css/sweetalert.css') }}" rel="stylesheet" type="text/css"/>
     <link href="{{ asset('assets/css/select2.min.css') }}" rel="stylesheet" type="text/css"/>
+    <link href="{{ asset('vendor/select2-bootstrap4/select2-bootstrap4.min.css') }}" rel="stylesheet" type="text/css"/>
 
 @yield('page_css')
 <!-- Template CSS -->
@@ -59,6 +60,23 @@
 <script src="{{ asset('web/js/custom-tables.js') }}"></script>
 <script src="{{ mix('assets/js/profile.js') }}"></script>
 <script src="{{ mix('assets/js/custom/custom.js') }}"></script>
+<script>
+    // Mensaje legible de un error AJAX. Antes cada pantalla mostraba
+    // "Error al anular" sin decir si faltaba permiso, se había vencido la
+    // sesión o la dirección no existía, y no había forma de diagnosticarlo.
+    window.mensajeErrorAjax = function (xhr) {
+        var r = (xhr && xhr.responseJSON) || {};
+        var detalle = r.message || r.error || '';
+        switch (xhr && xhr.status) {
+            case 0:   return 'No hay conexión con el servidor.';
+            case 403: return 'Su rol no tiene permiso para esta acción.' + (detalle ? ' (' + detalle + ')' : '');
+            case 404: return 'No se encontró el registro o la dirección.';
+            case 419: return 'La sesión expiró. Recargue la página e intente de nuevo.';
+            case 422: return detalle || 'Los datos enviados no son válidos.';
+            default:  return (detalle || 'Error del servidor') + ' [' + (xhr ? xhr.status : '?') + ']';
+        }
+    };
+</script>
 
 @include('layouts.partials.loader-reportes')
 
@@ -67,6 +85,28 @@
 
 @yield('page_js')
 @yield('scripts')
+@stack('scripts')
+<script>
+    // Select2 para los selects con la clase js-select2. Las listas cortas no
+    // muestran buscador; en formularios en línea el ancho sigue al del select
+    // (más el espacio de la flecha) y form-control-sm se mantiene chico.
+    // Para contenido cargado después: initSelect2(contenedor).
+    window.initSelect2 = function (ctx) {
+        $(ctx || document).find('select.js-select2').not('.select2-hidden-accessible').each(function () {
+            var $s = $(this), $modal = $s.closest('.modal');
+            var enLinea = $s.closest('.form-inline, .d-flex, .input-group').length > 0;
+            $s.select2({
+                theme: 'bootstrap4',
+                width: enLinea ? ($s.outerWidth() + 30) + 'px' : '100%',
+                minimumResultsForSearch: 8,
+                dropdownParent: $modal.length ? $modal : $(document.body)
+            });
+            if ($s.hasClass('form-control-sm')) $s.next('.select2-container').addClass('select2-sm');
+            if (enLinea && $s.hasClass('mr-2')) $s.next('.select2-container').addClass('mr-2');
+        });
+    };
+    $(function () { initSelect2(); });
+</script>
 <script>
     let loggedInUser =@json(\Illuminate\Support\Facades\Auth::user());
     let loginUrl = '{{ route('login') }}';

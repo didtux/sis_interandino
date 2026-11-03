@@ -10,7 +10,8 @@ class RolPermiso extends Model
     protected $primaryKey = 'perm_id';
     public $timestamps = false;
 
-    protected $fillable = ['rol_id', 'mod_id', 'perm_ver', 'perm_crear', 'perm_editar', 'perm_eliminar'];
+    protected $fillable = ['rol_id', 'mod_id', 'perm_ver', 'perm_crear', 'perm_editar', 'perm_eliminar',
+                           'perm_anular', 'perm_exportar'];
 
     public function rol()
     {

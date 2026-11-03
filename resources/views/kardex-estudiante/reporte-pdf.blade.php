@@ -11,7 +11,8 @@ th{background:#e8e8e8;}
 .tag{display:inline-block;padding:1px 5px;background:#34495e;color:#fff;border-radius:2px;font-size:8px;font-weight:bold;}
 </style></head>
 <body>
-<h2>KARDEX DE ESTUDIANTE@if($estudiante) — {{ mb_strtoupper($estudiante->est_apellido_paterno.' '.$estudiante->est_nombres, 'UTF-8') }}@endif</h2>
+{{-- "@if" pegado a una letra no lo reconoce Blade: quedaba sólo el @endif y el PDF daba error. --}}
+<h2>KARDEX DE ESTUDIANTE @if($estudiante) — {{ mb_strtoupper($estudiante->est_apellidos.' '.$estudiante->est_nombres, 'UTF-8') }} @endif</h2>
 <div class="sub">
     @if($curso)Curso: {{ $curso->cur_nombre }} · @endif
     Generado: {{ now()->format('d/m/Y H:i') }}
@@ -34,7 +35,7 @@ th{background:#e8e8e8;}
         @forelse($registros as $r)
             <tr>
                 <td>{{ $r->ek_fecha->format('d/m/Y') }}</td>
-                @if(!$estudiante)<td>{{ optional($r->estudiante)->est_apellido_paterno }} {{ optional($r->estudiante)->est_nombres }}</td>@endif
+                @if(!$estudiante)<td>{{ optional($r->estudiante)->est_apellidos }} {{ optional($r->estudiante)->est_nombres }}</td>@endif
                 <td><span class="tag">{{ $r->ek_tipo }}</span></td>
                 <td>{{ $r->ek_categoria ?? '—' }}</td>
                 <td><strong>{{ $r->ek_titulo }}</strong>@if($r->ek_descripcion)<br><span style="color:#555;">{{ $r->ek_descripcion }}</span>@endif</td>

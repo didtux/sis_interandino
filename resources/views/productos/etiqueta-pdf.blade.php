@@ -81,7 +81,7 @@
         </div>
         
         <div class="footer">
-            Escanea el codigo QR para ver detalles
+            {{ $producto->prod_item ?: $producto->prod_codigo }}
         </div>
     </div>
 </body>

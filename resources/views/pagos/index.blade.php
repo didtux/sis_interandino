@@ -81,7 +81,7 @@
                                 <div class="btn-group btn-group-sm" role="group">
                                     <button type="button" class="btn btn-outline-primary" onclick="rangoPreset('hoy')">Hoy</button>
                                     <button type="button" class="btn btn-outline-primary" onclick="rangoPreset('mes')">Este mes</button>
-                                    <button type="button" class="btn btn-outline-primary" onclick="rangoPreset('gestion')">Gestión {{ date('Y') }}</button>
+                                    <button type="button" class="btn btn-outline-primary" onclick="rangoPreset('gestion')">Gestión {{ gestion_actual() }}</button>
                                 </div>
                                 @if(!empty($sinFiltros))
                                     <span class="ml-2 text-muted small">
@@ -542,15 +542,17 @@ function dibujarRecibo(doc, codigo, padre, fecha, monto, items) {
 }
 
 function anularPago(id) {
-    if (confirm('¿Está seguro de anular este pago?')) {
-        $.ajax({
-            url: '{{ url("/pagos") }}/' + id + '/anular',
-            type: 'PUT',
-            data: { _token: '{{ csrf_token() }}' },
-            success: function(response) { alert('Pago anulado'); location.reload(); },
-            error: function() { alert('Error al anular'); }
-        });
-    }
+    // El motivo queda registrado junto con quién anuló y cuándo.
+    var motivo = prompt('Se anulará todo el recibo. Indique el motivo de la anulación:');
+    if (motivo === null) return;
+    if (!motivo.trim()) { alert('Debe indicar un motivo.'); return; }
+    $.ajax({
+        url: '{{ url("/pagos") }}/' + id + '/anular',
+        type: 'PUT',
+        data: { _token: '{{ csrf_token() }}', motivo: motivo.trim() },
+        success: function(response) { alert('Pago anulado'); location.reload(); },
+        error: function(xhr) { alert('No se pudo anular: ' + mensajeErrorAjax(xhr)); }
+    });
 }
 </script>
 @endsection

@@ -14,7 +14,7 @@ class EstudianteObservadoController extends Controller
         $user = auth()->user();
         // Roles de dirección/administración: Administrador(1), Director General(9),
         // Directora Académica(10), Secretaría(11), Dir-financiero(13).
-        if (!in_array($user->rol_id, [1, 9, 10, 11, 13])) {
+        if (!$user->tieneCapacidad('observados.gestionar')) {
             abort(403, 'Solo dirección puede gestionar la lista de observados.');
         }
     }
@@ -23,7 +23,7 @@ class EstudianteObservadoController extends Controller
     {
         $this->soloDirector();
 
-        $gestion = (int) $request->input('gestion', date('Y'));
+        $gestion = (int) $request->input('gestion', gestion_actual());
         $estado  = $request->input('estado', 'activos'); // activos | liberados | todos
 
         $q = EstudianteObservado::with(['estudiante.curso', 'estudiante.padres'])
@@ -113,7 +113,7 @@ class EstudianteObservadoController extends Controller
     public function reportePdf(Request $request)
     {
         $this->soloDirector();
-        $gestion = (int) $request->input('gestion', date('Y'));
+        $gestion = (int) $request->input('gestion', gestion_actual());
         $observados = EstudianteObservado::with(['estudiante.curso'])
             ->where('obs_gestion', $gestion)
             ->where('obs_activo', 1)

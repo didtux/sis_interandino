@@ -45,7 +45,7 @@
 
     <div class="title-section">
         <h2>REPORTE DE MENSUALIDADES</h2>
-        <p>Gestión {{ date('Y') }}</p>
+        <p>Gestión {{ gestion_actual() }}</p>
     </div>
 
     @php

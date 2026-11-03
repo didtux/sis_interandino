@@ -47,17 +47,37 @@ class User extends Authenticatable
 
     public function tienePermiso($modSlug, $accion = 'perm_ver')
     {
-        if ($this->rol_id == 1) return true; // Admin total
+        return \App\Support\Permisos::puede((int) $this->rol_id, $modSlug, $accion);
+    }
 
-        return RolPermiso::where('rol_id', $this->rol_id)
-            ->whereHas('modulo', fn($q) => $q->where('mod_slug', $modSlug))
-            ->where($accion, 1)
-            ->exists();
+    /** Capacidad especial asignada al rol (config/permisos.php). */
+    public function tieneCapacidad(string $slug): bool
+    {
+        return \App\Support\Permisos::tieneCapacidad((int) $this->rol_id, $slug);
     }
 
     public function tieneAccesoModulo($modSlug)
     {
         return $this->tienePermiso($modSlug, 'perm_ver');
+    }
+
+    /** Ver en alguno de los módulos dados. */
+    public function tieneAccesoAlguno(array $slugs)
+    {
+        foreach ($slugs as $s) {
+            if ($this->tieneAccesoModulo($s)) return true;
+        }
+        return false;
+    }
+
+    /**
+     * Ver en el módulo o en cualquiera de sus submódulos. Para los grupos del
+     * menú: antes un rol con sólo "Licencias" marcado no veía el grupo
+     * Asistencias porque se le pedía el módulo padre.
+     */
+    public function tieneAccesoGrupo($modSlug)
+    {
+        return \App\Support\Permisos::puedeGrupo((int) $this->rol_id, $modSlug);
     }
 
     public function scopeActivo($query)

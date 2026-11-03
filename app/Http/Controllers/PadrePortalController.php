@@ -40,9 +40,10 @@ class PadrePortalController extends Controller
         return PadreFamilia::where('pfam_codigo', $user->us_entidad_id)->firstOrFail();
     }
 
+    /** Hijos del padre (incluye los de sus registros duplicados por CI). */
     private function getEstudiantes()
     {
-        return $this->getPadre()->estudiantes()->with('curso')->where('est_visible', 1)->get();
+        return $this->getPadre()->hijos();
     }
 
     // ── Dashboard ──────────────────────────────────────────────────
@@ -50,7 +51,7 @@ class PadrePortalController extends Controller
     {
         $padre = $this->getPadre();
         $estudiantes = $this->getEstudiantes();
-        $gestion = date('Y');
+        $gestion = gestion_actual();
 
         $alertas = [];
         $resumen = [];
@@ -58,15 +59,11 @@ class PadrePortalController extends Controller
         foreach ($estudiantes as $est) {
             $info = ['estudiante' => $est, 'mora_mensualidad' => false, 'mora_transporte' => false, 'promedio' => 0, 'faltas' => 0];
 
-            // Mora mensualidades
-            $mesActual = (int)date('m');
-            $mesesEscolares = range(2, min($mesActual, 11));
-            $pagos = Pago::where('est_codigo', $est->est_codigo)->where('pagos_estado', 1)->get();
-            $mesesPagados = [];
-            foreach ($pagos as $p) {
-                foreach ($p->meses_cubiertos as $m) $mesesPagados[] = $m;
-            }
-            $mesesPendientes = array_diff($mesesEscolares, array_unique($mesesPagados));
+            // Mora mensualidades: misma cuenta que caja (MoraService). Antes el
+            // portal tenía la suya, sin filtrar la gestión.
+            $mora = (new \App\Services\MoraService())->deEstudiante($est->est_codigo, $gestion);
+            $mesesPendientes = $mora->mora_meses_pendientes ?? [];
+            $info['bloqueo'] = (new \App\Services\BloqueoNotasService())->estado($est->est_codigo, $gestion);
             if (count($mesesPendientes) > 0) {
                 $info['mora_mensualidad'] = true;
                 $info['meses_pendientes'] = count($mesesPendientes);
@@ -112,32 +109,26 @@ class PadrePortalController extends Controller
     public function notas(Request $request)
     {
         $estudiantes = $this->getEstudiantes();
-        $gestion = date('Y');
+        $gestion = gestion_actual();
         $periodos = NotaPeriodo::activo()->gestion($gestion)->orderBy('periodo_numero')->get();
         $estSeleccionado = $request->est_codigo ? $estudiantes->firstWhere('est_codigo', $request->est_codigo) : $estudiantes->first();
 
         $notasData = [];
+        $bloqueo = ['bloqueado' => false];
         if ($estSeleccionado) {
-            $curmatdocs = CursoMateriaDocente::with('materia')
-                ->where('cur_codigo', $estSeleccionado->cur_codigo)->where('curmatdoc_estado', 1)->get();
-
-            foreach ($curmatdocs as $cmd) {
-                $matNotas = ['materia' => $cmd->materia->mat_nombre, 'trimestres' => [], 'promedio' => 0];
-                $suma = 0; $cnt = 0;
-                foreach ($periodos as $p) {
-                    $nota = Nota::where('est_codigo', $estSeleccionado->est_codigo)
-                        ->where('curmatdoc_id', $cmd->curmatdoc_id)->where('periodo_id', $p->periodo_id)
-                        ->where('nota_estado', 2)->first();
-                    $val = $nota ? round($nota->nota_promedio_trimestral) : 0;
-                    $matNotas['trimestres'][$p->periodo_numero] = $val;
-                    if ($val > 0) { $suma += $val; $cnt++; }
+            // Bloqueo por mora (parámetros del colegio): no se cargan las notas.
+            $bloqueo = (new \App\Services\BloqueoNotasService())->estado($estSeleccionado->est_codigo, $gestion);
+            if (!$bloqueo['bloqueado']) {
+                // Mismos números que el boletín (BoletinNotasService).
+                $filas = (new \App\Services\BoletinNotasService())
+                    ->notasEstudiante($estSeleccionado->est_codigo, $estSeleccionado->cur_codigo, $periodos);
+                foreach ($filas as $f) {
+                    $notasData[] = ['materia' => $f['nombre'], 'trimestres' => $f['trimestres'], 'promedio' => $f['promedio']];
                 }
-                $matNotas['promedio'] = $cnt > 0 ? round($suma / $cnt) : 0;
-                $notasData[] = $matNotas;
             }
         }
 
-        return view('padre-portal.notas', compact('estudiantes', 'estSeleccionado', 'periodos', 'notasData', 'gestion'));
+        return view('padre-portal.notas', compact('estudiantes', 'estSeleccionado', 'periodos', 'notasData', 'gestion', 'bloqueo'));
     }
 
     // ── Asistencia ─────────────────────────────────────────────────
@@ -145,7 +136,7 @@ class PadrePortalController extends Controller
     {
         $estudiantes = $this->getEstudiantes();
         $estSeleccionado = $request->est_codigo ? $estudiantes->firstWhere('est_codigo', $request->est_codigo) : $estudiantes->first();
-        $gestion = date('Y');
+        $gestion = gestion_actual();
         $periodos = NotaPeriodo::activo()->gestion($gestion)->orderBy('periodo_numero')->get();
 
         $asistData = [];
@@ -195,7 +186,7 @@ class PadrePortalController extends Controller
         $estudiantes = $this->getEstudiantes();
         $estSeleccionado = $request->est_codigo ? $estudiantes->firstWhere('est_codigo', $request->est_codigo) : $estudiantes->first();
 
-        $gestion = (int) date('Y');
+        $gestion = (int) gestion_actual();
         $mensualidades = collect();
         $inscripcion = null;
         $pagosTransporte = collect();
@@ -209,12 +200,12 @@ class PadrePortalController extends Controller
             // del concepto, no la fecha).
             $mensualidades = Pago::where('est_codigo', $estSeleccionado->est_codigo)
                 ->where('pagos_estado', 1)
-                ->whereYear('pagos_fecha', $gestion)
+                ->deGestion($gestion)
                 ->orderBy('pagos_fecha', 'desc')
                 ->get();
 
             $inscripcion = Inscripcion::where('est_codigo', $estSeleccionado->est_codigo)
-                ->where('insc_estado', 1)
+                ->whereIn('insc_estado', [1, 2])
                 ->where('insc_gestion', $gestion)
                 ->first();
 
@@ -238,6 +229,38 @@ class PadrePortalController extends Controller
             'estudiantes', 'estSeleccionado', 'mensualidades', 'inscripcion',
             'pagosTransporte', 'totalMensualidades', 'saldoInscripcion', 'gestion'
         ));
+    }
+
+    /** Publicaciones del colegio de un tipo, filtradas por el curso de cada hijo. */
+    public function publicaciones(Request $request, string $tipo)
+    {
+        $tipo = strtoupper($tipo);
+        abort_unless(isset(\App\Models\Publicacion::TIPOS[$tipo]), 404);
+        $estudiantes = $this->getEstudiantes();
+        $gestion = gestion_actual();
+        $todas = \App\Models\Publicacion::with('curso')->visiblesPara($gestion)->where('pub_tipo', $tipo)
+            ->orderBy('pub_orden')->orderByDesc('pub_fecha')->get();
+        $publicaciones = $todas->filter(fn($p) => $estudiantes->contains(
+            fn($e) => $p->aplicaA($e->cur_codigo, optional($e->curso)->cur_nivel)
+        ) || $estudiantes->isEmpty() && !$p->cur_codigo && !$p->niv_nombre)->values();
+        [$titulo, $icono] = \App\Models\Publicacion::TIPOS[$tipo];
+        return view('padre-portal.publicaciones', compact('publicaciones', 'tipo', 'titulo', 'icono', 'estudiantes', 'gestion'));
+    }
+
+    /** Agenda del curso de cada hijo (tabla agenda) más la agenda institucional publicada. */
+    public function agenda(Request $request)
+    {
+        $estudiantes = $this->getEstudiantes();
+        $estSeleccionado = $request->est_codigo ? $estudiantes->firstWhere('est_codigo', $request->est_codigo) : $estudiantes->first();
+        $eventos = collect();
+        if ($estSeleccionado) {
+            $eventos = \App\Models\Agenda::where('age_estado', 1)
+                ->where(fn($q) => $q->where('curso_codigo', $estSeleccionado->cur_codigo)->orWhere('est_codigo', $estSeleccionado->est_codigo))
+                ->where('age_fechahora', '>=', now()->subDays(30))
+                ->orderBy('age_fechahora')->limit(200)->get();
+        }
+        $institucional = \App\Models\Publicacion::visiblesPara(gestion_actual())->where('pub_tipo', 'AGENDA')->orderByDesc('pub_fecha')->get();
+        return view('padre-portal.agenda', compact('estudiantes', 'estSeleccionado', 'eventos', 'institucional'));
     }
 
     // ── Enfermería ─────────────────────────────────────────────────
